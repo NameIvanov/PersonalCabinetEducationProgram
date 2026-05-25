@@ -1,6 +1,6 @@
 ﻿namespace PersonalCabinetEducationProgram.Models
 {
-    public class EducationalProgramManagers
+    public class EducationalProgramManager
     {
         public Guid Id { get; set; }
         public Guid EducationalProgramLink { get; set; }
