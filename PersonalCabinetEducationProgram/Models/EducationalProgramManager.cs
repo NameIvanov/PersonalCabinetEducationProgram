@@ -2,8 +2,8 @@
 {
     public class EducationalProgramManager
     {
-        public Guid Id { get; set; }
-        public Guid EducationalProgramLink { get; set; }
-        public Guid LinkManager { get; set; }
+        public int Id { get; set; }
+        public int EducationalProgramLink { get; set; }
+        public int LinkManager { get; set; }
     }
 }
