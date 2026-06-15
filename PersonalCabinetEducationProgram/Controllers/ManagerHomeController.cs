@@ -5,6 +5,7 @@ namespace PersonalCabinetEducationProgram.Controllers
     public class ManagerHomeController : Controller
     {
         private readonly IWebHostEnvironment _env;
+
         public ManagerHomeController(IWebHostEnvironment env)
         {
             _env = env;

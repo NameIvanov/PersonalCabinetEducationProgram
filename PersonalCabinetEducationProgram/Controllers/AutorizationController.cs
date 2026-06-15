@@ -4,11 +4,11 @@ using PersonalCabinetEducationProgram.Models;
 
 namespace PersonalCabinetEducationProgram.Controllers
 {
-    public class HomeController : Controller
+    public class AutorizationController : Controller
     {
-        
-        private readonly ILogger<HomeController> _logger;
-        public HomeController(ILogger<HomeController> logger)
+
+        private readonly ILogger<AutorizationController> _logger;
+        public AutorizationController(ILogger<AutorizationController> logger)
         {
             _logger = logger;
         }
@@ -17,10 +17,11 @@ namespace PersonalCabinetEducationProgram.Controllers
         {
             return View();
         }
-
-        public IActionResult Privacy()
+        [HttpPost]
+        public IActionResult Authorization(string login, string password, bool remember)
         {
-            return View();
+
+            return RedirectToAction("Index");
         }
 
         [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]

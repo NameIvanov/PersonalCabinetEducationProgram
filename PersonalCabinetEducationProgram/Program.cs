@@ -1,7 +1,14 @@
+using PersonalCabinetEducationProgram.Data;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+builder.Services.AddSingleton<IEducationalProgramElementsRepository, EducationalProgramElementsRepository>();
+builder.Services.AddSingleton<IEducationalProgramRepository, EducationalProgramRepository>();
+builder.Services.AddSingleton<IFacultysRepository, FacultysRepository>();
+builder.Services.AddSingleton<IDepartmentsRepository, DepartmentsRepository>();
+builder.Services.AddSingleton<IUsersRepository, UsersRepository>();
 
 var app = builder.Build();
 
