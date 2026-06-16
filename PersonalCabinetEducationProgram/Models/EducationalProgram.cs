@@ -29,5 +29,6 @@ namespace PersonalCabinetEducationProgram.Models
         public User User { get; set; }
         public ICollection<EducationalProgramElement> Elements { get; set; }
         public ICollection<EducationalProgramManager> Managers { get; set; }
+
     }
 }
