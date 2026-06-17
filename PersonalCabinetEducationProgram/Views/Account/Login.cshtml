@@ -1,0 +1,28 @@
+@{
+    ViewData["Title"] = "Вход";
+}
+
+<div class="row justify-content-center mt-5">
+    <div class="col-md-4">
+        <div class="card shadow-sm rounded-4">
+            <div class="card-body p-4">
+                <h4 class="fw-bold mb-4 text-center">Вход в систему</h4>
+                <form method="post">
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input name="email" type="email" class="form-control" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Пароль</label>
+                        <input name="password" type="password" class="form-control" required />
+                    </div>
+                    @if (!ViewData.ModelState.IsValid)
+                    {
+                        <div class="text-danger small mb-2">@ViewData.ModelState[string.Empty]?.Errors?.FirstOrDefault()?.ErrorMessage</div>
+                    }
+                    <button type="submit" class="btn btn-primary w-100">Войти</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

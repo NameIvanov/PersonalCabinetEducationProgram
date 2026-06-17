@@ -1,4 +1,5 @@
-﻿@model List<EducationalProgramElement>
+﻿@using PersonalCabinetEducationProgram.ViewModels
+@model ManagerHomeViewModel
 @{
 	ViewData["Title"] = "Менеджер образовательных программ";
 }
@@ -7,69 +8,99 @@
 	<div class="row g-0 m-0">
 		<div class="col-12 col-lg-2 bg-white border-end min-vh-100 p-0 m-0">
 			<div class="p-1 m-0">
-				<div class="accordion" id="sidebarPrograms">
 
-					<div class="accordion-item border-0">
-						<h2 class="accordion-header" id="headingOne">
-							<button class="accordion-button bg-white shadow-none px-1 py-2 fw-semibold small" type="button"
-							data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="true" aria-controls="collapseOne">
-								<span class="me-1">📘</span>
-								<span>01.03.04 “Прикладная математика и информатика”</span>
-							</button>
-						</h2>
-
-						<div id="collapseOne" class="accordion-collapse collapse show" aria-labelledby="headingOne" data-bs-parent="#sidebarPrograms">
-							<div class="accordion-body p-0 pt-1 ps-1">
-
-								<div class="accordion-item border-0">
-									<h2 class="accordion-header" id="headingOneChild">
-										<button class="accordion-button bg-white shadow-none px-1 py-2 fw-normal small" type="button"
-										data-bs-toggle="collapse" data-bs-target="#collapseOneChild" aria-expanded="true" aria-controls="collapseOneChild">
-											<span class="me-1">📂</span>
-											<span>Программирование, анализ данных и математическое моделирование</span>
-										</button>
-									</h2>
-
-									<div id="collapseOneChild" class="accordion-collapse collapse show" aria-labelledby="headingOneChild" data-bs-parent="#collapseOne">
-										<div class="accordion-body p-0 pt-1 ps-2 d-grid gap-2">
-											<a href="#" class="btn btn-light text-start border rounded-3 fw-semibold py-1 px-2">2026</a>
-											<a href="#" class="btn btn-light text-start border rounded-3 py-1 px-2">2025</a>
-											<a href="#" class="btn btn-light text-start border rounded-3 py-1 px-2">2024</a>
-											<a href="#" class="btn btn-light text-start border rounded-3 py-1 px-2">2023</a>
-										</div>
+				@if (Model.IsManager && Model.EducationalPrograms != null)
+				{
+					var directions = Model.EducationalPrograms
+						.GroupBy(p => new { p.CodeReferral, p.Name })
+						.ToList();
+					<div class="accordion" id="sidebarDirections">
+						@foreach (var dir in directions)
+						{
+							var dirKey = $"dir{Guid.NewGuid():N}";
+							var programsInDir = dir.ToList();
+							var deptIds = programsInDir
+								.Select(p => Model.PinningDepartmentFaculties
+									?.FirstOrDefault(pdf => pdf.EducationalProgramId == p.Id)?.DepartmentId)
+								.Where(id => id.HasValue)
+								.Select(id => id.Value)
+								.Distinct()
+								.ToList();
+							<div class="accordion-item border-0">
+								<h2 class="accordion-header">
+									<button class="accordion-button bg-white shadow-none px-1 py-2 fw-semibold small" type="button"
+									data-bs-toggle="collapse" data-bs-target="#@dirKey" aria-expanded="true">
+										<span class="me-1">📘</span>
+										<span>@dir.Key.CodeReferral "@dir.Key.Name"</span>
+									</button>
+								</h2>
+								<div id="@dirKey" class="accordion-collapse collapse show">
+									<div class="accordion-body p-0 pt-1 ps-3 d-grid gap-1">
+										@foreach (var deptId in deptIds)
+										{
+											var dept = Model.Departments?.FirstOrDefault(d => d.Id == deptId);
+											if (dept == null) { continue; }
+											var deptKey = $"dept{Guid.NewGuid():N}";
+											var progYears = programsInDir
+												.Where(p => Model.PinningDepartmentFaculties
+													?.Any(pdf => pdf.EducationalProgramId == p.Id && pdf.DepartmentId == deptId) == true)
+												.Where(p => p.YearApprovals.HasValue)
+												.Select(p => p.YearApprovals.Value.Year)
+												.Distinct()
+												.OrderByDescending(y => y)
+												.ToList();
+											<div class="accordion-item border-0">
+												<h2 class="accordion-header">
+													<button class="accordion-button bg-white shadow-none px-1 py-2 fw-normal small collapsed" type="button"
+													data-bs-toggle="collapse" data-bs-target="#@deptKey">
+														<span class="me-1">📂</span>
+														<span>@dept.Name</span>
+													</button>
+												</h2>
+												<div id="@deptKey" class="accordion-collapse collapse">
+													<div class="accordion-body p-0 pt-1 ps-2 d-grid gap-1">
+														@foreach (var y in progYears)
+														{
+															var isActive = y == Model.SelectedYear;
+															<a href="?year=@y"
+															   class="btn btn-sm text-start border rounded-3 py-1 px-2 @(isActive ? "btn-primary text-white fw-semibold" : "btn-light")">
+																@y
+															</a>
+														}
+													</div>
+												</div>
+											</div>
+										}
 									</div>
 								</div>
-
-								<div class="mt-2">
-									<a href="#" class="d-flex align-items-start text-decoration-none text-muted small mb-2 ps-0">
-										<span class="me-1">›</span>
-										<span class="me-1">📘</span>
-										<span>Программирование, анализ данных (случай, если больше одного профиля)</span>
-									</a>
-
-									<a href="#" class="d-flex align-items-start text-decoration-none text-muted small mb-2 ps-0">
-										<span class="me-1">›</span>
-										<span class="me-1">📘</span>
-										<span>Программирование, анализ данных (случай, если больше одного профиля)</span>
-									</a>
-
-									<a href="#" class="d-flex align-items-start text-decoration-none text-dark small mb-2 ps-0">
-										<span class="me-1">›</span>
-										<span class="me-1">📘</span>
-										<span>09.03.01 “Информатика и вычислительная техника”</span>
-									</a>
-
-									<a href="#" class="d-flex align-items-start text-decoration-none text-dark small mb-2 ps-0">
-										<span class="me-1">›</span>
-										<span class="me-1">📘</span>
-										<span>44.03.05 “Педагогическое образование” с двумя профилями подготовки “Математика. Информатика”</span>
-									</a>
-								</div>
 							</div>
+						}
+					</div>
+				}
+
+				@if (Model.IsAdminOrStaff)
+				{
+					<div class="d-flex flex-column gap-2 p-2" id="navPanel">
+						<a href="#" class="btn btn-outline-secondary text-start" data-panel="faculties">📋 Факультеты</a>
+						<a href="#" class="btn btn-outline-secondary text-start" data-panel="departments">📋 Кафедры</a>
+						<a href="#" class="btn btn-outline-secondary text-start" data-panel="users">👥 Сотрудники</a>
+						<a href="#" class="btn btn-outline-secondary text-start" data-panel="programs">📘 ОПОП</a>
+						<hr />
+						<div id="panelContent">
+							@if (Model.AllPrograms != null)
+							{
+								@foreach (var prog in Model.AllPrograms)
+								{
+									<a href="#" class="d-flex align-items-start text-decoration-none text-dark small mb-2 ps-0">
+										<span class="me-1">›</span>
+										<span>@prog.CodeReferral "@prog.Name"</span>
+									</a>
+								}
+							}
 						</div>
 					</div>
+				}
 
-				</div>
 			</div>
 		</div>
 
@@ -79,12 +110,15 @@
 					<div class="col-12 col-xl-5">
 						<div class="card shadow-sm rounded-4 h-100">
 							<div class="card-body p-4">
-								<h4 class="fw-bold mb-3">01.03.02 “Прикладная математика и информатика”</h4>
-								<p class="mb-4"><strong>Профиль:</strong> «Программирование, анализ данных и математическое моделирование»</p>
-								<div class="d-flex align-items-center gap-2">
-									<span>Год начала подготовки:</span>
-									<span class="badge rounded-pill text-dark border bg-white px-3 py-2">2026</span>
-								</div>
+								@if (Model.CurrentProgram != null)
+								{
+									<h4 class="fw-bold mb-3">@Model.CurrentProgram.CodeReferral "@Model.CurrentProgram.Name"</h4>
+									<p class="mb-4"><strong>Профиль:</strong> «@(Model.Departments?.FirstOrDefault()?.Name ?? "—")»</p>
+									<div class="d-flex align-items-center gap-2">
+										<span>Год начала подготовки:</span>
+										<span class="badge rounded-pill text-dark border bg-white px-3 py-2">@(Model.CurrentProgram.YearApprovals?.Year.ToString() ?? "—")</span>
+									</div>
+								}
 							</div>
 						</div>
 					</div>
@@ -113,34 +147,26 @@
 													</tr>
 												</thead>
 												<tbody>
-													<tr>
-														<td><span class="badge rounded-circle bg-primary" style="width:10px;height:10px;">&nbsp;</span> Новые</td>
-														<td>65</td>
-														<td>4</td>
-														<td>1</td>
-														<td>70</td>
-													</tr>
-													<tr>
-														<td><span class="badge rounded-circle bg-secondary" style="width:10px;height:10px;">&nbsp;</span> Согласовано</td>
-														<td>65</td>
-														<td>4</td>
-														<td>1</td>
-														<td>72</td>
-													</tr>
-													<tr>
-														<td><span class="badge rounded-circle bg-danger" style="width:10px;height:10px;">&nbsp;</span> Не согласовано</td>
-														<td>65</td>
-														<td>4</td>
-														<td>1</td>
-														<td>72</td>
-													</tr>
-													<tr>
-														<td><span class="badge rounded-circle bg-success" style="width:10px;height:10px;">&nbsp;</span> На сайте</td>
-														<td>65</td>
-														<td>4</td>
-														<td>1</td>
-														<td>72</td>
-													</tr>
+													@{
+														var stats = Model.GetStats();
+														var rows = new[] {
+															new { label = "Новые", badge = "bg-primary", key = "Новые" },
+															new { label = "Согласовано", badge = "bg-secondary", key = "Согласовано" },
+															new { label = "Не согласовано", badge = "bg-danger", key = "Не согласовано" },
+															new { label = "На сайте", badge = "bg-success", key = "На сайте" }
+														};
+													}
+													@foreach (var row in rows)
+													{
+														var vals = stats.ContainsKey(row.key) ? stats[row.key] : new[] { 0, 0, 0, 0 };
+														<tr>
+															<td><span class="badge rounded-circle @row.badge" style="width:10px;height:10px;">&nbsp;</span> @row.label</td>
+															<td>@vals[0]</td>
+															<td>@vals[1]</td>
+															<td>@vals[2]</td>
+															<td>@vals[3]</td>
+														</tr>
+													}
 												</tbody>
 											</table>
 										</div>
@@ -154,7 +180,10 @@
 				<div class="mt-4">
 					<div class="d-flex justify-content-between align-items-center mb-3">
 						<h4 class="fw-bold mb-0">Редактор образовательной программы</h4>
-						<a href="#" class="btn btn-primary">Добавить файл</a>
+						@if (Model.IsManager)
+						{
+							<a href="#" class="btn btn-primary">Добавить файл</a>
+						}
 					</div>
 					<div class="card shadow-sm rounded-4">
 						<div class="table-responsive">
@@ -169,9 +198,9 @@
 									</tr>
 								</thead>
 								<tbody>
-									@if (Model != null)
+									@if (Model.Elements != null)
 									{
-										@foreach (var item in Model)
+										@foreach (var item in Model.Elements)
 										{
 											<tr>
 												<td>@(item.Name)</td>
@@ -229,7 +258,7 @@
 											</tr>
 										</thead>
 										<tbody>
-											@foreach(var item in Model.Where(i=>i.TypeElement=="Дисциплина"))
+											@foreach(var item in Model.Elements.Where(i=>i.TypeElement=="Дисциплина"))
 											{
 												<tr>
 													<td>Из таблицы ОПОП</td>
@@ -270,7 +299,7 @@
 											</tr>
 										</thead>
 										<tbody>
-											@foreach (var item in Model.Where(i => i.TypeElement == "Практика"))
+											@foreach (var item in Model.Elements.Where(i => i.TypeElement == "Практика"))
 											{
 												<tr>
 													<td>Из таблицы ОПОП</td>
@@ -311,7 +340,7 @@
 											</tr>
 										</thead>
 										<tbody>
-											@foreach (var item in Model.Where(i => i.TypeElement == "Программа ГИА"))
+											@foreach (var item in Model.Elements.Where(i => i.TypeElement == "Программа ГИА"))
 											{
 												<tr>
 													<td>Из таблицы ОПОП</td>
@@ -352,7 +381,7 @@
 											</tr>
 										</thead>
 										<tbody>
-											@foreach (var item in Model.Where(i => i.TypeElement == "Методический материал"))
+											@foreach (var item in Model.Elements.Where(i => i.TypeElement == "Методический материал"))
 											{
 												<tr>
 													<td>Из таблицы ОПОП</td>
@@ -400,6 +429,20 @@
 
 			document.querySelectorAll('[id^="tab-"]').forEach(el => el.classList.add('d-none'));
 			document.getElementById('tab-' + link.dataset.tab).classList.remove('d-none');
+		});
+
+		document.getElementById('navPanel')?.addEventListener('click', function (e) {
+			const btn = e.target.closest('[data-panel]');
+			if (!btn) return;
+			e.preventDefault();
+
+			this.querySelectorAll('[data-panel]').forEach(b => b.classList.remove('active'));
+			btn.classList.add('active');
+
+			const panel = btn.dataset.panel;
+			fetch('/ManagerHome/GetPanel?type=' + panel)
+				.then(r => r.text())
+				.then(html => document.getElementById('panelContent').innerHTML = html);
 		});
 	</script>
 }
