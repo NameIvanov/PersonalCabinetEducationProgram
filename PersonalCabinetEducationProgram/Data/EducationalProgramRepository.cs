@@ -4,14 +4,18 @@ namespace PersonalCabinetEducationProgram.Data
 {
     public class EducationalProgramRepository : IEducationalProgramRepository
     {
-        private static List<EducationalProgram> elements = new List<EducationalProgram>();
+        private readonly ApplicationDbContext _db;
+        public EducationalProgramRepository(ApplicationDbContext db)
+        {
+            _db = db;
+        }
         public List<EducationalProgram> GetAll()
         {
-            return elements;
+            return _db.EducationalPrograms.ToList();
         }
         public EducationalProgram GetElementById(int educationalProgramId)
         {
-            return elements.FirstOrDefault(i => i.Id == educationalProgramId);
+            return _db.EducationalPrograms.FirstOrDefault(i => i.Id == educationalProgramId);
         }
     }
 }

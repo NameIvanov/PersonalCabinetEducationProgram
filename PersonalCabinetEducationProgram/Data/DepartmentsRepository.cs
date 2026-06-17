@@ -4,10 +4,14 @@ namespace PersonalCabinetEducationProgram.Data
 {
     public class DepartmentsRepository : IDepartmentsRepository
     {
-        private static List<Department> elements = new List<Department>();
+        private readonly ApplicationDbContext _db;
+        public DepartmentsRepository(ApplicationDbContext db)
+        {
+            _db = db;
+        }
         public List<Department> GetAll()
         {
-            return elements;
+            return _db.Departments.ToList();
         }
     }
 }

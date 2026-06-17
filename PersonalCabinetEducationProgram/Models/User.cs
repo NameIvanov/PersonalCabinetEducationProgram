@@ -20,7 +20,7 @@ namespace PersonalCabinetEducationProgram.Models
 
         // Навигации
         public ICollection<EducationalProgram> EducationalPrograms { get; set; }
-        public ICollection<EducationalProgramElement> EducationalProgramElements { get; set; }
+        //public ICollection<EducationalProgramElement> EducationalProgramElements { get; set; }
         public ICollection<EducationalProgramElementComment> Comments { get; set; }
         public ICollection<EducationalProgramManager> EducationalProgramManagers { get; set; }
     }

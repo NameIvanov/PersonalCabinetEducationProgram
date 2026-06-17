@@ -4,10 +4,14 @@ namespace PersonalCabinetEducationProgram.Data
 {
     public class UsersRepository : IUsersRepository
     {
-        private static List<User> elements = new List<User>();
+        private readonly ApplicationDbContext _db;
+        public UsersRepository(ApplicationDbContext db)
+        {
+            _db = db;
+        }
         public List<User> GetAll()
         {
-            return elements;
+            return _db.Users.ToList();
         }
     }
 }
