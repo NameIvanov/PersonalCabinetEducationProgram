@@ -1,3 +1,5 @@
+SET NAMES utf8mb4;
+
 CREATE DATABASE IF NOT EXISTS personal_cabinet
     CHARACTER SET utf8mb4
     COLLATE utf8mb4_unicode_ci;
@@ -110,8 +112,8 @@ CREATE TABLE IF NOT EXISTS educational_programs (
     educational_level LONGTEXT NOT NULL,
     year_approvals INT NULL,
     Status LONGTEXT NOT NULL,
-    user_id INT NOT NULL,
-    CONSTRAINT fk_prog_user FOREIGN KEY (user_id) REFERENCES users (Id) ON DELETE CASCADE
+    user_id INT NULL,
+    CONSTRAINT fk_prog_user FOREIGN KEY (user_id) REFERENCES users (Id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS educational_program_elements (
@@ -187,4 +189,10 @@ CREATE TABLE IF NOT EXISTS element_status_history (
     CONSTRAINT fk_hist_elem FOREIGN KEY (educational_program_element_id)
         REFERENCES educational_program_elements (Id) ON DELETE CASCADE,
     CONSTRAINT fk_hist_user FOREIGN KEY (user_id) REFERENCES users (Id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS `__EFMigrationsHistory` (
+    `MigrationId` VARCHAR(150) NOT NULL,
+    `ProductVersion` VARCHAR(32) NOT NULL,
+    CONSTRAINT `PK___EFMigrationsHistory` PRIMARY KEY (`MigrationId`)
 ) ENGINE=InnoDB;
