@@ -485,6 +485,22 @@ h5 {
     border-left: 2px solid #ddd;
 }
 
+.table tbody tr.assignment-present > td {
+    background-color: #eef8f0;
+}
+
+.table tbody tr.assignment-present:hover > td {
+    background-color: #e4f3e7;
+}
+
+.table tbody tr.assignment-missing > td {
+    background-color: #fff0f0;
+}
+
+.table tbody tr.assignment-missing:hover > td {
+    background-color: #ffe6e6;
+}
+
 .app-small { font-size: 10px; }
 .app-caption { font-size: 9px; }
 

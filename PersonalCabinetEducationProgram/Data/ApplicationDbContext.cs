@@ -25,6 +25,15 @@ namespace PersonalCabinetEducationProgram.Data
             base.OnModelCreating(modelBuilder);
             ConfigureIdentityTables(modelBuilder);
 
+            modelBuilder.Entity<EducationalProgram>(entity =>
+            {
+                entity.HasOne(p => p.User)
+                    .WithMany(u => u.EducationalPrograms)
+                    .HasForeignKey(p => p.UserId)
+                    .OnDelete(DeleteBehavior.SetNull)
+                    .HasConstraintName("fk_prog_user");
+            });
+
             modelBuilder.Entity<ApproverAssignment>(entity =>
             {
                 entity.HasOne(a => a.ApproverUser)

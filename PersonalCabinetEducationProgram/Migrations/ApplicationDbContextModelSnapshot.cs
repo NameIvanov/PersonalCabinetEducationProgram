@@ -61,7 +61,7 @@ namespace PersonalCabinetEducationProgram.Migrations
                         .HasColumnType("longtext")
                         .HasColumnName("claim_value");
 
-                    b.Property<int>("UserId")
+                    b.Property<int?>("UserId")
                         .HasColumnType("int")
                         .HasColumnName("user_id");
 
@@ -1038,8 +1038,8 @@ namespace PersonalCabinetEducationProgram.Migrations
                     b.HasOne("PersonalCabinetEducationProgram.Models.User", "User")
                         .WithMany("EducationalPrograms")
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_prog_user");
 
                     b.Navigation("User");
                 });

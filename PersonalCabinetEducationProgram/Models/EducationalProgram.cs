@@ -23,9 +23,9 @@ namespace PersonalCabinetEducationProgram.Models
         public string Status { get; set; }
 
         [Column("user_id")]
-        public int UserId { get; set; }
+        public int? UserId { get; set; }
 
-        public User User { get; set; }
+        public User? User { get; set; }
         public ICollection<EducationalProgramElement> Elements { get; set; }
         public ICollection<EducationalProgramManager> Managers { get; set; }
         public ICollection<EducationalProgramAssignment> Assignments { get; set; }

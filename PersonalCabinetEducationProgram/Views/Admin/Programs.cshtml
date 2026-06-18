@@ -31,7 +31,7 @@
                     @foreach (var program in Model)
                     {
                         var assignment = program.Assignments?.FirstOrDefault();
-                        <tr>
+                        <tr class="@(program.UserId.HasValue ? "assignment-present" : "assignment-missing")">
                             <td class="fw-semibold">
                                 <a asp-action="ProgramDetails" asp-route-id="@program.Id" class="text-decoration-none">@program.CodeReferral</a>
                             </td>
@@ -52,7 +52,7 @@
                                 }
                                 <span class="badge @statusClass">@program.Status</span>
                             </td>
-                            <td class="small">@program.User?.FullName</td>
+                            <td class="small">@(program.User?.FullName ?? "Не назначен")</td>
                             <td>
                                 <button type="button" class="btn btn-outline-primary btn-sm"
                                         data-bs-toggle="modal" data-bs-target="#assignManagerModal_@program.Id">
@@ -79,6 +79,7 @@
                                             <div class="mb-3">
                                                 <label class="form-label">Новый руководитель</label>
                                                 <select name="managerUserId" class="form-select">
+                                                    <option value="" selected="@(!program.UserId.HasValue)">Не назначен</option>
                                                     @if (managers != null)
                                                     {
                                                         @foreach (var manager in managers)
@@ -163,6 +164,7 @@
                             <div class="col-md-6">
                                 <label class="form-label">Руководитель</label>
                                 <select name="managerUserId" class="form-select">
+                                    <option value="">Не назначен</option>
                                     @if (managers != null)
                                     {
                                         @foreach (var manager in managers)

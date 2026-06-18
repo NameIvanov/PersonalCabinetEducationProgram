@@ -2,6 +2,7 @@
 @{
     ViewData["Title"] = "Факультеты";
     var approvers = ViewBag.Approvers as List<PersonalCabinetEducationProgram.Models.User>;
+    var currentApprovers = ViewBag.CurrentApprovers as Dictionary<int, int> ?? new Dictionary<int, int>();
 }
 
 <div class="container py-4">
@@ -17,7 +18,8 @@
                 <tbody>
                     @foreach (var f in Model)
                     {
-                        <tr>
+                        var hasApprover = currentApprovers.TryGetValue(f.Id, out var currentApproverId);
+                        <tr class="@(hasApprover ? "assignment-present" : "assignment-missing")">
                             <td>@f.Id</td>
                             <td>
                                 <a asp-action="FacultyDetails" asp-route-id="@f.Id" class="text-decoration-none fw-semibold">
@@ -50,17 +52,18 @@
                                                 <div class="mb-3">
                                                     <label class="form-label">Согласующий</label>
                                                     <select name="approverUserId" class="form-select">
+                                                        <option value="" selected="@(!hasApprover)">Не назначен</option>
                                                         @if (approvers != null)
                                                         {
                                                             @foreach (var approver in approvers)
                                                             {
-                                                                <option value="@approver.Id">@approver.FullName</option>
+                                                                <option value="@approver.Id" selected="@(currentApproverId == approver.Id)">@approver.FullName</option>
                                                             }
                                                         }
                                                     </select>
                                                 </div>
                                             </div>
-                                            <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button><button type="submit" class="btn btn-success">Назначить</button></div>
+                                            <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button><button type="submit" class="btn btn-success">Сохранить</button></div>
                                         </form>
                                     </div>
                                 </div>

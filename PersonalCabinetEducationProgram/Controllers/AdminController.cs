@@ -230,7 +230,14 @@ namespace PersonalCabinetEducationProgram.Controllers
         public async Task<IActionResult> CreateProgram(string codeReferral, string name, string educationalLevel,
             int yearApprovals, int departmentId, int facultyId, int? managerUserId)
         {
-            var assignedManagerId = managerUserId ?? 1;
+            if (managerUserId.HasValue)
+            {
+                var manager = await _userManager.FindByIdAsync(managerUserId.Value.ToString());
+                if (manager == null ||
+                    manager.ApprovalStatus != UserApprovalStatus.Approved ||
+                    !await _userManager.IsInRoleAsync(manager, AppRoles.Manager))
+                    return NotFound();
+            }
 
             var program = new EducationalProgram
             {
@@ -239,7 +246,7 @@ namespace PersonalCabinetEducationProgram.Controllers
                 EducationalLevel = educationalLevel,
                 YearApprovals = yearApprovals,
                 Status = EducationalProgramStatus.Draft,
-                UserId = assignedManagerId
+                UserId = managerUserId
             };
 
             _context.EducationalPrograms.Add(program);
@@ -252,13 +259,16 @@ namespace PersonalCabinetEducationProgram.Controllers
                 FacultyId = facultyId
             });
 
-            _context.EducationalProgramManagers.Add(new EducationalProgramManager
+            if (managerUserId.HasValue)
             {
-                EducationalProgramId = program.Id,
-                UserId = assignedManagerId,
-                AssignedByUserId = GetCurrentUserId(),
-                AssignedAt = DateTime.Now
-            });
+                _context.EducationalProgramManagers.Add(new EducationalProgramManager
+                {
+                    EducationalProgramId = program.Id,
+                    UserId = managerUserId.Value,
+                    AssignedByUserId = GetCurrentUserId(),
+                    AssignedAt = DateTime.Now
+                });
+            }
 
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Programs));
@@ -266,19 +276,24 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> AssignProgramManager(int programId, int managerUserId)
+        public async Task<IActionResult> AssignProgramManager(int programId, int? managerUserId)
         {
             var program = await _context.EducationalPrograms
                 .Include(p => p.Managers)
                 .FirstOrDefaultAsync(p => p.Id == programId);
 
-            var manager = await _userManager.FindByIdAsync(managerUserId.ToString());
-
-            if (program == null ||
-                manager == null ||
-                manager.ApprovalStatus != UserApprovalStatus.Approved ||
-                !await _userManager.IsInRoleAsync(manager, AppRoles.Manager))
+            if (program == null)
                 return NotFound();
+
+            User? manager = null;
+            if (managerUserId.HasValue)
+            {
+                manager = await _userManager.FindByIdAsync(managerUserId.Value.ToString());
+                if (manager == null ||
+                    manager.ApprovalStatus != UserApprovalStatus.Approved ||
+                    !await _userManager.IsInRoleAsync(manager, AppRoles.Manager))
+                    return NotFound();
+            }
 
             program.UserId = managerUserId;
 
@@ -287,13 +302,16 @@ namespace PersonalCabinetEducationProgram.Controllers
                 .ToListAsync();
 
             _context.EducationalProgramManagers.RemoveRange(currentAssignments);
-            _context.EducationalProgramManagers.Add(new EducationalProgramManager
+            if (managerUserId.HasValue)
             {
-                EducationalProgramId = programId,
-                UserId = managerUserId,
-                AssignedByUserId = GetCurrentUserId(),
-                AssignedAt = DateTime.Now
-            });
+                _context.EducationalProgramManagers.Add(new EducationalProgramManager
+                {
+                    EducationalProgramId = programId,
+                    UserId = managerUserId.Value,
+                    AssignedByUserId = GetCurrentUserId(),
+                    AssignedAt = DateTime.Now
+                });
+            }
 
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Programs));
@@ -409,29 +427,22 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> AssignApproverToFaculty(int approverUserId, int facultyId)
+        public async Task<IActionResult> AssignApproverToFaculty(int? approverUserId, int facultyId)
         {
             return await CreateApproverAssignment(approverUserId, facultyId, null, nameof(Faculties));
         }
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> AssignApproverToDepartment(int approverUserId, int departmentId)
+        public async Task<IActionResult> AssignApproverToDepartment(int? approverUserId, int departmentId)
         {
             return await CreateApproverAssignment(approverUserId, null, departmentId, nameof(Departments));
         }
 
-        private async Task<IActionResult> CreateApproverAssignment(int approverUserId, int? facultyId, int? departmentId, string redirectAction)
+        private async Task<IActionResult> CreateApproverAssignment(int? approverUserId, int? facultyId, int? departmentId, string redirectAction)
         {
             if (facultyId == null && departmentId == null)
                 return BadRequest();
-
-            var approver = await _userManager.FindByIdAsync(approverUserId.ToString());
-
-            if (approver == null ||
-                approver.ApprovalStatus != UserApprovalStatus.Approved ||
-                !await _userManager.IsInRoleAsync(approver, AppRoles.Approver))
-                return NotFound();
 
             if (facultyId != null && !await _context.Facultys.AnyAsync(f => f.Id == facultyId))
                 return NotFound();
@@ -439,30 +450,45 @@ namespace PersonalCabinetEducationProgram.Controllers
             if (departmentId != null && !await _context.Departments.AnyAsync(d => d.Id == departmentId))
                 return NotFound();
 
-            var exists = await _context.ApproverAssignments.AnyAsync(a =>
-                a.ApproverUserId == approverUserId && a.FacultyId == facultyId && a.DepartmentId == departmentId);
+            var currentAssignments = await _context.ApproverAssignments
+                .Where(a => a.FacultyId == facultyId && a.DepartmentId == departmentId)
+                .ToListAsync();
+            _context.ApproverAssignments.RemoveRange(currentAssignments);
 
-            if (!exists)
+            if (approverUserId.HasValue)
             {
+                var approver = await _userManager.FindByIdAsync(approverUserId.Value.ToString());
+                if (approver == null ||
+                    approver.ApprovalStatus != UserApprovalStatus.Approved ||
+                    !await _userManager.IsInRoleAsync(approver, AppRoles.Approver))
+                    return NotFound();
+
                 _context.ApproverAssignments.Add(new ApproverAssignment
                 {
-                    ApproverUserId = approverUserId,
+                    ApproverUserId = approverUserId.Value,
                     FacultyId = facultyId,
                     DepartmentId = departmentId,
                     AssignedByUserId = GetCurrentUserId(),
                     AssignedAt = DateTime.Now
                 });
-
-                await _context.SaveChangesAsync();
             }
 
+            await _context.SaveChangesAsync();
             return RedirectToAction(redirectAction);
         }
 
         public async Task<IActionResult> Departments()
         {
             var departments = await _context.Departments.ToListAsync();
+            var currentAssignments = await _context.ApproverAssignments
+                .Where(a => a.DepartmentId.HasValue)
+                .OrderByDescending(a => a.AssignedAt)
+                .ToListAsync();
+
             ViewBag.Approvers = await GetApprovedApprovers();
+            ViewBag.CurrentApprovers = currentAssignments
+                .GroupBy(a => a.DepartmentId!.Value)
+                .ToDictionary(g => g.Key, g => g.First().ApproverUserId);
             return View(departments);
         }
 
@@ -502,7 +528,15 @@ namespace PersonalCabinetEducationProgram.Controllers
         public async Task<IActionResult> Faculties()
         {
             var faculties = await _context.Facultys.ToListAsync();
+            var currentAssignments = await _context.ApproverAssignments
+                .Where(a => a.FacultyId.HasValue)
+                .OrderByDescending(a => a.AssignedAt)
+                .ToListAsync();
+
             ViewBag.Approvers = await GetApprovedApprovers();
+            ViewBag.CurrentApprovers = currentAssignments
+                .GroupBy(a => a.FacultyId!.Value)
+                .ToDictionary(g => g.Key, g => g.First().ApproverUserId);
             return View(faculties);
         }
 
