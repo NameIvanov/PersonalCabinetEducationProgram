@@ -63,7 +63,7 @@ namespace PersonalCabinetEducationProgram.Services
 
             if (!adminOverride)
             {
-                if (ElementApprovalStatus.IsLockedForNonAdmin(oldStatus))
+                if (allowedFrom == null && ElementApprovalStatus.IsLockedForNonAdmin(oldStatus))
                 {
                     throw new InvalidOperationException("Нельзя изменить согласованный или опубликованный элемент.");
                 }

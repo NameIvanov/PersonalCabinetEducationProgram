@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -16,17 +17,20 @@ namespace PersonalCabinetEducationProgram.Controllers
         private readonly IFileStorageService _fileStorageService;
         private readonly FileStorageSettings _storageSettings;
         private readonly ElementWorkflowService _workflowService;
+        private readonly UserManager<User> _userManager;
 
         public AdminController(
             ApplicationDbContext context,
             IFileStorageService fileStorageService,
             IOptions<FileStorageSettings> storageSettings,
-            ElementWorkflowService workflowService)
+            ElementWorkflowService workflowService,
+            UserManager<User> userManager)
         {
             _context = context;
             _fileStorageService = fileStorageService;
             _storageSettings = storageSettings.Value;
             _workflowService = workflowService;
+            _userManager = userManager;
         }
 
         private int GetCurrentUserId()
@@ -37,7 +41,12 @@ namespace PersonalCabinetEducationProgram.Controllers
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Users()
         {
-            var users = await _context.Users.Include(u => u.Role).ToListAsync();
+            var users = await _userManager.Users.OrderBy(u => u.Id).ToListAsync();
+            foreach (var user in users)
+            {
+                user.RoleName = (await _userManager.GetRolesAsync(user)).SingleOrDefault() ?? string.Empty;
+            }
+
             return View(users);
         }
 
@@ -45,7 +54,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> ChangeApprovalStatus(int id, string approvalStatus, string? rejectionReason)
         {
-            var user = await _context.Users.FindAsync(id);
+            var user = await _userManager.FindByIdAsync(id.ToString());
             if (user == null)
                 return NotFound();
 
@@ -58,39 +67,71 @@ namespace PersonalCabinetEducationProgram.Controllers
             user.ApprovalStatus = approvalStatus;
             user.RejectionReason = approvalStatus == UserApprovalStatus.Rejected ? rejectionReason : null;
 
-            await _context.SaveChangesAsync();
+            await _userManager.UpdateAsync(user);
+            await _userManager.UpdateSecurityStampAsync(user);
             return RedirectToAction(nameof(Users));
         }
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> CreateUser(string fullName, string role, string post)
+        public async Task<IActionResult> CreateUser(
+            string fullName,
+            int roleId,
+            string post,
+            string? username,
+            string? password)
         {
-            _context.Users.Add(new User
+            if (!AppRoles.AllIds.Contains(roleId))
+                return BadRequest();
+
+            username = string.IsNullOrWhiteSpace(username)
+                ? $"user{Guid.NewGuid():N}"[..16]
+                : username.Trim();
+            password = string.IsNullOrWhiteSpace(password)
+                ? $"Temp-{Guid.NewGuid():N}"[..14]
+                : password;
+
+            var user = new User
             {
+                UserName = username,
                 FullName = fullName,
-                LinkRole = role,
-                RoleId = GetRoleId(role),
                 Post = post,
                 ApprovalStatus = UserApprovalStatus.Approved
-            });
+            };
 
-            await _context.SaveChangesAsync();
+            var createResult = await _userManager.CreateAsync(user, password);
+            if (!createResult.Succeeded)
+            {
+                TempData["UsersError"] = string.Join(" ", createResult.Errors.Select(e => e.Description));
+                return RedirectToAction(nameof(Users));
+            }
+
+            await _userManager.AddToRoleAsync(user, GetRoleName(roleId));
             return RedirectToAction(nameof(Users));
         }
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> EditUser(int id, string fullName, string role, string post)
+        public async Task<IActionResult> EditUser(int id, string fullName, int roleId, string post)
         {
-            var user = await _context.Users.FindAsync(id);
+            if (!AppRoles.AllIds.Contains(roleId))
+                return BadRequest();
+
+            var user = await _userManager.FindByIdAsync(id.ToString());
             if (user != null)
             {
                 user.FullName = fullName;
-                user.LinkRole = role;
-                user.RoleId = GetRoleId(role);
                 user.Post = post;
-                await _context.SaveChangesAsync();
+                await _userManager.UpdateAsync(user);
+
+                var currentRoles = await _userManager.GetRolesAsync(user);
+                if (currentRoles.Count > 0)
+                {
+                    await _userManager.RemoveFromRolesAsync(user, currentRoles);
+                }
+
+                await _userManager.AddToRoleAsync(user, GetRoleName(roleId));
+                await _userManager.UpdateSecurityStampAsync(user);
             }
 
             return RedirectToAction(nameof(Users));
@@ -100,11 +141,10 @@ namespace PersonalCabinetEducationProgram.Controllers
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteUser(int id)
         {
-            var user = await _context.Users.FindAsync(id);
+            var user = await _userManager.FindByIdAsync(id.ToString());
             if (user != null)
             {
-                _context.Users.Remove(user);
-                await _context.SaveChangesAsync();
+                await _userManager.DeleteAsync(user);
             }
 
             return RedirectToAction(nameof(Users));
@@ -121,10 +161,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
             ViewBag.Departments = await _context.Departments.ToListAsync();
             ViewBag.Facultys = await _context.Facultys.ToListAsync();
-            ViewBag.Managers = await _context.Users
-                .Where(u => u.RoleId == GetRoleId(AppRoles.Manager) && u.ApprovalStatus == UserApprovalStatus.Approved)
-                .OrderBy(u => u.FullName)
-                .ToListAsync();
+            ViewBag.Managers = await GetApprovedUsersInRole(AppRoles.Manager);
 
             return View(programs);
         }
@@ -235,12 +272,12 @@ namespace PersonalCabinetEducationProgram.Controllers
                 .Include(p => p.Managers)
                 .FirstOrDefaultAsync(p => p.Id == programId);
 
-            var manager = await _context.Users.FirstOrDefaultAsync(u =>
-                u.Id == managerUserId &&
-                u.RoleId == GetRoleId(AppRoles.Manager) &&
-                u.ApprovalStatus == UserApprovalStatus.Approved);
+            var manager = await _userManager.FindByIdAsync(managerUserId.ToString());
 
-            if (program == null || manager == null)
+            if (program == null ||
+                manager == null ||
+                manager.ApprovalStatus != UserApprovalStatus.Approved ||
+                !await _userManager.IsInRoleAsync(manager, AppRoles.Manager))
                 return NotFound();
 
             program.UserId = managerUserId;
@@ -389,12 +426,11 @@ namespace PersonalCabinetEducationProgram.Controllers
             if (facultyId == null && departmentId == null)
                 return BadRequest();
 
-            var approver = await _context.Users.FirstOrDefaultAsync(u =>
-                u.Id == approverUserId &&
-                u.RoleId == GetRoleId(AppRoles.Approver) &&
-                u.ApprovalStatus == UserApprovalStatus.Approved);
+            var approver = await _userManager.FindByIdAsync(approverUserId.ToString());
 
-            if (approver == null)
+            if (approver == null ||
+                approver.ApprovalStatus != UserApprovalStatus.Approved ||
+                !await _userManager.IsInRoleAsync(approver, AppRoles.Approver))
                 return NotFound();
 
             if (facultyId != null && !await _context.Facultys.AnyAsync(f => f.Id == facultyId))
@@ -505,21 +541,27 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         private async Task<List<User>> GetApprovedApprovers()
         {
-            return await _context.Users
-                .Where(u => u.RoleId == GetRoleId(AppRoles.Approver) && u.ApprovalStatus == UserApprovalStatus.Approved)
-                .OrderBy(u => u.FullName)
-                .ToListAsync();
+            return await GetApprovedUsersInRole(AppRoles.Approver);
         }
 
-        private static int GetRoleId(string role)
+        private async Task<List<User>> GetApprovedUsersInRole(string roleName)
         {
-            return role switch
+            var users = await _userManager.GetUsersInRoleAsync(roleName);
+            return users
+                .Where(u => u.ApprovalStatus == UserApprovalStatus.Approved)
+                .OrderBy(u => u.FullName)
+                .ToList();
+        }
+
+        private static string GetRoleName(int roleId)
+        {
+            return roleId switch
             {
-                AppRoles.Manager => 1,
-                AppRoles.Approver => 2,
-                AppRoles.Moderator => 3,
-                AppRoles.Admin => 4,
-                _ => 1
+                AppRoles.ManagerId => AppRoles.Manager,
+                AppRoles.ApproverId => AppRoles.Approver,
+                AppRoles.ModeratorId => AppRoles.Moderator,
+                AppRoles.AdminId => AppRoles.Admin,
+                _ => throw new ArgumentOutOfRangeException(nameof(roleId))
             };
         }
 

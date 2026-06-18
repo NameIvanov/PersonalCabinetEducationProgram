@@ -3,7 +3,7 @@ using System.Text;
 
 namespace PersonalCabinetEducationProgram.Services
 {
-    public static class PasswordHasher
+    public static class LegacyPasswordHasher
     {
         public static string Hash(string input)
         {

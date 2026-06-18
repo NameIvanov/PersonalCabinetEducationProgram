@@ -1,7 +1,6 @@
 ﻿@model IEnumerable<PersonalCabinetEducationProgram.Models.User>
 @{
     ViewData["Title"] = "Управление пользователями";
-    var roles = new[] { "Manager", "Approver", "Moderator", "Admin" };
     var roleNames = new Dictionary<string, string>
     {
         { "Manager", "Руководитель ОПОП" },
@@ -57,7 +56,7 @@
                             <td class="fw-semibold">@user.Username</td>
                             <td>@user.FullName</td>
                             <td>@user.Post</td>
-                            <td><span class="badge bg-primary-subtle text-primary">@(roleNames.GetValueOrDefault(user.LinkRole, user.LinkRole))</span></td>
+                            <td><span class="badge bg-primary-subtle text-primary">@(roleNames.GetValueOrDefault(user.RoleName, user.RoleName))</span></td>
                             <td>
                                 <span class="badge @approvalBadge">@approvalText</span>
                                 @if (user.ApprovalStatus == "Rejected" && !string.IsNullOrWhiteSpace(user.RejectionReason))
@@ -67,7 +66,7 @@
                             </td>
                             <td>
                                 <div class="d-flex gap-1 flex-wrap">
-                                    @if (user.LinkRole != "Admin")
+                                    @if (user.RoleName != PersonalCabinetEducationProgram.Models.AppRoles.Admin)
                                     {
                                         <button type="button" class="btn btn-outline-success btn-sm"
                                                 onclick="openApprovalModal(@user.Id, 'Approved', '@user.FullName')"

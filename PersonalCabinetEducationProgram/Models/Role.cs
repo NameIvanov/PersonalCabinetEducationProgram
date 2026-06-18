@@ -1,18 +1,12 @@
 using System.ComponentModel.DataAnnotations.Schema;
-using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Identity;
 
 namespace PersonalCabinetEducationProgram.Models
 {
-    [Table("roles", Schema = "personal_cabinet")]
-    public class Role
+    [Table("roles")]
+    public class Role : IdentityRole<int>
     {
-        [Key]
-        public int Id { get; set; }
-
-        public string Name { get; set; }
-
-        public string Description { get; set; }
-
-        public ICollection<User> Users { get; set; }
+        [Column("Description")]
+        public string Description { get; set; } = string.Empty;
     }
 }

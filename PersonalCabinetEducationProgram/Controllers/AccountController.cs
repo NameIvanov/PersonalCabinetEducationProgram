@@ -1,10 +1,6 @@
-using System.Security.Claims;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using PersonalCabinetEducationProgram.Data;
 using PersonalCabinetEducationProgram.Models;
 using PersonalCabinetEducationProgram.Services;
 using PersonalCabinetEducationProgram.ViewModels;
@@ -13,11 +9,18 @@ namespace PersonalCabinetEducationProgram.Controllers
 {
     public class AccountController : Controller
     {
-        private readonly ApplicationDbContext _context;
+        private readonly UserManager<User> _userManager;
+        private readonly SignInManager<User> _signInManager;
+        private readonly IPasswordHasher<User> _identityPasswordHasher;
 
-        public AccountController(ApplicationDbContext context)
+        public AccountController(
+            UserManager<User> userManager,
+            SignInManager<User> signInManager,
+            IPasswordHasher<User> identityPasswordHasher)
         {
-            _context = context;
+            _userManager = userManager;
+            _signInManager = signInManager;
+            _identityPasswordHasher = identityPasswordHasher;
         }
 
         [AllowAnonymous]
@@ -31,49 +34,54 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [AllowAnonymous]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> Login(LoginViewModel model)
         {
             if (!ModelState.IsValid)
                 return View(model);
 
-            var user = await _context.Users
-                .Include(u => u.Role)
-                .FirstOrDefaultAsync(u => u.Username == model.Username);
-
-            if (user == null || !PasswordHasher.Verify(model.Password, user.PasswordHash))
+            var user = await _userManager.FindByNameAsync(model.Username);
+            if (user == null)
             {
-                ModelState.AddModelError(string.Empty, "Неверный логин или пароль.");
+                AddInvalidCredentialsError();
                 return View(model);
             }
 
             if (user.ApprovalStatus == UserApprovalStatus.Pending)
             {
-                ModelState.AddModelError(string.Empty, "Ваш аккаунт ожидает подтверждения модератором.");
+                ModelState.AddModelError(string.Empty, "Ваш аккаунт ожидает подтверждения администратором.");
                 return View(model);
             }
 
             if (user.ApprovalStatus == UserApprovalStatus.Rejected)
             {
-                var reason = string.IsNullOrWhiteSpace(user.RejectionReason) ? string.Empty : $" Причина: {user.RejectionReason}";
-                ModelState.AddModelError(string.Empty, $"Ваш аккаунт отклонен модератором.{reason}");
+                var reason = string.IsNullOrWhiteSpace(user.RejectionReason)
+                    ? string.Empty
+                    : $" Причина: {user.RejectionReason}";
+                ModelState.AddModelError(string.Empty, $"Ваш аккаунт отклонён администратором.{reason}");
                 return View(model);
             }
 
-            var roleName = user.Role?.Name ?? user.LinkRole;
-            var claims = new List<Claim>
+            var check = await _signInManager.CheckPasswordSignInAsync(user, model.Password, lockoutOnFailure: true);
+            if (!check.Succeeded && IsLegacyPasswordValid(user, model.Password))
             {
-                new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new(ClaimTypes.Name, user.FullName),
-                new(ClaimTypes.Role, roleName),
-                new("Username", user.Username),
-                new("Post", user.Post)
-            };
+                user.PasswordHash = _identityPasswordHasher.HashPassword(user, model.Password);
+                user.SecurityStamp = Guid.NewGuid().ToString();
+                var updateResult = await _userManager.UpdateAsync(user);
+                if (updateResult.Succeeded)
+                {
+                    await _userManager.ResetAccessFailedCountAsync(user);
+                    check = Microsoft.AspNetCore.Identity.SignInResult.Success;
+                }
+            }
 
-            var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-            await HttpContext.SignInAsync(
-                CookieAuthenticationDefaults.AuthenticationScheme,
-                new ClaimsPrincipal(identity));
+            if (!check.Succeeded)
+            {
+                AddInvalidCredentialsError();
+                return View(model);
+            }
 
+            await _signInManager.SignInAsync(user, isPersistent: false);
             return RedirectToAction(nameof(RedirectByRole));
         }
 
@@ -88,45 +96,51 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [AllowAnonymous]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> Register(RegisterViewModel model)
         {
-            if (!AppRoles.SelfRegistration.Contains(model.Role))
+            if (model.RoleId == null || !AppRoles.SelfRegistrationIds.Contains(model.RoleId.Value))
             {
-                ModelState.AddModelError(nameof(model.Role), "Можно зарегистрироваться только как руководитель или согласующий.");
+                ModelState.AddModelError(nameof(model.RoleId), "Можно зарегистрироваться только как руководитель или согласующий.");
             }
 
             if (!ModelState.IsValid)
                 return View(model);
 
-            var usernameExists = await _context.Users.AnyAsync(u => u.Username == model.Username);
-            if (usernameExists)
+            var roleName = model.RoleId == AppRoles.ManagerId ? AppRoles.Manager : AppRoles.Approver;
+            var user = new User
             {
-                ModelState.AddModelError(nameof(model.Username), "Этот логин уже занят.");
+                UserName = model.Username,
+                FullName = model.FullName,
+                Post = model.Post,
+                ApprovalStatus = UserApprovalStatus.Pending
+            };
+
+            var createResult = await _userManager.CreateAsync(user, model.Password);
+            if (!createResult.Succeeded)
+            {
+                AddIdentityErrors(createResult);
                 return View(model);
             }
 
-            _context.Users.Add(new User
+            var roleResult = await _userManager.AddToRoleAsync(user, roleName);
+            if (!roleResult.Succeeded)
             {
-                Username = model.Username,
-                PasswordHash = PasswordHasher.Hash(model.Password),
-                FullName = model.FullName,
-                Post = model.Post,
-                LinkRole = model.Role,
-                RoleId = model.Role == AppRoles.Manager ? 1 : 2,
-                ApprovalStatus = UserApprovalStatus.Pending
-            });
+                await _userManager.DeleteAsync(user);
+                AddIdentityErrors(roleResult);
+                return View(model);
+            }
 
-            await _context.SaveChangesAsync();
-
-            TempData["SuccessMessage"] = "Регистрация завершена. Дождитесь подтверждения модератором.";
+            TempData["SuccessMessage"] = "Регистрация завершена. Дождитесь подтверждения администратором.";
             return RedirectToAction(nameof(Login));
         }
 
         [Authorize]
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> Logout()
         {
-            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            await _signInManager.SignOutAsync();
             return RedirectToAction(nameof(Login));
         }
 
@@ -149,6 +163,26 @@ namespace PersonalCabinetEducationProgram.Controllers
         public IActionResult AccessDenied()
         {
             return View();
+        }
+
+        private bool IsLegacyPasswordValid(User user, string password)
+        {
+            return !string.IsNullOrWhiteSpace(user.PasswordHash)
+                && user.PasswordHash.Length == 64
+                && LegacyPasswordHasher.Verify(password, user.PasswordHash);
+        }
+
+        private void AddInvalidCredentialsError()
+        {
+            ModelState.AddModelError(string.Empty, "Неверный логин или пароль.");
+        }
+
+        private void AddIdentityErrors(IdentityResult result)
+        {
+            foreach (var error in result.Errors)
+            {
+                ModelState.AddModelError(string.Empty, error.Description);
+            }
         }
     }
 }

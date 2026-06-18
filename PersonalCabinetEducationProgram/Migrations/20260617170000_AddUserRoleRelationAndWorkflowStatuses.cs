@@ -1,9 +1,13 @@
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using PersonalCabinetEducationProgram.Data;
 
 #nullable disable
 
 namespace PersonalCabinetEducationProgram.Migrations
 {
+    [DbContext(typeof(ApplicationDbContext))]
+    [Migration("20260617170000_AddUserRoleRelationAndWorkflowStatuses")]
     public partial class AddUserRoleRelationAndWorkflowStatuses : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)

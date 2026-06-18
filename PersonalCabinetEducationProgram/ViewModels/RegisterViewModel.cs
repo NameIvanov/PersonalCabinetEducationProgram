@@ -30,6 +30,6 @@ namespace PersonalCabinetEducationProgram.ViewModels
 
         [Required]
         [Display(Name = "Роль")]
-        public string Role { get; set; } = string.Empty;
+        public int? RoleId { get; set; }
     }
 }
