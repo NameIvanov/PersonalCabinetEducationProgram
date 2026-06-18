@@ -1,0 +1,99 @@
+﻿@{
+    ViewData["Title"] = "История изменений";
+    var element = ViewBag.Element as PersonalCabinetEducationProgram.Models.EducationalProgramElement;
+    var history = ViewBag.History as List<PersonalCabinetEducationProgram.Models.ElementStatusHistory>;
+    var comments = ViewBag.Comments as List<PersonalCabinetEducationProgram.Models.EducationalProgramElementComment>;
+    var returnController = ViewBag.ReturnController as string ?? "ManagerHome";
+}
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <a asp-controller="@returnController" asp-action="Index" asp-route-programId="@element?.EducationalProgramId" class="text-decoration-none">← Назад к программе</a>
+            <h4 class="fw-bold mt-2 mb-0">История: @element?.Name</h4>
+            @if (!string.IsNullOrEmpty(element?.Description))
+            {
+                <div class="text-muted small">@element.Description</div>
+            }
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-12 col-lg-6">
+            <div class="card shadow-sm rounded-4 h-100">
+                <div class="card-header bg-white border-bottom">
+                    <h6 class="fw-bold mb-0">Изменения статуса</h6>
+                </div>
+                <div class="card-body">
+                    @if (history != null && history.Any())
+                    {
+                        <div class="history-line">
+                            @foreach (var h in history)
+                            {
+                                <div class="mb-3 position-relative">
+                                    <div class="position-absolute" style="left:-22px;top:4px;width:12px;height:12px;border-radius:50%;background:#0d6efd;border:2px solid white;"></div>
+                                    <div class="d-flex justify-content-between">
+                                        <div>
+                                            <span class="small fw-semibold">@h.User?.FullName</span>
+                                            @if (!string.IsNullOrEmpty(h.OldStatus))
+                                            {
+                                                <span class="text-muted small"> изменил статус с «@h.OldStatus»</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-muted small"> установил статус «@h.NewStatus»</span>
+                                            }
+                                        </div>
+                                        <div class="text-muted small" style="font-size:0.72rem;">@h.ChangeDate.ToString("dd.MM.yyyy HH:mm")</div>
+                                    </div>
+                                    <div class="mt-1">
+                                        <span class="badge bg-secondary-subtle text-secondary">@h.NewStatus</span>
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(h.Comment))
+                                    {
+                                        <div class="text-muted small mt-1 fst-italic">«@h.Comment»</div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-center text-muted py-4">
+                            <div>История изменений пуста</div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-6">
+            <div class="card shadow-sm rounded-4 h-100">
+                <div class="card-header bg-white border-bottom">
+                    <h6 class="fw-bold mb-0">Комментарии</h6>
+                </div>
+                <div class="card-body">
+                    @if (comments != null && comments.Any())
+                    {
+                        @foreach (var c in comments)
+                        {
+                            <div class="comment-bubble mb-2">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span class="small fw-semibold">@c.User?.FullName</span>
+                                    <span class="text-muted" style="font-size:0.7rem;">@c.DateTimeComment.ToString("dd.MM.yyyy HH:mm")</span>
+                                </div>
+                                <div class="small">@c.CommentContent</div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="text-center text-muted py-4">
+                            <div>Комментариев нет</div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

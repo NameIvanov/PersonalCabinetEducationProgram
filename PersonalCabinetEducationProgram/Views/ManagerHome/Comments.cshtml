@@ -1,0 +1,79 @@
+@model IEnumerable<PersonalCabinetEducationProgram.Models.EducationalProgramElementComment>
+@using PersonalCabinetEducationProgram.Models
+@{
+    ViewData["Title"] = "Комментарии";
+    var element = ViewBag.Element as PersonalCabinetEducationProgram.Models.EducationalProgramElement;
+    var returnController = ViewBag.ReturnController as string ?? "ManagerHome";
+}
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <a asp-controller="@returnController" asp-action="Index" asp-route-programId="@element?.EducationalProgramId" class="text-decoration-none">← Назад к программе</a>
+            <h4 class="fw-bold mt-2 mb-0">Комментарии: @element?.Name</h4>
+            @if (!string.IsNullOrEmpty(element?.Description))
+            {
+                <div class="text-muted small">@element.Description</div>
+            }
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12 col-lg-8">
+            @if (Model.Any())
+            {
+                @foreach (var comment in Model)
+                {
+                    <div class="comment-bubble mb-3">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div class="d-flex align-items-center">
+                                <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-2" style="width:32px;height:32px;font-size:0.8rem;">
+                                    @comment.User?.FullName?.Split(' ').LastOrDefault()?.Substring(0, 1)
+                                </div>
+                                <div>
+                                    <div class="fw-semibold small">@comment.User?.FullName</div>
+                                    <div class="text-muted" style="font-size:0.7rem;">@comment.User?.Post</div>
+                                </div>
+                            </div>
+                            <div class="text-muted small" style="font-size:0.72rem;">@comment.DateTimeComment.ToString("dd.MM.yyyy HH:mm")</div>
+                        </div>
+                        <div class="small">@comment.CommentContent</div>
+                        <form method="post" asp-controller="@returnController" asp-action="UpdateCommentStatus" class="mt-2 d-flex gap-2 align-items-center">
+                            <input type="hidden" name="commentId" value="@comment.Id" />
+                            <select name="status" class="form-select form-select-sm" style="max-width: 180px;">
+                                @foreach (var status in CommentStatus.All)
+                                {
+                                    <option value="@status" selected="@(comment.Status == status)">@status</option>
+                                }
+                            </select>
+                            <button type="submit" class="btn btn-outline-secondary btn-sm">Сохранить</button>
+                        </form>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="text-center text-muted py-5">
+                    <div class="fs-1 mb-3">💬</div>
+                    <div>Комментариев пока нет</div>
+                </div>
+            }
+        </div>
+
+        <div class="col-12 col-lg-4">
+            <div class="card shadow-sm rounded-4 sticky-top" style="top: 80px;">
+                <div class="card-body">
+                    <h6 class="fw-bold mb-3">Новый комментарий</h6>
+                    <form method="post" asp-controller="@returnController" asp-action="AddComment">
+                        <input type="hidden" name="elementId" value="@element?.Id" />
+                        <div class="mb-3">
+                            <textarea name="commentText" class="form-control" rows="4"
+                                      placeholder="Введите ваш комментарий..."></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">Отправить</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,42 @@
+@model IEnumerable<PersonalCabinetEducationProgram.ViewModels.AssignmentListItemViewModel>
+@{
+    ViewData["Title"] = "Назначения";
+}
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="fw-bold mb-0">Назначения</h4>
+    </div>
+
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Дата</th>
+                        <th>Пользователь</th>
+                        <th>Тип назначения</th>
+                        <th>Куда назначен</th>
+                        <th>Кто назначил</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var assignment in Model)
+                    {
+                        <tr>
+                            <td>@(assignment.AssignedAt?.ToString("dd.MM.yyyy HH:mm") ?? "—")</td>
+                            <td class="fw-semibold">@assignment.UserFullName</td>
+                            <td>@assignment.AssignmentType</td>
+                            <td>@assignment.TargetName</td>
+                            <td>@assignment.AssignedByFullName</td>
+                        </tr>
+                    }
+                    @if (!Model.Any())
+                    {
+                        <tr><td colspan="5" class="text-center text-muted py-4">Назначений пока нет</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

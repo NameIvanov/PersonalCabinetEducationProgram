@@ -1,0 +1,99 @@
+﻿@model PersonalCabinetEducationProgram.ViewModels.OrganizationDocumentsViewModel
+@{
+    ViewData["Title"] = Model.PageTitle;
+}
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-start mb-4">
+        <div>
+            @if (Model.EntityType == "Faculty")
+            {
+                <a asp-action="Faculties" class="text-decoration-none">← Назад к факультетам</a>
+            }
+            else
+            {
+                <a asp-action="Departments" class="text-decoration-none">← Назад к кафедрам</a>
+            }
+            <h3 class="fw-bold mt-2 mb-1">@Model.EntityName</h3>
+            <div class="text-muted">@Model.PageTitle</div>
+        </div>
+        <div class="badge bg-primary-subtle text-primary fs-6">ОПОП: @Model.Programs.Count</div>
+    </div>
+
+    @if (!Model.Programs.Any())
+    {
+        <div class="card shadow-sm rounded-4">
+            <div class="card-body text-center text-muted py-5">
+                Для этой сущности пока не привязано ни одной образовательной программы.
+            </div>
+        </div>
+    }
+    else
+    {
+        @foreach (var program in Model.Programs)
+        {
+            var assignment = program.Assignments?.FirstOrDefault(a =>
+                (Model.EntityType == "Faculty" && a.FacultyId == Model.EntityId) ||
+                (Model.EntityType == "Department" && a.DepartmentId == Model.EntityId));
+
+            <div class="card shadow-sm rounded-4 mb-4">
+                <div class="card-header bg-white border-bottom-0 pt-4 px-4 pb-2">
+                    <div class="d-flex flex-column flex-lg-row justify-content-between gap-3">
+                        <div>
+                            <h5 class="fw-bold mb-1">@program.CodeReferral @program.Name</h5>
+                            <div class="text-muted mb-1">@program.EducationalLevel</div>
+                            <div class="small text-muted">
+                                Кафедра: @assignment?.Department?.Name ?? "—"
+                            </div>
+                            <div class="small text-muted">
+                                Факультет: @assignment?.Faculty?.Name ?? "—"
+                            </div>
+                        </div>
+                        <div>
+                            <span class="badge bg-secondary-subtle text-secondary">Статус программы: @program.Status</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body px-0 pt-2 pb-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-4">Тип</th>
+                                    <th>Документ</th>
+                                    <th>Шифр / описание</th>
+                                    <th>Статус</th>
+                                    <th>Дата загрузки</th>
+                                    <th class="pe-4">Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var element in program.Elements.OrderBy(e => e.TypeElement).ThenBy(e => e.Name))
+                                {
+                                    <tr>
+                                        <td class="ps-4">@element.TypeElement</td>
+                                        <td class="fw-semibold">@element.Name</td>
+                                        <td class="text-muted small">@element.Description</td>
+                                        <td>@await Html.PartialAsync("_StatusBadge", element.StatusApprovals)</td>
+                                        <td>@(element.UploadDate?.ToString("dd.MM.yyyy") ?? "—")</td>
+                                        <td class="pe-4">
+                                            <div class="d-flex gap-1 flex-wrap">
+                                                <a asp-controller="ManagerHome" asp-action="Comments" asp-route-elementId="@element.Id" class="btn btn-outline-secondary btn-sm" title="Комментарии">💬</a>
+                                                <a asp-controller="ManagerHome" asp-action="History" asp-route-elementId="@element.Id" class="btn btn-outline-secondary btn-sm" title="История">🕐</a>
+                                                @if (!string.IsNullOrEmpty(element.FilePath))
+                                                {
+                                                    <a asp-controller="ManagerHome" asp-action="Preview" asp-route-elementId="@element.Id" class="btn btn-outline-secondary btn-sm" target="_blank" title="Просмотр">📄</a>
+                                                    <a asp-controller="ManagerHome" asp-action="Download" asp-route-elementId="@element.Id" class="btn btn-outline-secondary btn-sm" title="Скачать">⬇</a>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>

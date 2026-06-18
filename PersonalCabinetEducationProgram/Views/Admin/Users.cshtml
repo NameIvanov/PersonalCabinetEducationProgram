@@ -1,0 +1,149 @@
+﻿@model IEnumerable<PersonalCabinetEducationProgram.Models.User>
+@{
+    ViewData["Title"] = "Управление пользователями";
+    var roles = new[] { "Manager", "Approver", "Moderator", "Admin" };
+    var roleNames = new Dictionary<string, string>
+    {
+        { "Manager", "Руководитель ОПОП" },
+        { "Approver", "Согласующий" },
+        { "Moderator", "Модератор" },
+        { "Admin", "Администратор" }
+    };
+}
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="fw-bold mb-0">Пользователи</h4>
+    </div>
+
+    @if (TempData["UsersError"] != null)
+    {
+        <div class="alert alert-danger">@TempData["UsersError"]</div>
+    }
+
+    <div class="card shadow-sm rounded-4">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>ID</th>
+                        <th>Логин</th>
+                        <th>ФИО</th>
+                        <th>Должность</th>
+                        <th>Роль</th>
+                        <th>Статус</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var user in Model.OrderByDescending(u => u.ApprovalStatus == "Pending").ThenBy(u => u.Id))
+                    {
+                        var approvalBadge = user.ApprovalStatus switch
+                        {
+                            "Approved" => "bg-success-subtle text-success",
+                            "Rejected" => "bg-danger-subtle text-danger",
+                            _ => "bg-warning-subtle text-warning"
+                        };
+
+                        var approvalText = user.ApprovalStatus switch
+                        {
+                            "Approved" => "Подтвержден",
+                            "Rejected" => "Отклонен",
+                            _ => "Ожидает решения"
+                        };
+
+                        <tr>
+                            <td>@user.Id</td>
+                            <td class="fw-semibold">@user.Username</td>
+                            <td>@user.FullName</td>
+                            <td>@user.Post</td>
+                            <td><span class="badge bg-primary-subtle text-primary">@(roleNames.GetValueOrDefault(user.LinkRole, user.LinkRole))</span></td>
+                            <td>
+                                <span class="badge @approvalBadge">@approvalText</span>
+                                @if (user.ApprovalStatus == "Rejected" && !string.IsNullOrWhiteSpace(user.RejectionReason))
+                                {
+                                    <div class="small text-muted mt-1">Причина: @user.RejectionReason</div>
+                                }
+                            </td>
+                            <td>
+                                <div class="d-flex gap-1 flex-wrap">
+                                    @if (user.LinkRole != "Admin")
+                                    {
+                                        <button type="button" class="btn btn-outline-success btn-sm"
+                                                onclick="openApprovalModal(@user.Id, 'Approved', '@user.FullName')"
+                                                title="Подтвердить">✔️</button>
+                                        @if (!(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value == user.Id.ToString()))
+                                        {
+                                            <button type="button" class="btn btn-outline-danger btn-sm"
+                                                    onclick="openApprovalModal(@user.Id, 'Rejected', '@user.FullName')"
+                                                    title="Отклонить">✖️</button>
+                                        }
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="approvalModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4">
+            <form method="post" asp-action="ChangeApprovalStatus">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="approvalModalTitle">Подтверждение действия</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="id" id="approvalUserId" />
+                    <input type="hidden" name="approvalStatus" id="approvalStatus" />
+                    <p id="approvalModalText" class="mb-3"></p>
+                    <div class="mb-3 d-none" id="rejectionReasonBlock">
+                        <label for="rejectionReason" class="form-label">Причина отклонения</label>
+                        <textarea name="rejectionReason" id="rejectionReason" class="form-control" rows="3" placeholder="Укажите причину"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary" id="approvalSubmitButton">Подтвердить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function openApprovalModal(userId, status, fullName) {
+            document.getElementById('approvalUserId').value = userId;
+            document.getElementById('approvalStatus').value = status;
+
+            var title = document.getElementById('approvalModalTitle');
+            var text = document.getElementById('approvalModalText');
+            var submitButton = document.getElementById('approvalSubmitButton');
+            var rejectionBlock = document.getElementById('rejectionReasonBlock');
+            var rejectionReason = document.getElementById('rejectionReason');
+
+            if (status === 'Approved') {
+                title.textContent = 'Подтверждение аккаунта';
+                text.textContent = 'Подтвердить аккаунт пользователя ' + fullName + '?';
+                submitButton.textContent = 'Подтвердить';
+                submitButton.className = 'btn btn-success';
+                rejectionBlock.classList.add('d-none');
+                rejectionReason.value = '';
+            } else {
+                title.textContent = 'Отклонение аккаунта';
+                text.textContent = 'Отклонить аккаунт пользователя ' + fullName + '?';
+                submitButton.textContent = 'Отклонить';
+                submitButton.className = 'btn btn-danger';
+                rejectionBlock.classList.remove('d-none');
+            }
+
+            var modal = new bootstrap.Modal(document.getElementById('approvalModal'));
+            modal.show();
+        }
+    </script>
+}

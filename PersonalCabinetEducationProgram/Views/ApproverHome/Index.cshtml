@@ -1,0 +1,431 @@
+﻿@model IEnumerable<PersonalCabinetEducationProgram.Models.EducationalProgramElement>
+@{
+    ViewData["Title"] = "Согласующий";
+
+    var programs = ViewBag.Programs as List<PersonalCabinetEducationProgram.Models.EducationalProgram>;
+    int? selectedProgramId = ViewBag.SelectedProgramId as int?;
+    var selectedProgram = programs?.FirstOrDefault(p => p.Id == selectedProgramId);
+    string activeTab = ViewBag.ActiveTab as string ?? "disciplines";
+    var allComments = ViewBag.Comments as List<PersonalCabinetEducationProgram.Models.EducationalProgramElementComment>;
+
+    var mainElements = Model.Where(e => e.TypeElement == "Main").ToList();
+    var disciplines = Model.Where(e => e.TypeElement == "Discipline").ToList();
+    var practices = Model.Where(e => e.TypeElement == "Practice").ToList();
+    var gia = Model.Where(e => e.TypeElement == "GIA").ToList();
+
+    int countNew = Model.Count(e => string.IsNullOrEmpty(PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(e.StatusApprovals)));
+    int countUploaded = Model.Count(e => PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(e.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Uploaded);
+    int countOnReview = Model.Count(e => PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(e.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.OnApproval);
+    int countApproved = Model.Count(e => PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(e.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Approved);
+    int countRejected = Model.Count(e => PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(e.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.RevisionRequired);
+    int countPublished = Model.Count(e => PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(e.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Published);
+}
+
+<div class="container-fluid p-0 m-0 app-shell">
+    <div class="row g-0 m-0">
+
+        <div class="col-12 col-lg-2 app-sidebar">
+            <div class="p-2">
+                <div class="sidebar-title">Программы на согласовании</div>
+
+                @if (programs != null)
+                {
+                    var grouped = programs
+                        .GroupBy(p => p.EducationalLevel)
+                        .OrderBy(g => g.Key);
+
+                    foreach (var group in grouped)
+                    {
+                        var groupKey = group.Key?.Replace(" ", "") ?? "unknown";
+                        var groupContainsSelected = group.Any(p => p.Id == selectedProgramId);
+                        <div class="mb-1">
+                            <div class="accordion" id="sidebar_@groupKey">
+                                <div class="accordion-item border-0">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button @(groupContainsSelected ? "" : "collapsed") bg-white shadow-none px-2 py-2 fw-semibold small"
+                                                type="button" data-bs-toggle="collapse"
+                                                data-bs-target="#collapse_@groupKey">
+                                            @group.Key
+                                        </button>
+                                    </h2>
+                                    <div id="collapse_@groupKey" class="accordion-collapse collapse @(groupContainsSelected ? "show" : "")" data-bs-parent="#sidebar_@groupKey">
+                                        <div class="accordion-body p-0 ps-2">
+                                            @foreach (var prog in group)
+                                            {
+                                                var assignment = prog.Assignments?.FirstOrDefault();
+                                                <a asp-action="Index" asp-route-programId="@prog.Id"
+                                                   class="d-block text-decoration-none py-1 px-2 rounded mb-1 sidebar-item @(prog.Id == selectedProgramId ? "active" : "")">
+                                                    <div class="small fw-semibold text-dark">@prog.CodeReferral</div>
+                                                    <div class="small text-muted app-small">@prog.Name</div>
+                                                    @if (assignment?.Department != null)
+                                                    {
+                                                        <div class="text-muted app-caption">@assignment.Department.Name</div>
+                                                    }
+                                                </a>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-10 p-0 app-content">
+            <div class="p-3 p-lg-4">
+
+                @if (selectedProgram != null)
+                {
+                    <div class="row g-3 mb-4">
+                        <div class="col-12 col-xl-5">
+                            <div class="card shadow-sm rounded-4 h-100">
+                                <div class="card-body p-4">
+                                    <h4 class="fw-bold mb-2">@selectedProgram.CodeReferral «@selectedProgram.Name»</h4>
+                                    @{
+                                        var assignment = selectedProgram.Assignments?.FirstOrDefault();
+                                    }
+                                    @if (assignment != null)
+                                    {
+                                        <p class="mb-1"><strong>Кафедра:</strong> @assignment.Department?.Name</p>
+                                        <p class="mb-1"><strong>Факультет:</strong> @assignment.Faculty?.Name</p>
+                                    }
+                                    <p class="mb-1"><strong>Уровень:</strong> @selectedProgram.EducationalLevel</p>
+                                    <div class="d-flex align-items-center gap-2 mt-2">
+                                        <span>Статус программы:</span>
+                                        @{
+                                            var progStatusClass = selectedProgram.Status switch
+                                            {
+                                                "Согласована" => "bg-success-subtle text-success",
+                                                "Опубликована" => "bg-primary-subtle text-primary",
+                                                _ => "bg-warning-subtle text-warning"
+                                            };
+                                        }
+                                        <span class="badge @progStatusClass">@selectedProgram.Status</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12 col-xl-7">
+                            <div class="card shadow-sm rounded-4 h-100">
+                                <div class="card-body p-4">
+                                    <div class="row align-items-center">
+                                        <div class="col-12 col-md-4 text-center mb-3 mb-md-0">
+                                            @{
+                                                double total = Math.Max(countUploaded + countOnReview + countApproved + countRejected, 1);
+                                                double pctUploaded = (countUploaded / total) * 100;
+                                                double pctOnReview = (countOnReview / total) * 100;
+                                                double pctApproved = (countApproved / total) * 100;
+                                                double pctRejected = (countRejected / total) * 100;
+
+                                                double stop1 = pctUploaded;
+                                                double stop2 = stop1 + pctOnReview;
+                                                double stop3 = stop2 + pctApproved;
+                                                double stop4 = stop3 + pctRejected;
+
+                                                string chartStyle = "background: conic-gradient(" +
+                                                    $"#ffc107 0% {stop1.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}%, " +
+                                                    $"#0dcaf0 {stop1.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}% {stop2.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}%, " +
+                                                    $"#198754 {stop2.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}% {stop3.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}%, " +
+                                                    $"#dc3545 {stop3.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}% {stop4.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}%);";
+                                            }
+                                            <div class="position-relative d-inline-block rounded-circle" style="width:140px;height:140px;@chartStyle">
+                                                <div class="position-absolute top-50 start-50 translate-middle rounded-circle bg-white d-flex flex-column align-items-center justify-content-center"
+                                                     style="width:92px;height:92px;box-shadow: inset 0 0 0 1px rgba(0,0,0,.06);">
+                                                    <div class="fw-bold fs-4">@Model.Count()</div>
+                                                    <div class="text-muted small">всего</div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="col-12 col-md-8">
+                                            <table class="table table-borderless align-middle mb-0 small">
+                                                <tbody>
+                                                    <tr>
+                                                        <td><span class="d-inline-block rounded-circle bg-warning" style="width:10px;height:10px;"></span> Загружено</td>
+                                                        <td class="fw-bold">@countUploaded</td>
+                                                        <td><span class="d-inline-block rounded-circle bg-info" style="width:10px;height:10px;"></span> На согласовании</td>
+                                                        <td class="fw-bold">@countOnReview</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td><span class="d-inline-block rounded-circle bg-success" style="width:10px;height:10px;"></span> Согласовано</td>
+                                                        <td class="fw-bold">@countApproved</td>
+                                                        <td><span class="d-inline-block rounded-circle bg-danger" style="width:10px;height:10px;"></span> На доработку</td>
+                                                        <td class="fw-bold">@countRejected</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="card shadow-sm rounded-4 mb-4">
+                        <div class="card-body py-5 text-center text-muted">
+                            Для этого пользователя пока не назначено ни одной образовательной программы.
+                        </div>
+                    </div>
+                }
+
+                @if (selectedProgram != null)
+                {
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4 class="fw-bold mb-0">Основные элементы ОПОП</h4>
+                    </div>
+                    <div class="card shadow-sm rounded-4">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Элемент ОПОП</th>
+                                        <th>Статус</th>
+                                        <th>Дата загрузки</th>
+                                        <th>Действия</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var element in mainElements)
+                                    {
+                                        await RenderElementRow(element, allComments);
+                                    }
+                                    @if (!mainElements.Any())
+                                    {
+                                        <tr><td colspan="4" class="text-center text-muted py-3">Элементы не найдены</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                            <ul class="nav nav-pills gap-1">
+                                <li class="nav-item">
+                                    <a class="nav-link tab-custom @(activeTab == "disciplines" ? "active" : "")"
+                                       asp-action="Index" asp-route-programId="@selectedProgramId" asp-route-tab="disciplines">Дисциплины</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link tab-custom @(activeTab == "practices" ? "active" : "")"
+                                       asp-action="Index" asp-route-programId="@selectedProgramId" asp-route-tab="practices">Практика</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link tab-custom @(activeTab == "gia" ? "active" : "")"
+                                       asp-action="Index" asp-route-programId="@selectedProgramId" asp-route-tab="gia">ГИА</a>
+                                </li>
+                            </ul>
+                </div>
+
+                <div class="card shadow-sm rounded-4">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Шифр</th>
+                                    <th>Наименование</th>
+                                    <th>Статус</th>
+                                    <th>Дата загрузки</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @{
+                                    var tabElements = activeTab switch
+                                    {
+                                        "practices" => practices,
+                                        "gia" => gia,
+                                        _ => disciplines
+                                    };
+                                }
+                                @foreach (var element in tabElements)
+                                {
+                                    <tr>
+                                        <td class="text-muted small">@element.Description</td>
+                                        <td>@element.Name</td>
+                                        <td>@await Html.PartialAsync("_StatusBadge", element.StatusApprovals)</td>
+                                        <td class="small">@(element.UploadDate?.ToString("dd.MM.yyyy") ?? "—")</td>
+                                        <td>
+                                            <div class="d-flex gap-1 flex-wrap">
+                                                @if (!string.IsNullOrEmpty(element.FilePath))
+                                                {
+                                                    <a asp-action="Preview" asp-route-elementId="@element.Id"
+                                                       class="btn btn-outline-secondary btn-sm" title="Просмотр" target="_blank">📄</a>
+                                                    <a asp-action="Download" asp-route-elementId="@element.Id"
+                                                       class="btn btn-outline-secondary btn-sm" title="Скачать">⬇</a>
+                                                }
+                                                @if (PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(element.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Uploaded)
+                                                {
+                                                    <button type="button" class="btn btn-outline-info btn-sm" title="На согласование"
+                                                            onclick="showReviewModal(@element.Id)">📤</button>
+                                                }
+                                                @if (PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(element.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Uploaded || PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(element.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.OnApproval)
+                                                {
+                                                    <button type="button" class="btn btn-outline-success btn-sm" title="Согласовать"
+                                                            onclick="showApproveModal(@element.Id)">✔️</button>
+                                                    <button type="button" class="btn btn-outline-danger btn-sm" title="На доработку"
+                                                            onclick="showRejectModal(@element.Id)">✖️</button>
+                                                }
+                                                <a asp-action="Comments" asp-route-elementId="@element.Id"
+                                                   class="btn btn-outline-secondary btn-sm" title="Комментарии">💬</a>
+                                                <a asp-action="History" asp-route-elementId="@element.Id"
+                                                   class="btn btn-outline-secondary btn-sm" title="История">🕐</a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                                @if (!tabElements.Any())
+                                {
+                                    <tr><td colspan="5" class="text-center text-muted py-3">Элементы не найдены</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                }
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="approveModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4">
+            <div class="modal-header bg-success-subtle">
+                <h5 class="modal-title text-success">Согласование элемента</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" asp-action="Approve">
+                <div class="modal-body">
+                    <input type="hidden" name="elementId" id="approveElementId" />
+                    <div class="mb-3">
+                        <label class="form-label">Комментарий к согласованию</label>
+                        <textarea name="comment" class="form-control" rows="3" placeholder="Введите комментарий (необязательно)"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-success">Согласовать</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="rejectModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4">
+            <div class="modal-header bg-danger-subtle">
+                <h5 class="modal-title text-danger">Отправка на доработку</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" asp-action="Reject">
+                <div class="modal-body">
+                    <input type="hidden" name="elementId" id="rejectElementId" />
+                    <div class="mb-3">
+                        <label class="form-label">Причина отклонения</label>
+                        <textarea name="comment" class="form-control" rows="3" placeholder="Укажите причину отправки на доработку"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-danger">На доработку</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="reviewModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4">
+            <div class="modal-header bg-info-subtle">
+                <h5 class="modal-title text-info">Отправить на согласование</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" asp-action="SendForReview">
+                <div class="modal-body">
+                    <input type="hidden" name="elementId" id="reviewElementId" />
+                    <p>Отправить элемент на согласование?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-info">Отправить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@functions {
+    async Task RenderElementRow(PersonalCabinetEducationProgram.Models.EducationalProgramElement element, List<PersonalCabinetEducationProgram.Models.EducationalProgramElementComment> allComments)
+    {
+        var elementComments = allComments?.Where(c => c.EducationalProgramElementId == element.Id).ToList();
+        var commentCount = elementComments?.Count ?? 0;
+
+        <tr>
+            <td>
+                <div>@element.Name</div>
+                @if (!string.IsNullOrEmpty(element.Description))
+                {
+                    <div class="text-muted small">@element.Description</div>
+                }
+            </td>
+            <td>@await Html.PartialAsync("_StatusBadge", element.StatusApprovals)</td>
+            <td class="small">@(element.UploadDate?.ToString("dd.MM.yyyy") ?? "—")</td>
+            <td>
+                <div class="d-flex gap-1 flex-wrap">
+                    @if (!string.IsNullOrEmpty(element.FilePath))
+                    {
+                        <a asp-action="Preview" asp-route-elementId="@element.Id"
+                           class="btn btn-outline-secondary btn-sm" title="Просмотр" target="_blank">📄</a>
+                        <a asp-action="Download" asp-route-elementId="@element.Id"
+                           class="btn btn-outline-secondary btn-sm" title="Скачать">⬇</a>
+                    }
+                    @if (PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(element.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Uploaded)
+                    {
+                        <button type="button" class="btn btn-outline-info btn-sm" title="На согласование"
+                                onclick="showReviewModal(@element.Id)">📤</button>
+                    }
+                    @if (PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(element.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Uploaded || PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(element.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.OnApproval)
+                    {
+                        <button type="button" class="btn btn-outline-success btn-sm" title="Согласовать"
+                                onclick="showApproveModal(@element.Id)">✔️</button>
+                        <button type="button" class="btn btn-outline-danger btn-sm" title="На доработку"
+                                onclick="showRejectModal(@element.Id)">✖️</button>
+                    }
+                    <a asp-action="Comments" asp-route-elementId="@element.Id"
+                       class="btn btn-outline-secondary btn-sm" title="Комментарии (@commentCount)">💬 @if(commentCount > 0){<span>@commentCount</span>}</a>
+                    <a asp-action="History" asp-route-elementId="@element.Id"
+                       class="btn btn-outline-secondary btn-sm" title="История">🕐</a>
+                </div>
+            </td>
+        </tr>
+    }
+}
+
+@section Scripts {
+    <script>
+        function showApproveModal(elementId) {
+            document.getElementById('approveElementId').value = elementId;
+            var modal = new bootstrap.Modal(document.getElementById('approveModal'));
+            modal.show();
+        }
+        function showRejectModal(elementId) {
+            document.getElementById('rejectElementId').value = elementId;
+            var modal = new bootstrap.Modal(document.getElementById('rejectModal'));
+            modal.show();
+        }
+        function showReviewModal(elementId) {
+            document.getElementById('reviewElementId').value = elementId;
+            var modal = new bootstrap.Modal(document.getElementById('reviewModal'));
+            modal.show();
+        }
+    </script>
+}
