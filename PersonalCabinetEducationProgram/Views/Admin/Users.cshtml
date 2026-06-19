@@ -13,7 +13,15 @@
 <div class="container py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h4 class="fw-bold mb-0">Пользователи</h4>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createUserModal">
+            Создать аккаунт
+        </button>
     </div>
+
+    @if (TempData["UsersSuccess"] != null)
+    {
+        <div class="alert alert-success">@TempData["UsersSuccess"]</div>
+    }
 
     @if (TempData["UsersError"] != null)
     {
@@ -78,12 +86,127 @@
                                                     title="Отклонить">✖️</button>
                                         }
                                     }
+                                    <button type="button"
+                                            class="btn btn-outline-primary btn-sm reset-password-button"
+                                            data-user-id="@user.Id"
+                                            data-user-name="@user.FullName"
+                                            title="Сбросить пароль">
+                                        Пароль
+                                    </button>
+                                    @if (user.ApprovalStatus == PersonalCabinetEducationProgram.Models.UserApprovalStatus.Rejected)
+                                    {
+                                        <button type="button"
+                                                class="btn btn-outline-danger btn-sm delete-user-button"
+                                                data-user-id="@user.Id"
+                                                data-user-name="@user.FullName"
+                                                title="Удалить отклонённый аккаунт">
+                                            Удалить
+                                        </button>
+                                    }
                                 </div>
                             </td>
                         </tr>
                     }
                 </tbody>
             </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="createUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4">
+            <form method="post" asp-action="CreateUser">
+                <div class="modal-header">
+                    <h5 class="modal-title">Новый аккаунт</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">ФИО</label>
+                        <input type="text" name="fullName" class="form-control" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Логин</label>
+                        <input type="text" name="username" class="form-control" autocomplete="off" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Должность</label>
+                        <input type="text" name="post" class="form-control" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Роль</label>
+                        <select name="roleId" class="form-select" required>
+                            <option value="1">Руководитель ОПОП</option>
+                            <option value="2">Согласующий</option>
+                            <option value="3">Модератор</option>
+                            <option value="4">Администратор</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Пароль</label>
+                        <input type="password" name="password" class="form-control" minlength="6" autocomplete="new-password" required />
+                    </div>
+                    <div>
+                        <label class="form-label">Повторите пароль</label>
+                        <input type="password" name="confirmPassword" class="form-control" minlength="6" autocomplete="new-password" required />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Создать</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="resetPasswordModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4">
+            <form method="post" asp-action="ResetUserPassword">
+                <div class="modal-header">
+                    <h5 class="modal-title">Сброс пароля</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="id" id="resetPasswordUserId" />
+                    <p class="text-muted small" id="resetPasswordUserName"></p>
+                    <div class="mb-3">
+                        <label class="form-label">Новый пароль</label>
+                        <input type="password" name="newPassword" class="form-control" minlength="6" autocomplete="new-password" required />
+                    </div>
+                    <div>
+                        <label class="form-label">Повторите пароль</label>
+                        <input type="password" name="confirmPassword" class="form-control" minlength="6" autocomplete="new-password" required />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Сбросить пароль</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="deleteUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4">
+            <form method="post" asp-action="DeleteUser">
+                <div class="modal-header">
+                    <h5 class="modal-title">Удаление аккаунта</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="id" id="deleteUserId" />
+                    <p class="mb-0" id="deleteUserText"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-danger">Удалить</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -144,5 +267,23 @@
             var modal = new bootstrap.Modal(document.getElementById('approvalModal'));
             modal.show();
         }
+
+        document.querySelectorAll('.reset-password-button').forEach(function (button) {
+            button.addEventListener('click', function () {
+                document.getElementById('resetPasswordUserId').value = button.dataset.userId;
+                document.getElementById('resetPasswordUserName').textContent =
+                    'Пользователь: ' + button.dataset.userName;
+                new bootstrap.Modal(document.getElementById('resetPasswordModal')).show();
+            });
+        });
+
+        document.querySelectorAll('.delete-user-button').forEach(function (button) {
+            button.addEventListener('click', function () {
+                document.getElementById('deleteUserId').value = button.dataset.userId;
+                document.getElementById('deleteUserText').textContent =
+                    'Удалить отклонённый аккаунт пользователя ' + button.dataset.userName + '?';
+                new bootstrap.Modal(document.getElementById('deleteUserModal')).show();
+            });
+        });
     </script>
 }

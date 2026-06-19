@@ -37,7 +37,14 @@ namespace PersonalCabinetEducationProgram.Services
             element.UploadDate = DateOnly.FromDateTime(DateTime.Now);
             element.StatusApprovals = ElementApprovalStatus.Uploaded;
 
-            AddHistory(element.Id, userId, oldStatus, ElementApprovalStatus.Uploaded, $"Загружен файл: {originalFileName}");
+            AddHistory(
+                element.Id,
+                userId,
+                oldStatus,
+                ElementApprovalStatus.Uploaded,
+                $"Загружен файл: {originalFileName}",
+                storedFileName,
+                originalFileName);
             await RecalculateProgramStatusAsync(element.EducationalProgramId);
             await _context.SaveChangesAsync();
 
@@ -118,7 +125,14 @@ namespace PersonalCabinetEducationProgram.Services
             program.Status = EducationalProgramStatus.Draft;
         }
 
-        private void AddHistory(int elementId, int userId, string oldStatus, string newStatus, string comment)
+        private void AddHistory(
+            int elementId,
+            int userId,
+            string oldStatus,
+            string newStatus,
+            string comment,
+            string? filePath = null,
+            string? fileName = null)
         {
             _context.ElementStatusHistory.Add(new ElementStatusHistory
             {
@@ -127,7 +141,9 @@ namespace PersonalCabinetEducationProgram.Services
                 OldStatus = oldStatus,
                 NewStatus = newStatus,
                 ChangeDate = DateTime.Now,
-                Comment = comment
+                Comment = comment,
+                FilePath = filePath,
+                FileName = fileName
             });
         }
     }

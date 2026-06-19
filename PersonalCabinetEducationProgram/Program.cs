@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Server.IIS;
 using Microsoft.EntityFrameworkCore;
 using PersonalCabinetEducationProgram.Data;
 using PersonalCabinetEducationProgram.Models;
@@ -8,6 +10,12 @@ using Pomelo.EntityFrameworkCore.MySql.Infrastructure;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllersWithViews();
+builder.Services.Configure<FormOptions>(options =>
+    options.MultipartBodyLengthLimit = FileUploadLimits.MaxFileSizeBytes);
+builder.Services.Configure<IISServerOptions>(options =>
+    options.MaxRequestBodySize = FileUploadLimits.MaxRequestSizeBytes);
+builder.WebHost.ConfigureKestrel(options =>
+    options.Limits.MaxRequestBodySize = FileUploadLimits.MaxRequestSizeBytes);
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("Connection string 'DefaultConnection' is not configured.");

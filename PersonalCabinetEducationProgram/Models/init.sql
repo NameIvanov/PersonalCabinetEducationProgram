@@ -186,6 +186,8 @@ CREATE TABLE IF NOT EXISTS element_status_history (
     new_status LONGTEXT NOT NULL,
     change_date DATETIME(6) NOT NULL,
     comment LONGTEXT NOT NULL,
+    file_path LONGTEXT NULL,
+    file_name LONGTEXT NULL,
     CONSTRAINT fk_hist_elem FOREIGN KEY (educational_program_element_id)
         REFERENCES educational_program_elements (Id) ON DELETE CASCADE,
     CONSTRAINT fk_hist_user FOREIGN KEY (user_id) REFERENCES users (Id) ON DELETE CASCADE

@@ -86,6 +86,10 @@
         }
 
         <main role="main" class="site-content">
+            @if (TempData["ErrorMessage"] is string errorMessage)
+            {
+                <div class="alert alert-danger mx-3 mt-3 mb-0" role="alert">@errorMessage</div>
+            }
             @RenderBody()
         </main>
     </div>

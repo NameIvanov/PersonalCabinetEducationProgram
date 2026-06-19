@@ -66,9 +66,24 @@ namespace PersonalCabinetEducationProgram.Controllers
         [HttpPost]
         public async Task<IActionResult> Upload(int elementId, IFormFile file)
         {
+            var targetElement = await _context.EducationalProgramElements.FindAsync(elementId);
+            int programId = targetElement?.EducationalProgramId ?? 1;
+
+            if (file == null || file.Length == 0)
+            {
+                TempData["ErrorMessage"] = "Выберите файл для загрузки.";
+                return RedirectToAction(nameof(Index), new { programId });
+            }
+
+            if (file.Length > FileUploadLimits.MaxFileSizeBytes)
+            {
+                TempData["ErrorMessage"] = $"Размер файла не должен превышать {FileUploadLimits.MaxFileSizeDisplay}.";
+                return RedirectToAction(nameof(Index), new { programId });
+            }
+
             if (file != null && file.Length > 0)
             {
-                var element = await _context.EducationalProgramElements.FindAsync(elementId);
+                var element = targetElement;
                 if (element != null)
                 {
                     if (ElementApprovalStatus.IsLockedForNonAdmin(element.StatusApprovals))
@@ -76,13 +91,19 @@ namespace PersonalCabinetEducationProgram.Controllers
                         return BadRequest("Нельзя изменить согласованный или опубликованный элемент.");
                     }
 
-                    string uniqueFileName = await _fileStorageService.SaveFileAsync(file);
-                    await _workflowService.MarkUploadedAsync(elementId, GetCurrentUserId(), uniqueFileName, file.FileName);
+                    try
+                    {
+                        string uniqueFileName = await _fileStorageService.SaveFileAsync(file);
+                        await _workflowService.MarkUploadedAsync(elementId, GetCurrentUserId(), uniqueFileName, file.FileName);
+                    }
+                    catch (InvalidOperationException ex)
+                    {
+                        TempData["ErrorMessage"] = ex.Message;
+                    }
                 }
             }
 
-            int progId = (await _context.EducationalProgramElements.FindAsync(elementId))?.EducationalProgramId ?? 1;
-            return RedirectToAction(nameof(Index), new { programId = progId });
+            return RedirectToAction(nameof(Index), new { programId });
         }
 
         public async Task<IActionResult> Download(int elementId)

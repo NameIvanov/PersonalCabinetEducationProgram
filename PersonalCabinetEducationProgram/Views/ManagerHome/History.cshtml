@@ -53,6 +53,16 @@
                                     {
                                         <div class="text-muted small mt-1 fst-italic">«@h.Comment»</div>
                                     }
+                                    @if (!string.IsNullOrEmpty(h.FilePath))
+                                    {
+                                        <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
+                                            <span class="small fw-semibold">@h.FileName</span>
+                                            <a asp-controller="HistoryFiles" asp-action="Preview" asp-route-historyId="@h.Id"
+                                               class="btn btn-outline-secondary btn-sm" target="_blank">Открыть</a>
+                                            <a asp-controller="HistoryFiles" asp-action="Download" asp-route-historyId="@h.Id"
+                                               class="btn btn-outline-secondary btn-sm">Скачать</a>
+                                        </div>
+                                    }
                                 </div>
                             }
                         </div>

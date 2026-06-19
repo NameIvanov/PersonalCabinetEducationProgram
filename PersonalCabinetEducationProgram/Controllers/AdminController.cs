@@ -74,28 +74,38 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> CreateUser(
             string fullName,
             int roleId,
             string post,
-            string? username,
-            string? password)
+            string username,
+            string password,
+            string confirmPassword)
         {
             if (!AppRoles.AllIds.Contains(roleId))
                 return BadRequest();
 
-            username = string.IsNullOrWhiteSpace(username)
-                ? $"user{Guid.NewGuid():N}"[..16]
-                : username.Trim();
-            password = string.IsNullOrWhiteSpace(password)
-                ? $"Temp-{Guid.NewGuid():N}"[..14]
-                : password;
+            if (string.IsNullOrWhiteSpace(fullName) ||
+                string.IsNullOrWhiteSpace(post) ||
+                string.IsNullOrWhiteSpace(username) ||
+                string.IsNullOrWhiteSpace(password))
+            {
+                TempData["UsersError"] = "Заполните все поля для создания аккаунта.";
+                return RedirectToAction(nameof(Users));
+            }
+
+            if (password != confirmPassword)
+            {
+                TempData["UsersError"] = "Пароли не совпадают.";
+                return RedirectToAction(nameof(Users));
+            }
 
             var user = new User
             {
-                UserName = username,
-                FullName = fullName,
-                Post = post,
+                UserName = username.Trim(),
+                FullName = fullName.Trim(),
+                Post = post.Trim(),
                 ApprovalStatus = UserApprovalStatus.Approved
             };
 
@@ -106,7 +116,49 @@ namespace PersonalCabinetEducationProgram.Controllers
                 return RedirectToAction(nameof(Users));
             }
 
-            await _userManager.AddToRoleAsync(user, GetRoleName(roleId));
+            var roleResult = await _userManager.AddToRoleAsync(user, GetRoleName(roleId));
+            if (!roleResult.Succeeded)
+            {
+                await _userManager.DeleteAsync(user);
+                TempData["UsersError"] = string.Join(" ", roleResult.Errors.Select(e => e.Description));
+                return RedirectToAction(nameof(Users));
+            }
+
+            TempData["UsersSuccess"] = $"Аккаунт «{user.UserName}» создан.";
+            return RedirectToAction(nameof(Users));
+        }
+
+        [HttpPost]
+        [Authorize(Roles = "Admin")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ResetUserPassword(int id, string newPassword, string confirmPassword)
+        {
+            var user = await _userManager.FindByIdAsync(id.ToString());
+            if (user == null)
+                return NotFound();
+
+            if (string.IsNullOrWhiteSpace(newPassword))
+            {
+                TempData["UsersError"] = "Введите новый пароль.";
+                return RedirectToAction(nameof(Users));
+            }
+
+            if (newPassword != confirmPassword)
+            {
+                TempData["UsersError"] = "Пароли не совпадают.";
+                return RedirectToAction(nameof(Users));
+            }
+
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+            var result = await _userManager.ResetPasswordAsync(user, token, newPassword);
+            if (!result.Succeeded)
+            {
+                TempData["UsersError"] = string.Join(" ", result.Errors.Select(e => e.Description));
+                return RedirectToAction(nameof(Users));
+            }
+
+            await _userManager.UpdateSecurityStampAsync(user);
+            TempData["UsersSuccess"] = $"Пароль пользователя «{user.UserName}» сброшен.";
             return RedirectToAction(nameof(Users));
         }
 
@@ -139,14 +191,33 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteUser(int id)
         {
             var user = await _userManager.FindByIdAsync(id.ToString());
-            if (user != null)
+            if (user == null)
+                return NotFound();
+
+            if (user.ApprovalStatus != UserApprovalStatus.Rejected)
             {
-                await _userManager.DeleteAsync(user);
+                TempData["UsersError"] = "Удалять можно только отклонённые аккаунты.";
+                return RedirectToAction(nameof(Users));
             }
 
+            if (GetCurrentUserId() == id)
+            {
+                TempData["UsersError"] = "Нельзя удалить собственный аккаунт.";
+                return RedirectToAction(nameof(Users));
+            }
+
+            var result = await _userManager.DeleteAsync(user);
+            if (!result.Succeeded)
+            {
+                TempData["UsersError"] = string.Join(" ", result.Errors.Select(e => e.Description));
+                return RedirectToAction(nameof(Users));
+            }
+
+            TempData["UsersSuccess"] = $"Аккаунт «{user.UserName}» удалён.";
             return RedirectToAction(nameof(Users));
         }
 
@@ -350,8 +421,21 @@ namespace PersonalCabinetEducationProgram.Controllers
 
             if (file != null && file.Length > 0)
             {
-                var uniqueFileName = await _fileStorageService.SaveFileAsync(file);
-                await _workflowService.MarkUploadedAsync(elementId, GetCurrentUserId(), uniqueFileName, file.FileName, adminOverride: true);
+                if (file.Length > FileUploadLimits.MaxFileSizeBytes)
+                {
+                    TempData["ErrorMessage"] = $"Размер файла не должен превышать {FileUploadLimits.MaxFileSizeDisplay}.";
+                    return RedirectToAction(nameof(ProgramDetails), new { id = element.EducationalProgramId });
+                }
+
+                try
+                {
+                    var uniqueFileName = await _fileStorageService.SaveFileAsync(file);
+                    await _workflowService.MarkUploadedAsync(elementId, GetCurrentUserId(), uniqueFileName, file.FileName, adminOverride: true);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    TempData["ErrorMessage"] = ex.Message;
+                }
             }
 
             return RedirectToAction(nameof(ProgramDetails), new { id = element.EducationalProgramId });

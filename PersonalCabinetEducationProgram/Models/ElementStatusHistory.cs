@@ -27,6 +27,12 @@ namespace PersonalCabinetEducationProgram.Models
         [Column("comment")]
         public string Comment { get; set; }
 
+        [Column("file_path")]
+        public string? FilePath { get; set; }
+
+        [Column("file_name")]
+        public string? FileName { get; set; }
+
         public EducationalProgramElement Element { get; set; }
         public User User { get; set; }
     }

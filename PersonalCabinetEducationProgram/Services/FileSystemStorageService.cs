@@ -23,7 +23,10 @@ namespace PersonalCabinetEducationProgram.Services
         public async Task<string> SaveFileAsync(IFormFile file)
         {
             if (file == null || file.Length == 0)
-                throw new ArgumentException("File is empty");
+                throw new ArgumentException("Файл не выбран или пуст.");
+
+            if (file.Length > FileUploadLimits.MaxFileSizeBytes)
+                throw new InvalidOperationException($"Размер файла не должен превышать {FileUploadLimits.MaxFileSizeDisplay}.");
 
             var extension = Path.GetExtension(file.FileName);
             if (!AllowedExtensions.Contains(extension))

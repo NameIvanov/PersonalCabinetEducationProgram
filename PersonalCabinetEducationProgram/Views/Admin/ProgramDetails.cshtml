@@ -65,7 +65,7 @@
                                         <form method="post" enctype="multipart/form-data" asp-action="UploadElement" class="d-inline">
                                             <input type="hidden" name="elementId" value="@element.Id" />
                                             <label class="btn btn-outline-primary btn-sm mb-0" title="Загрузить или заменить">
-                                                @(string.IsNullOrEmpty(element.FilePath) ? "Загрузить" : "Заменить") <input type="file" name="file" accept=".pdf,.doc,.docx" style="display:none;" onchange="this.form.submit()" />
+                                                @(string.IsNullOrEmpty(element.FilePath) ? "Загрузить" : "Заменить") <input type="file" name="file" accept=".pdf,.doc,.docx" data-max-size="52428800" title="PDF, DOC или DOCX до 50 МБ" style="display:none;" onchange="if (window.validateUploadFile(this)) this.form.submit()" />
                                             </label>
                                         </form>
 
