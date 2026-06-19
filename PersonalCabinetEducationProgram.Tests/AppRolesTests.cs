@@ -11,10 +11,16 @@ public class AppRolesTests
     }
 
     [Fact]
-    public void SelfRegistration_AllowsOnlyManagerAndApprover()
+    public void SelfRegistration_AllowsManagerApproverAndModerator()
     {
         Assert.Equal(
-            [AppRoles.ManagerId, AppRoles.ApproverId],
+            [AppRoles.ManagerId, AppRoles.ApproverId, AppRoles.ModeratorId],
             AppRoles.SelfRegistrationIds);
+    }
+
+    [Fact]
+    public void AssignableRoles_DoNotContainAdmin()
+    {
+        Assert.DoesNotContain(AppRoles.AdminId, AppRoles.AssignableIds);
     }
 }

@@ -74,6 +74,16 @@
                             </td>
                             <td>
                                 <div class="d-flex gap-1 flex-wrap">
+                                    <button type="button"
+                                            class="btn btn-outline-secondary btn-sm edit-user-button"
+                                            data-user-id="@user.Id"
+                                            data-user-name="@user.FullName"
+                                            data-user-post="@user.Post"
+                                            data-user-role="@user.RoleName"
+                                            data-user-is-admin="@(user.RoleName == PersonalCabinetEducationProgram.Models.AppRoles.Admin ? "true" : "false")"
+                                            title="Редактировать пользователя">
+                                        Изменить
+                                    </button>
                                     @if (user.RoleName != PersonalCabinetEducationProgram.Models.AppRoles.Admin)
                                     {
                                         <button type="button" class="btn btn-outline-success btn-sm"
@@ -113,6 +123,45 @@
     </div>
 </div>
 
+<div class="modal fade" id="editUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4">
+            <form method="post" asp-action="EditUser">
+                <div class="modal-header">
+                    <h5 class="modal-title">Редактирование пользователя</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="id" id="editUserId" />
+                    <div class="mb-3">
+                        <label class="form-label">ФИО</label>
+                        <input type="text" name="fullName" id="editUserFullName" class="form-control" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Должность</label>
+                        <input type="text" name="post" id="editUserPost" class="form-control" required />
+                    </div>
+                    <div id="editUserRoleBlock">
+                        <label class="form-label">Роль</label>
+                        <select name="roleId" id="editUserRoleId" class="form-select" required>
+                            <option value="1">Руководитель ОПОП</option>
+                            <option value="2">Согласующий</option>
+                            <option value="3">Модератор</option>
+                        </select>
+                    </div>
+                    <div id="editAdminRoleNotice" class="text-muted small d-none">
+                        Роль администратора изменять нельзя.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="createUserModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content rounded-4">
@@ -140,7 +189,6 @@
                             <option value="1">Руководитель ОПОП</option>
                             <option value="2">Согласующий</option>
                             <option value="3">Модератор</option>
-                            <option value="4">Администратор</option>
                         </select>
                     </div>
                     <div class="mb-3">
@@ -267,6 +315,34 @@
             var modal = new bootstrap.Modal(document.getElementById('approvalModal'));
             modal.show();
         }
+
+        const roleIds = {
+            'Manager': '1',
+            'Approver': '2',
+            'Moderator': '3'
+        };
+
+        document.querySelectorAll('.edit-user-button').forEach(function (button) {
+            button.addEventListener('click', function () {
+                document.getElementById('editUserId').value = button.dataset.userId;
+                document.getElementById('editUserFullName').value = button.dataset.userName;
+                document.getElementById('editUserPost').value = button.dataset.userPost;
+                const isAdmin = button.dataset.userIsAdmin === 'true';
+                const roleBlock = document.getElementById('editUserRoleBlock');
+                const adminNotice = document.getElementById('editAdminRoleNotice');
+                const roleSelect = document.getElementById('editUserRoleId');
+
+                roleBlock.classList.toggle('d-none', isAdmin);
+                adminNotice.classList.toggle('d-none', !isAdmin);
+                roleSelect.disabled = isAdmin;
+                roleSelect.required = !isAdmin;
+
+                if (!isAdmin) {
+                    roleSelect.value = roleIds[button.dataset.userRole] || '1';
+                }
+                new bootstrap.Modal(document.getElementById('editUserModal')).show();
+            });
+        });
 
         document.querySelectorAll('.reset-password-button').forEach(function (button) {
             button.addEventListener('click', function () {

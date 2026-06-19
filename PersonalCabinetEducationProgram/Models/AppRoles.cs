@@ -14,6 +14,7 @@ namespace PersonalCabinetEducationProgram.Models
 
         public static readonly string[] All = [Manager, Approver, Moderator, Admin];
         public static readonly int[] AllIds = [ManagerId, ApproverId, ModeratorId, AdminId];
-        public static readonly int[] SelfRegistrationIds = [ManagerId, ApproverId];
+        public static readonly int[] AssignableIds = [ManagerId, ApproverId, ModeratorId];
+        public static readonly int[] SelfRegistrationIds = [ManagerId, ApproverId, ModeratorId];
     }
 }

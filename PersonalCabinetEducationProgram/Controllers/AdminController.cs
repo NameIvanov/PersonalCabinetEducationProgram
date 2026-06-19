@@ -83,7 +83,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             string password,
             string confirmPassword)
         {
-            if (!AppRoles.AllIds.Contains(roleId))
+            if (!AppRoles.AssignableIds.Contains(roleId))
                 return BadRequest();
 
             if (string.IsNullOrWhiteSpace(fullName) ||
@@ -164,28 +164,64 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> EditUser(int id, string fullName, int roleId, string post)
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> EditUser(int id, string fullName, int? roleId, string post)
         {
-            if (!AppRoles.AllIds.Contains(roleId))
-                return BadRequest();
-
-            var user = await _userManager.FindByIdAsync(id.ToString());
-            if (user != null)
+            if (string.IsNullOrWhiteSpace(fullName) || string.IsNullOrWhiteSpace(post))
             {
-                user.FullName = fullName;
-                user.Post = post;
-                await _userManager.UpdateAsync(user);
-
-                var currentRoles = await _userManager.GetRolesAsync(user);
-                if (currentRoles.Count > 0)
-                {
-                    await _userManager.RemoveFromRolesAsync(user, currentRoles);
-                }
-
-                await _userManager.AddToRoleAsync(user, GetRoleName(roleId));
-                await _userManager.UpdateSecurityStampAsync(user);
+                TempData["UsersError"] = "ФИО и должность обязательны.";
+                return RedirectToAction(nameof(Users));
             }
 
+            var user = await _userManager.FindByIdAsync(id.ToString());
+            if (user == null)
+                return NotFound();
+
+            var currentRoles = await _userManager.GetRolesAsync(user);
+            var isAdministrator = currentRoles.Contains(AppRoles.Admin, StringComparer.OrdinalIgnoreCase);
+
+            if (!isAdministrator && (roleId == null || !AppRoles.AssignableIds.Contains(roleId.Value)))
+                return BadRequest();
+
+            user.FullName = fullName.Trim();
+            user.Post = post.Trim();
+
+            var updateResult = await _userManager.UpdateAsync(user);
+            if (!updateResult.Succeeded)
+            {
+                TempData["UsersError"] = string.Join(" ", updateResult.Errors.Select(e => e.Description));
+                return RedirectToAction(nameof(Users));
+            }
+
+            if (!isAdministrator)
+            {
+                var targetRole = GetRoleName(roleId!.Value);
+                if (!currentRoles.Contains(targetRole, StringComparer.OrdinalIgnoreCase))
+                {
+                    var roleResult = await _userManager.AddToRoleAsync(user, targetRole);
+                    if (!roleResult.Succeeded)
+                    {
+                        TempData["UsersError"] = string.Join(" ", roleResult.Errors.Select(e => e.Description));
+                        return RedirectToAction(nameof(Users));
+                    }
+                }
+
+                var rolesToRemove = currentRoles
+                    .Where(role => !role.Equals(targetRole, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                if (rolesToRemove.Count > 0)
+                {
+                    var removeResult = await _userManager.RemoveFromRolesAsync(user, rolesToRemove);
+                    if (!removeResult.Succeeded)
+                    {
+                        TempData["UsersError"] = string.Join(" ", removeResult.Errors.Select(e => e.Description));
+                        return RedirectToAction(nameof(Users));
+                    }
+                }
+            }
+
+            await _userManager.UpdateSecurityStampAsync(user);
+            TempData["UsersSuccess"] = $"Данные пользователя «{user.UserName}» обновлены.";
             return RedirectToAction(nameof(Users));
         }
 

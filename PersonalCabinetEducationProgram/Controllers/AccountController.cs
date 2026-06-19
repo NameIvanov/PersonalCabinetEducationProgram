@@ -101,13 +101,19 @@ namespace PersonalCabinetEducationProgram.Controllers
         {
             if (model.RoleId == null || !AppRoles.SelfRegistrationIds.Contains(model.RoleId.Value))
             {
-                ModelState.AddModelError(nameof(model.RoleId), "Можно зарегистрироваться только как руководитель или согласующий.");
+                ModelState.AddModelError(nameof(model.RoleId), "Выберите доступную роль.");
             }
 
             if (!ModelState.IsValid)
                 return View(model);
 
-            var roleName = model.RoleId == AppRoles.ManagerId ? AppRoles.Manager : AppRoles.Approver;
+            var roleName = model.RoleId.Value switch
+            {
+                AppRoles.ManagerId => AppRoles.Manager,
+                AppRoles.ApproverId => AppRoles.Approver,
+                AppRoles.ModeratorId => AppRoles.Moderator,
+                _ => throw new InvalidOperationException("Недоступная роль.")
+            };
             var user = new User
             {
                 UserName = model.Username,
