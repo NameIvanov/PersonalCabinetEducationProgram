@@ -193,6 +193,25 @@ CREATE TABLE IF NOT EXISTS element_status_history (
     CONSTRAINT fk_hist_user FOREIGN KEY (user_id) REFERENCES users (Id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS notifications (
+    Id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    educational_program_element_id INT NOT NULL,
+    actor_name LONGTEXT NOT NULL,
+    type LONGTEXT NOT NULL,
+    title LONGTEXT NOT NULL,
+    message LONGTEXT NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    is_read TINYINT(1) NOT NULL DEFAULT 0,
+    read_at DATETIME(6) NULL,
+    CONSTRAINT fk_notif_user FOREIGN KEY (user_id) REFERENCES users (Id) ON DELETE CASCADE,
+    CONSTRAINT fk_notif_elem FOREIGN KEY (educational_program_element_id)
+        REFERENCES educational_program_elements (Id) ON DELETE CASCADE,
+    INDEX ix_notif_user (user_id),
+    INDEX ix_notif_elem (educational_program_element_id),
+    INDEX ix_notif_unread (user_id, is_read)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS `__EFMigrationsHistory` (
     `MigrationId` VARCHAR(150) NOT NULL,
     `ProductVersion` VARCHAR(32) NOT NULL,

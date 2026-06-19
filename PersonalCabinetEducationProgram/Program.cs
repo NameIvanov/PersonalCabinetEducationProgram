@@ -56,6 +56,7 @@ builder.Services.AddScoped<IUserClaimsPrincipalFactory<User>, ApplicationClaimsP
 builder.Services.Configure<FileStorageSettings>(builder.Configuration.GetSection("FileStorageSettings"));
 builder.Services.AddScoped<IFileStorageService, FileSystemStorageService>();
 builder.Services.AddScoped<ElementWorkflowService>();
+builder.Services.AddScoped<NotificationService>();
 
 var app = builder.Build();
 

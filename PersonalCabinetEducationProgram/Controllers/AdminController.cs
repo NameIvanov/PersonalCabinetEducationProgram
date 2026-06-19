@@ -18,19 +18,22 @@ namespace PersonalCabinetEducationProgram.Controllers
         private readonly FileStorageSettings _storageSettings;
         private readonly ElementWorkflowService _workflowService;
         private readonly UserManager<User> _userManager;
+        private readonly NotificationService _notificationService;
 
         public AdminController(
             ApplicationDbContext context,
             IFileStorageService fileStorageService,
             IOptions<FileStorageSettings> storageSettings,
             ElementWorkflowService workflowService,
-            UserManager<User> userManager)
+            UserManager<User> userManager,
+            NotificationService notificationService)
         {
             _context = context;
             _fileStorageService = fileStorageService;
             _storageSettings = storageSettings.Value;
             _workflowService = workflowService;
             _userManager = userManager;
+            _notificationService = notificationService;
         }
 
         private int GetCurrentUserId()
@@ -508,6 +511,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DownloadElement(int elementId)
         {
+            await _notificationService.MarkElementReadAsync(GetCurrentUserId(), elementId);
             var element = await _context.EducationalProgramElements.FindAsync(elementId);
             if (element == null || string.IsNullOrEmpty(element.FilePath))
                 return NotFound();
@@ -523,6 +527,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> PreviewElement(int elementId)
         {
+            await _notificationService.MarkElementReadAsync(GetCurrentUserId(), elementId);
             var element = await _context.EducationalProgramElements.FindAsync(elementId);
             if (element == null || string.IsNullOrEmpty(element.FilePath))
                 return NotFound();

@@ -32,5 +32,6 @@ namespace PersonalCabinetEducationProgram.Models
         public ICollection<EducationalProgramElementComment> Comments { get; set; } = [];
         public ICollection<EducationalProgramManager> EducationalProgramManagers { get; set; } = [];
         public ICollection<ApproverAssignment> ApproverAssignments { get; set; } = [];
+        public ICollection<Notification> Notifications { get; set; } = [];
     }
 }

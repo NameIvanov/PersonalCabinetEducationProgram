@@ -14,15 +14,18 @@ namespace PersonalCabinetEducationProgram.Controllers
         private readonly FileStorageSettings _storageSettings;
         private readonly ApplicationDbContext _context;
         private readonly ElementWorkflowService _workflowService;
+        private readonly NotificationService _notificationService;
 
         public ModeratorHomeController(
             IOptions<FileStorageSettings> storageSettings,
             ApplicationDbContext context,
-            ElementWorkflowService workflowService)
+            ElementWorkflowService workflowService,
+            NotificationService notificationService)
         {
             _storageSettings = storageSettings.Value;
             _context = context;
             _workflowService = workflowService;
+            _notificationService = notificationService;
         }
 
         private int GetCurrentUserId()
@@ -56,6 +59,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         public async Task<IActionResult> Download(int elementId)
         {
+            await _notificationService.MarkElementReadAsync(GetCurrentUserId(), elementId);
             var element = await _context.EducationalProgramElements.FindAsync(elementId);
             if (element == null || string.IsNullOrEmpty(element.FilePath))
                 return NotFound();
@@ -70,6 +74,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         public async Task<IActionResult> Preview(int elementId)
         {
+            await _notificationService.MarkElementReadAsync(GetCurrentUserId(), elementId);
             var element = await _context.EducationalProgramElements.FindAsync(elementId);
             if (element == null || string.IsNullOrEmpty(element.FilePath))
                 return NotFound();
@@ -132,6 +137,12 @@ namespace PersonalCabinetEducationProgram.Controllers
                 Status = CommentStatus.New
             });
 
+            await _notificationService.CreateForElementAsync(
+                elementId,
+                GetCurrentUserId(),
+                NotificationType.CommentAdded,
+                "Добавлен комментарий",
+                commentText.Trim());
             await _context.SaveChangesAsync();
 
             var element = await _context.EducationalProgramElements.FindAsync(elementId);
@@ -156,12 +167,14 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         public async Task<IActionResult> History(int elementId)
         {
+            await _notificationService.MarkElementReadAsync(GetCurrentUserId(), elementId);
             await FillElementDetailsViewBag(elementId, nameof(ModeratorHomeController).Replace("Controller", ""));
             return View("~/Views/ManagerHome/History.cshtml");
         }
 
         public async Task<IActionResult> Comments(int elementId)
         {
+            await _notificationService.MarkElementReadAsync(GetCurrentUserId(), elementId);
             await FillElementDetailsViewBag(elementId, nameof(ModeratorHomeController).Replace("Controller", ""));
             var comments = await GetElementComments(elementId);
             return View("~/Views/ManagerHome/Comments.cshtml", comments);

@@ -46,6 +46,7 @@
         @if (isAuthenticated)
         {
             <div class="app-user">
+                @await Component.InvokeAsync("NotificationBell")
                 <span class="app-avatar" aria-hidden="true"></span>
                 <div class="app-user-copy">
                     <strong>@User.Identity?.Name</strong>

@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS `__EFMigrationsHistory` (
 
 INSERT INTO `__EFMigrationsHistory` (`MigrationId`, `ProductVersion`) VALUES
 ('20260619132300_InitialCreate', '8.0.0'),
-('20260619134645_AddHistoryFileVersions', '8.0.0')
+('20260619134645_AddHistoryFileVersions', '8.0.0'),
+('20260619150134_AddNotifications', '8.0.0')
 ON DUPLICATE KEY UPDATE
     `ProductVersion` = VALUES(`ProductVersion`);
 

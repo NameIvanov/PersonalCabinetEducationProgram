@@ -57,6 +57,8 @@
                                 <td>@(element.UploadDate?.ToString("dd.MM.yyyy") ?? "—")</td>
                                 <td>
                                     <div class="d-flex gap-1 flex-wrap">
+                                        <a asp-controller="ManagerHome" asp-action="History" asp-route-elementId="@element.Id"
+                                           class="btn btn-outline-secondary btn-sm">История</a>
                                         @if (!string.IsNullOrEmpty(element.FilePath))
                                         {
                                             <a asp-action="PreviewElement" asp-route-elementId="@element.Id" class="btn btn-outline-secondary btn-sm" target="_blank">Просмотр</a>

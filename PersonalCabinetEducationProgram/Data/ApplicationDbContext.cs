@@ -16,6 +16,7 @@ namespace PersonalCabinetEducationProgram.Data
         public DbSet<EducationalProgramAssignment> EducationalProgramAssignments { get; set; }
         public DbSet<ElementStatusHistory> ElementStatusHistory { get; set; }
         public DbSet<ApproverAssignment> ApproverAssignments { get; set; }
+        public DbSet<Notification> Notifications { get; set; }
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) { }
 
@@ -162,6 +163,25 @@ namespace PersonalCabinetEducationProgram.Data
 
                 entity.HasIndex(h => h.EducationalProgramElementId).HasDatabaseName("ix_hist_elem");
                 entity.HasIndex(h => h.UserId).HasDatabaseName("ix_hist_user");
+            });
+
+            modelBuilder.Entity<Notification>(entity =>
+            {
+                entity.HasOne(n => n.User)
+                    .WithMany(u => u.Notifications)
+                    .HasForeignKey(n => n.UserId)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("fk_notif_user");
+
+                entity.HasOne(n => n.Element)
+                    .WithMany(e => e.Notifications)
+                    .HasForeignKey(n => n.EducationalProgramElementId)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("fk_notif_elem");
+
+                entity.HasIndex(n => n.UserId).HasDatabaseName("ix_notif_user");
+                entity.HasIndex(n => n.EducationalProgramElementId).HasDatabaseName("ix_notif_elem");
+                entity.HasIndex(n => new { n.UserId, n.IsRead }).HasDatabaseName("ix_notif_unread");
             });
 
             // Seed Roles

@@ -34,5 +34,6 @@ namespace PersonalCabinetEducationProgram.Models
         // Навигации
         public EducationalProgram EducationalProgram { get; set; }
         public ICollection<EducationalProgramElementComment> Comments { get; set; }
+        public ICollection<Notification> Notifications { get; set; } = [];
     }
 }

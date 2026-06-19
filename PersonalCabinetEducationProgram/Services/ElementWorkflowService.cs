@@ -7,10 +7,14 @@ namespace PersonalCabinetEducationProgram.Services
     public class ElementWorkflowService
     {
         private readonly ApplicationDbContext _context;
+        private readonly NotificationService _notificationService;
 
-        public ElementWorkflowService(ApplicationDbContext context)
+        public ElementWorkflowService(
+            ApplicationDbContext context,
+            NotificationService notificationService)
         {
             _context = context;
+            _notificationService = notificationService;
         }
 
         public async Task<EducationalProgramElement?> MarkUploadedAsync(
@@ -45,6 +49,12 @@ namespace PersonalCabinetEducationProgram.Services
                 $"Загружен файл: {originalFileName}",
                 storedFileName,
                 originalFileName);
+            await _notificationService.CreateForElementAsync(
+                element.Id,
+                userId,
+                NotificationType.FileUploaded,
+                "Загружен файл",
+                $"{originalFileName} загружен в элемент «{element.Name}».");
             await RecalculateProgramStatusAsync(element.EducationalProgramId);
             await _context.SaveChangesAsync();
 
@@ -83,6 +93,12 @@ namespace PersonalCabinetEducationProgram.Services
 
             element.StatusApprovals = normalizedNewStatus;
             AddHistory(element.Id, userId, oldStatus, normalizedNewStatus, comment ?? normalizedNewStatus);
+            await _notificationService.CreateForElementAsync(
+                element.Id,
+                userId,
+                NotificationType.StatusChanged,
+                "Изменён статус",
+                $"Элемент «{element.Name}»: «{oldStatus}» → «{normalizedNewStatus}». {comment}".Trim());
             await RecalculateProgramStatusAsync(element.EducationalProgramId);
             await _context.SaveChangesAsync();
 
