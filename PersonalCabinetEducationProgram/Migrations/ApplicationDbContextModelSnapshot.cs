@@ -61,7 +61,7 @@ namespace PersonalCabinetEducationProgram.Migrations
                         .HasColumnType("longtext")
                         .HasColumnName("claim_value");
 
-                    b.Property<int?>("UserId")
+                    b.Property<int>("UserId")
                         .HasColumnType("int")
                         .HasColumnName("user_id");
 
@@ -197,13 +197,17 @@ namespace PersonalCabinetEducationProgram.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ApproverUserId");
+                    b.HasIndex("ApproverUserId")
+                        .HasDatabaseName("ix_appr_user");
 
-                    b.HasIndex("AssignedByUserId");
+                    b.HasIndex("AssignedByUserId")
+                        .HasDatabaseName("ix_appr_by");
 
-                    b.HasIndex("DepartmentId");
+                    b.HasIndex("DepartmentId")
+                        .HasDatabaseName("ix_appr_dept");
 
-                    b.HasIndex("FacultyId");
+                    b.HasIndex("FacultyId")
+                        .HasDatabaseName("ix_appr_fac");
 
                     b.ToTable("approver_assignments", "personal_cabinet");
                 });
@@ -272,7 +276,7 @@ namespace PersonalCabinetEducationProgram.Migrations
                         .IsRequired()
                         .HasColumnType("longtext");
 
-                    b.Property<int>("UserId")
+                    b.Property<int?>("UserId")
                         .HasColumnType("int")
                         .HasColumnName("user_id");
 
@@ -282,7 +286,8 @@ namespace PersonalCabinetEducationProgram.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_prog_user");
 
                     b.ToTable("educational_programs", "personal_cabinet");
 
@@ -336,11 +341,14 @@ namespace PersonalCabinetEducationProgram.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("DepartmentId");
+                    b.HasIndex("DepartmentId")
+                        .HasDatabaseName("ix_epa_dept");
 
-                    b.HasIndex("EducationalProgramId");
+                    b.HasIndex("EducationalProgramId")
+                        .HasDatabaseName("ix_epa_prog");
 
-                    b.HasIndex("FacultyId");
+                    b.HasIndex("FacultyId")
+                        .HasDatabaseName("ix_epa_fac");
 
                     b.ToTable("educational_program_assignments", "personal_cabinet");
 
@@ -410,7 +418,8 @@ namespace PersonalCabinetEducationProgram.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("EducationalProgramId");
+                    b.HasIndex("EducationalProgramId")
+                        .HasDatabaseName("ix_elem_prog");
 
                     b.ToTable("educational_program_elements", "personal_cabinet");
 
@@ -572,9 +581,11 @@ namespace PersonalCabinetEducationProgram.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("EducationalProgramElementId");
+                    b.HasIndex("EducationalProgramElementId")
+                        .HasDatabaseName("ix_comm_elem");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_comm_user");
 
                     b.ToTable("comments_educational_program_element", "personal_cabinet");
                 });
@@ -603,11 +614,14 @@ namespace PersonalCabinetEducationProgram.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AssignedByUserId");
+                    b.HasIndex("AssignedByUserId")
+                        .HasDatabaseName("ix_mgr_by");
 
-                    b.HasIndex("EducationalProgramId");
+                    b.HasIndex("EducationalProgramId")
+                        .HasDatabaseName("ix_mgr_prog");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_mgr_user");
 
                     b.ToTable("educational_program_managers", "personal_cabinet");
 
@@ -673,9 +687,11 @@ namespace PersonalCabinetEducationProgram.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("EducationalProgramElementId");
+                    b.HasIndex("EducationalProgramElementId")
+                        .HasDatabaseName("ix_hist_elem");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_hist_user");
 
                     b.ToTable("element_status_history", "personal_cabinet");
                 });
@@ -957,7 +973,8 @@ namespace PersonalCabinetEducationProgram.Migrations
                         .WithMany()
                         .HasForeignKey("RoleId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_rc_role");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserClaim<int>", b =>
@@ -966,7 +983,8 @@ namespace PersonalCabinetEducationProgram.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_uc_user");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserLogin<int>", b =>
@@ -975,7 +993,8 @@ namespace PersonalCabinetEducationProgram.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_ul_user");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserRole<int>", b =>
@@ -984,13 +1003,15 @@ namespace PersonalCabinetEducationProgram.Migrations
                         .WithMany()
                         .HasForeignKey("RoleId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_ur_role");
 
                     b.HasOne("PersonalCabinetEducationProgram.Models.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_ur_user");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserToken<int>", b =>
@@ -999,7 +1020,8 @@ namespace PersonalCabinetEducationProgram.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_ut_user");
                 });
 
             modelBuilder.Entity("PersonalCabinetEducationProgram.Models.ApproverAssignment", b =>
@@ -1008,21 +1030,27 @@ namespace PersonalCabinetEducationProgram.Migrations
                         .WithMany("ApproverAssignments")
                         .HasForeignKey("ApproverUserId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_appr_user");
 
                     b.HasOne("PersonalCabinetEducationProgram.Models.User", "AssignedByUser")
                         .WithMany()
                         .HasForeignKey("AssignedByUserId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_appr_by");
 
                     b.HasOne("PersonalCabinetEducationProgram.Models.Departments", "Department")
                         .WithMany()
-                        .HasForeignKey("DepartmentId");
+                        .HasForeignKey("DepartmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_appr_dept");
 
                     b.HasOne("PersonalCabinetEducationProgram.Models.Facultys", "Faculty")
                         .WithMany()
-                        .HasForeignKey("FacultyId");
+                        .HasForeignKey("FacultyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_appr_fac");
 
                     b.Navigation("ApproverUser");
 
@@ -1050,19 +1078,22 @@ namespace PersonalCabinetEducationProgram.Migrations
                         .WithMany()
                         .HasForeignKey("DepartmentId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_epa_dept");
 
                     b.HasOne("PersonalCabinetEducationProgram.Models.EducationalProgram", "EducationalProgram")
                         .WithMany("Assignments")
                         .HasForeignKey("EducationalProgramId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_epa_prog");
 
                     b.HasOne("PersonalCabinetEducationProgram.Models.Facultys", "Faculty")
                         .WithMany()
                         .HasForeignKey("FacultyId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_epa_fac");
 
                     b.Navigation("Department");
 
@@ -1077,7 +1108,8 @@ namespace PersonalCabinetEducationProgram.Migrations
                         .WithMany("Elements")
                         .HasForeignKey("EducationalProgramId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_elem_prog");
 
                     b.Navigation("EducationalProgram");
                 });
@@ -1088,13 +1120,15 @@ namespace PersonalCabinetEducationProgram.Migrations
                         .WithMany("Comments")
                         .HasForeignKey("EducationalProgramElementId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_comm_elem");
 
                     b.HasOne("PersonalCabinetEducationProgram.Models.User", "User")
                         .WithMany("Comments")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_comm_user");
 
                     b.Navigation("Element");
 
@@ -1106,19 +1140,22 @@ namespace PersonalCabinetEducationProgram.Migrations
                     b.HasOne("PersonalCabinetEducationProgram.Models.User", "AssignedByUser")
                         .WithMany()
                         .HasForeignKey("AssignedByUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_mgr_by");
 
                     b.HasOne("PersonalCabinetEducationProgram.Models.EducationalProgram", "EducationalProgram")
                         .WithMany("Managers")
                         .HasForeignKey("EducationalProgramId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_mgr_prog");
 
                     b.HasOne("PersonalCabinetEducationProgram.Models.User", "User")
                         .WithMany("EducationalProgramManagers")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_mgr_user");
 
                     b.Navigation("AssignedByUser");
 
@@ -1133,13 +1170,15 @@ namespace PersonalCabinetEducationProgram.Migrations
                         .WithMany()
                         .HasForeignKey("EducationalProgramElementId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_hist_elem");
 
                     b.HasOne("PersonalCabinetEducationProgram.Models.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_hist_user");
 
                     b.Navigation("Element");
 

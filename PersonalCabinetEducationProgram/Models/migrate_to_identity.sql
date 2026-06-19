@@ -29,10 +29,7 @@ CREATE TABLE IF NOT EXISTS `__EFMigrationsHistory` (
 ) ENGINE=InnoDB;
 
 INSERT INTO `__EFMigrationsHistory` (`MigrationId`, `ProductVersion`) VALUES
-('20260617170000_AddUserRoleRelationAndWorkflowStatuses', '8.0.0'),
-('20260618190000_RemoveLegacyLinkRole', '8.0.0'),
-('20260618200000_MigrateToAspNetIdentity', '8.0.0'),
-('20260618213000_AllowProgramsWithoutManager', '8.0.0')
+('20260619132300_InitialCreate', '8.0.0')
 ON DUPLICATE KEY UPDATE
     `ProductVersion` = VALUES(`ProductVersion`);
 

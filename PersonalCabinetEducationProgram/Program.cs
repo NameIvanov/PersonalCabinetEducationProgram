@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using PersonalCabinetEducationProgram.Data;
 using PersonalCabinetEducationProgram.Models;
 using PersonalCabinetEducationProgram.Services;
+using Pomelo.EntityFrameworkCore.MySql.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,7 +13,10 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
     ?? throw new InvalidOperationException("Connection string 'DefaultConnection' is not configured.");
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseMySql(connectionString, new MySqlServerVersion(new Version(8, 0, 21))));
+    options.UseMySql(
+        connectionString,
+        new MySqlServerVersion(new Version(8, 0, 21)),
+        mySqlOptions => mySqlOptions.SchemaBehavior(MySqlSchemaBehavior.Ignore)));
 
 builder.Services
     .AddIdentity<User, Role>(options =>
@@ -46,6 +50,12 @@ builder.Services.AddScoped<IFileStorageService, FileSystemStorageService>();
 builder.Services.AddScoped<ElementWorkflowService>();
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    await dbContext.Database.MigrateAsync();
+}
 
 if (!app.Environment.IsDevelopment())
 {

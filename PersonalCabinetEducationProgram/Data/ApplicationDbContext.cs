@@ -17,7 +17,6 @@ namespace PersonalCabinetEducationProgram.Data
         public DbSet<ElementStatusHistory> ElementStatusHistory { get; set; }
         public DbSet<ApproverAssignment> ApproverAssignments { get; set; }
 
-        public ApplicationDbContext() { }
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) { }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -32,6 +31,8 @@ namespace PersonalCabinetEducationProgram.Data
                     .HasForeignKey(p => p.UserId)
                     .OnDelete(DeleteBehavior.SetNull)
                     .HasConstraintName("fk_prog_user");
+
+                entity.HasIndex(p => p.UserId).HasDatabaseName("ix_prog_user");
             });
 
             modelBuilder.Entity<ApproverAssignment>(entity =>
@@ -39,25 +40,128 @@ namespace PersonalCabinetEducationProgram.Data
                 entity.HasOne(a => a.ApproverUser)
                     .WithMany(u => u.ApproverAssignments)
                     .HasForeignKey(a => a.ApproverUserId)
-                    .OnDelete(DeleteBehavior.Cascade);
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("fk_appr_user");
 
                 entity.HasOne(a => a.AssignedByUser)
                     .WithMany()
                     .HasForeignKey(a => a.AssignedByUserId)
-                    .OnDelete(DeleteBehavior.Cascade);
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("fk_appr_by");
+
+                entity.HasOne(a => a.Faculty)
+                    .WithMany()
+                    .HasForeignKey(a => a.FacultyId)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("fk_appr_fac");
+
+                entity.HasOne(a => a.Department)
+                    .WithMany()
+                    .HasForeignKey(a => a.DepartmentId)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("fk_appr_dept");
+
+                entity.HasIndex(a => a.ApproverUserId).HasDatabaseName("ix_appr_user");
+                entity.HasIndex(a => a.AssignedByUserId).HasDatabaseName("ix_appr_by");
+                entity.HasIndex(a => a.FacultyId).HasDatabaseName("ix_appr_fac");
+                entity.HasIndex(a => a.DepartmentId).HasDatabaseName("ix_appr_dept");
             });
 
             modelBuilder.Entity<EducationalProgramManager>(entity =>
             {
+                entity.HasOne(m => m.EducationalProgram)
+                    .WithMany(p => p.Managers)
+                    .HasForeignKey(m => m.EducationalProgramId)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("fk_mgr_prog");
+
                 entity.HasOne(m => m.User)
                     .WithMany(u => u.EducationalProgramManagers)
                     .HasForeignKey(m => m.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("fk_mgr_user");
 
                 entity.HasOne(m => m.AssignedByUser)
                     .WithMany()
                     .HasForeignKey(m => m.AssignedByUserId)
-                    .OnDelete(DeleteBehavior.SetNull);
+                    .OnDelete(DeleteBehavior.SetNull)
+                    .HasConstraintName("fk_mgr_by");
+
+                entity.HasIndex(m => m.EducationalProgramId).HasDatabaseName("ix_mgr_prog");
+                entity.HasIndex(m => m.UserId).HasDatabaseName("ix_mgr_user");
+                entity.HasIndex(m => m.AssignedByUserId).HasDatabaseName("ix_mgr_by");
+            });
+
+            modelBuilder.Entity<EducationalProgramAssignment>(entity =>
+            {
+                entity.HasOne(a => a.EducationalProgram)
+                    .WithMany(p => p.Assignments)
+                    .HasForeignKey(a => a.EducationalProgramId)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("fk_epa_prog");
+
+                entity.HasOne(a => a.Department)
+                    .WithMany()
+                    .HasForeignKey(a => a.DepartmentId)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("fk_epa_dept");
+
+                entity.HasOne(a => a.Faculty)
+                    .WithMany()
+                    .HasForeignKey(a => a.FacultyId)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("fk_epa_fac");
+
+                entity.HasIndex(a => a.EducationalProgramId).HasDatabaseName("ix_epa_prog");
+                entity.HasIndex(a => a.DepartmentId).HasDatabaseName("ix_epa_dept");
+                entity.HasIndex(a => a.FacultyId).HasDatabaseName("ix_epa_fac");
+            });
+
+            modelBuilder.Entity<EducationalProgramElement>(entity =>
+            {
+                entity.HasOne(e => e.EducationalProgram)
+                    .WithMany(p => p.Elements)
+                    .HasForeignKey(e => e.EducationalProgramId)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("fk_elem_prog");
+
+                entity.HasIndex(e => e.EducationalProgramId).HasDatabaseName("ix_elem_prog");
+            });
+
+            modelBuilder.Entity<EducationalProgramElementComment>(entity =>
+            {
+                entity.HasOne(c => c.Element)
+                    .WithMany(e => e.Comments)
+                    .HasForeignKey(c => c.EducationalProgramElementId)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("fk_comm_elem");
+
+                entity.HasOne(c => c.User)
+                    .WithMany(u => u.Comments)
+                    .HasForeignKey(c => c.UserId)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("fk_comm_user");
+
+                entity.HasIndex(c => c.EducationalProgramElementId).HasDatabaseName("ix_comm_elem");
+                entity.HasIndex(c => c.UserId).HasDatabaseName("ix_comm_user");
+            });
+
+            modelBuilder.Entity<ElementStatusHistory>(entity =>
+            {
+                entity.HasOne(h => h.Element)
+                    .WithMany()
+                    .HasForeignKey(h => h.EducationalProgramElementId)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("fk_hist_elem");
+
+                entity.HasOne(h => h.User)
+                    .WithMany()
+                    .HasForeignKey(h => h.UserId)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("fk_hist_user");
+
+                entity.HasIndex(h => h.EducationalProgramElementId).HasDatabaseName("ix_hist_elem");
+                entity.HasIndex(h => h.UserId).HasDatabaseName("ix_hist_user");
             });
 
             // Seed Roles
@@ -314,6 +418,8 @@ namespace PersonalCabinetEducationProgram.Data
                 entity.Property(x => x.RoleId).HasColumnName("role_id");
                 entity.HasKey(x => new { x.UserId, x.RoleId }).HasName("pk_user_roles");
                 entity.HasIndex(x => x.RoleId).HasDatabaseName("ix_ur_role");
+                entity.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).HasConstraintName("fk_ur_user");
+                entity.HasOne<Role>().WithMany().HasForeignKey(x => x.RoleId).HasConstraintName("fk_ur_role");
             });
 
             modelBuilder.Entity<IdentityUserClaim<int>>(entity =>
@@ -324,6 +430,7 @@ namespace PersonalCabinetEducationProgram.Data
                 entity.Property(x => x.ClaimType).HasColumnName("claim_type");
                 entity.Property(x => x.ClaimValue).HasColumnName("claim_value");
                 entity.HasIndex(x => x.UserId).HasDatabaseName("ix_uc_user");
+                entity.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).HasConstraintName("fk_uc_user");
             });
 
             modelBuilder.Entity<IdentityRoleClaim<int>>(entity =>
@@ -334,6 +441,7 @@ namespace PersonalCabinetEducationProgram.Data
                 entity.Property(x => x.ClaimType).HasColumnName("claim_type");
                 entity.Property(x => x.ClaimValue).HasColumnName("claim_value");
                 entity.HasIndex(x => x.RoleId).HasDatabaseName("ix_rc_role");
+                entity.HasOne<Role>().WithMany().HasForeignKey(x => x.RoleId).HasConstraintName("fk_rc_role");
             });
 
             modelBuilder.Entity<IdentityUserLogin<int>>(entity =>
@@ -345,6 +453,7 @@ namespace PersonalCabinetEducationProgram.Data
                 entity.Property(x => x.UserId).HasColumnName("user_id");
                 entity.HasKey(x => new { x.LoginProvider, x.ProviderKey }).HasName("pk_user_logins");
                 entity.HasIndex(x => x.UserId).HasDatabaseName("ix_ul_user");
+                entity.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).HasConstraintName("fk_ul_user");
             });
 
             modelBuilder.Entity<IdentityUserToken<int>>(entity =>
@@ -355,6 +464,7 @@ namespace PersonalCabinetEducationProgram.Data
                 entity.Property(x => x.Name).HasColumnName("name").HasMaxLength(128);
                 entity.Property(x => x.Value).HasColumnName("value");
                 entity.HasKey(x => new { x.UserId, x.LoginProvider, x.Name }).HasName("pk_user_tokens");
+                entity.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).HasConstraintName("fk_ut_user");
             });
         }
 
