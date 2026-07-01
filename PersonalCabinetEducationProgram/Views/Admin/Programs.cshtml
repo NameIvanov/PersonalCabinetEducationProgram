@@ -1,0 +1,187 @@
+﻿@model IEnumerable<PersonalCabinetEducationProgram.Models.EducationalProgram>
+@{ 
+    ViewData["Title"] = "Управление ОПОП";
+    var departments = ViewBag.Departments as List<PersonalCabinetEducationProgram.Models.Departments>;
+    var faculties = ViewBag.Facultys as List<PersonalCabinetEducationProgram.Models.Facultys>;
+    var managers = ViewBag.Managers as List<PersonalCabinetEducationProgram.Models.User>;
+}
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="fw-bold mb-0">Образовательные программы</h4>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createProgramModal">Добавить программу</button>
+    </div>
+
+    <div class="card shadow-sm rounded-4">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Шифр</th>
+                        <th>Наименование</th>
+                        <th>Уровень</th>
+                        <th>Кафедра</th>
+                        <th>Факультет</th>
+                        <th>Статус</th>
+                        <th>Руководитель</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var program in Model)
+                    {
+                        var assignment = program.Assignments?.FirstOrDefault();
+                        <tr class="@(program.UserId.HasValue ? "assignment-present" : "assignment-missing")">
+                            <td class="fw-semibold">
+                                <a asp-action="ProgramDetails" asp-route-id="@program.Id" class="text-decoration-none">@program.CodeReferral</a>
+                            </td>
+                            <td>
+                                <a asp-action="ProgramDetails" asp-route-id="@program.Id" class="text-decoration-none fw-semibold">@program.Name</a>
+                            </td>
+                            <td>@program.EducationalLevel</td>
+                            <td class="small">@assignment?.Department?.Name</td>
+                            <td class="small">@assignment?.Faculty?.Name</td>
+                            <td>
+                                @{
+                                    var statusClass = program.Status switch
+                                    {
+                                        "Согласована" => "bg-success-subtle text-success",
+                                        "Опубликована" => "bg-primary-subtle text-primary",
+                                        _ => "bg-warning-subtle text-warning"
+                                    };
+                                }
+                                <span class="badge @statusClass">@program.Status</span>
+                            </td>
+                            <td class="small">@(program.User?.FullName ?? "Не назначен")</td>
+                            <td>
+                                <button type="button" class="btn btn-outline-primary btn-sm"
+                                        data-bs-toggle="modal" data-bs-target="#assignManagerModal_@program.Id">
+                                    Назначить
+                                </button>
+                                <a asp-action="ProgramDetails" asp-route-id="@program.Id" class="btn btn-outline-secondary btn-sm">Документы</a>
+                            </td>
+                        </tr>
+
+                        <div class="modal fade" id="assignManagerModal_@program.Id" tabindex="-1">
+                            <div class="modal-dialog">
+                                <div class="modal-content rounded-4">
+                                    <form method="post" asp-action="AssignProgramManager">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">Назначить руководителя</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <input type="hidden" name="programId" value="@program.Id" />
+                                            <div class="mb-3">
+                                                <div class="fw-semibold mb-1">@program.CodeReferral @program.Name</div>
+                                                <div class="text-muted small">Текущий руководитель: @(program.User?.FullName ?? "не назначен")</div>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">Новый руководитель</label>
+                                                <select name="managerUserId" class="form-select">
+                                                    <option value="" selected="@(!program.UserId.HasValue)">Не назначен</option>
+                                                    @if (managers != null)
+                                                    {
+                                                        @foreach (var manager in managers)
+                                                        {
+                                                            <option value="@manager.Id" selected="@(program.UserId == manager.Id)">@manager.FullName</option>
+                                                        }
+                                                    }
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                                            <button type="submit" class="btn btn-primary">Сохранить</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="modal fade" id="createProgramModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content rounded-4">
+                <form method="post" asp-action="CreateProgram">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Новая образовательная программа</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Шифр направления</label>
+                                <input type="text" name="codeReferral" class="form-control" placeholder="01.03.02" required />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Год утверждения</label>
+                                <input type="number" name="yearApprovals" class="form-control" value="2026" required />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Наименование</label>
+                                <input type="text" name="name" class="form-control" required />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Уровень образования</label>
+                                <select name="educationalLevel" class="form-select">
+                                    <option>Бакалавриат</option>
+                                    <option>Магистратура</option>
+                                    <option>Специалитет</option>
+                                    <option>СПО</option>
+                                    <option>Ординатура</option>
+                                    <option>Аспирантура</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Кафедра</label>
+                                <select name="departmentId" class="form-select">
+                                    @if (departments != null)
+                                    {
+                                        @foreach (var d in departments)
+                                        {
+                                            <option value="@d.Id">@d.Name</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Факультет</label>
+                                <select name="facultyId" class="form-select">
+                                    @if (faculties != null)
+                                    {
+                                        @foreach (var f in faculties)
+                                        {
+                                            <option value="@f.Id">@f.Name</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Руководитель</label>
+                                <select name="managerUserId" class="form-select">
+                                    <option value="">Не назначен</option>
+                                    @if (managers != null)
+                                    {
+                                        @foreach (var manager in managers)
+                                        {
+                                            <option value="@manager.Id">@manager.FullName</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                        <button type="submit" class="btn btn-primary">Создать</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

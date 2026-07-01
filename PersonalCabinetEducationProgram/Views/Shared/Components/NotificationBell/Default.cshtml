@@ -1,0 +1,12 @@
+@model int
+
+<a asp-controller="Notifications" asp-action="Index"
+   class="notification-bell"
+   title="Уведомления"
+   aria-label="Уведомления, непрочитанных: @Model">
+    <span class="notification-bell-icon" aria-hidden="true"></span>
+    @if (Model > 0)
+    {
+        <span class="notification-count">@(Model > 99 ? "99+" : Model.ToString())</span>
+    }
+</a>

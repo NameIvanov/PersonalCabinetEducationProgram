@@ -1,0 +1,365 @@
+﻿@model IEnumerable<PersonalCabinetEducationProgram.Models.User>
+@{
+    ViewData["Title"] = "Управление пользователями";
+    var roleNames = new Dictionary<string, string>
+    {
+        { "Manager", "Руководитель ОПОП" },
+        { "Approver", "Согласующий" },
+        { "Moderator", "Модератор" },
+        { "Admin", "Администратор" }
+    };
+}
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="fw-bold mb-0">Пользователи</h4>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createUserModal">
+            Создать аккаунт
+        </button>
+    </div>
+
+    @if (TempData["UsersSuccess"] != null)
+    {
+        <div class="alert alert-success">@TempData["UsersSuccess"]</div>
+    }
+
+    @if (TempData["UsersError"] != null)
+    {
+        <div class="alert alert-danger">@TempData["UsersError"]</div>
+    }
+
+    <div class="card shadow-sm rounded-4">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>ID</th>
+                        <th>Логин</th>
+                        <th>ФИО</th>
+                        <th>Должность</th>
+                        <th>Роль</th>
+                        <th>Статус</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var user in Model.OrderByDescending(u => u.ApprovalStatus == "Pending").ThenBy(u => u.Id))
+                    {
+                        var approvalBadge = user.ApprovalStatus switch
+                        {
+                            "Approved" => "bg-success-subtle text-success",
+                            "Rejected" => "bg-danger-subtle text-danger",
+                            _ => "bg-warning-subtle text-warning"
+                        };
+
+                        var approvalText = user.ApprovalStatus switch
+                        {
+                            "Approved" => "Подтвержден",
+                            "Rejected" => "Отклонен",
+                            _ => "Ожидает решения"
+                        };
+
+                        <tr>
+                            <td>@user.Id</td>
+                            <td class="fw-semibold">@user.Username</td>
+                            <td>@user.FullName</td>
+                            <td>@user.Post</td>
+                            <td><span class="badge bg-primary-subtle text-primary">@(roleNames.GetValueOrDefault(user.RoleName, user.RoleName))</span></td>
+                            <td>
+                                <span class="badge @approvalBadge">@approvalText</span>
+                                @if (user.ApprovalStatus == "Rejected" && !string.IsNullOrWhiteSpace(user.RejectionReason))
+                                {
+                                    <div class="small text-muted mt-1">Причина: @user.RejectionReason</div>
+                                }
+                            </td>
+                            <td>
+                                <div class="d-flex gap-1 flex-wrap">
+                                    <button type="button"
+                                            class="btn btn-outline-secondary btn-sm edit-user-button"
+                                            data-user-id="@user.Id"
+                                            data-user-name="@user.FullName"
+                                            data-user-post="@user.Post"
+                                            data-user-role="@user.RoleName"
+                                            data-user-is-admin="@(user.RoleName == PersonalCabinetEducationProgram.Models.AppRoles.Admin ? "true" : "false")"
+                                            title="Редактировать пользователя">
+                                        Изменить
+                                    </button>
+                                    @if (user.RoleName != PersonalCabinetEducationProgram.Models.AppRoles.Admin)
+                                    {
+                                        <button type="button" class="btn btn-outline-success btn-sm"
+                                                onclick="openApprovalModal(@user.Id, 'Approved', '@user.FullName')"
+                                                title="Подтвердить">✔️</button>
+                                        @if (!(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value == user.Id.ToString()))
+                                        {
+                                            <button type="button" class="btn btn-outline-danger btn-sm"
+                                                    onclick="openApprovalModal(@user.Id, 'Rejected', '@user.FullName')"
+                                                    title="Отклонить">✖️</button>
+                                        }
+                                    }
+                                    <button type="button"
+                                            class="btn btn-outline-primary btn-sm reset-password-button"
+                                            data-user-id="@user.Id"
+                                            data-user-name="@user.FullName"
+                                            title="Сбросить пароль">
+                                        Пароль
+                                    </button>
+                                    @if (user.ApprovalStatus == PersonalCabinetEducationProgram.Models.UserApprovalStatus.Rejected)
+                                    {
+                                        <button type="button"
+                                                class="btn btn-outline-danger btn-sm delete-user-button"
+                                                data-user-id="@user.Id"
+                                                data-user-name="@user.FullName"
+                                                title="Удалить отклонённый аккаунт">
+                                            Удалить
+                                        </button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="editUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4">
+            <form method="post" asp-action="EditUser">
+                <div class="modal-header">
+                    <h5 class="modal-title">Редактирование пользователя</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="id" id="editUserId" />
+                    <div class="mb-3">
+                        <label class="form-label">ФИО</label>
+                        <input type="text" name="fullName" id="editUserFullName" class="form-control" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Должность</label>
+                        <input type="text" name="post" id="editUserPost" class="form-control" required />
+                    </div>
+                    <div id="editUserRoleBlock">
+                        <label class="form-label">Роль</label>
+                        <select name="roleId" id="editUserRoleId" class="form-select" required>
+                            <option value="1">Руководитель ОПОП</option>
+                            <option value="2">Согласующий</option>
+                            <option value="3">Модератор</option>
+                        </select>
+                    </div>
+                    <div id="editAdminRoleNotice" class="text-muted small d-none">
+                        Роль администратора изменять нельзя.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="createUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4">
+            <form method="post" asp-action="CreateUser">
+                <div class="modal-header">
+                    <h5 class="modal-title">Новый аккаунт</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">ФИО</label>
+                        <input type="text" name="fullName" class="form-control" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Логин</label>
+                        <input type="text" name="username" class="form-control" autocomplete="off" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Должность</label>
+                        <input type="text" name="post" class="form-control" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Роль</label>
+                        <select name="roleId" class="form-select" required>
+                            <option value="1">Руководитель ОПОП</option>
+                            <option value="2">Согласующий</option>
+                            <option value="3">Модератор</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Пароль</label>
+                        <input type="password" name="password" class="form-control" minlength="6" autocomplete="new-password" required />
+                    </div>
+                    <div>
+                        <label class="form-label">Повторите пароль</label>
+                        <input type="password" name="confirmPassword" class="form-control" minlength="6" autocomplete="new-password" required />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Создать</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="resetPasswordModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4">
+            <form method="post" asp-action="ResetUserPassword">
+                <div class="modal-header">
+                    <h5 class="modal-title">Сброс пароля</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="id" id="resetPasswordUserId" />
+                    <p class="text-muted small" id="resetPasswordUserName"></p>
+                    <div class="mb-3">
+                        <label class="form-label">Новый пароль</label>
+                        <input type="password" name="newPassword" class="form-control" minlength="6" autocomplete="new-password" required />
+                    </div>
+                    <div>
+                        <label class="form-label">Повторите пароль</label>
+                        <input type="password" name="confirmPassword" class="form-control" minlength="6" autocomplete="new-password" required />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Сбросить пароль</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="deleteUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4">
+            <form method="post" asp-action="DeleteUser">
+                <div class="modal-header">
+                    <h5 class="modal-title">Удаление аккаунта</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="id" id="deleteUserId" />
+                    <p class="mb-0" id="deleteUserText"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-danger">Удалить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="approvalModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4">
+            <form method="post" asp-action="ChangeApprovalStatus">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="approvalModalTitle">Подтверждение действия</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="id" id="approvalUserId" />
+                    <input type="hidden" name="approvalStatus" id="approvalStatus" />
+                    <p id="approvalModalText" class="mb-3"></p>
+                    <div class="mb-3 d-none" id="rejectionReasonBlock">
+                        <label for="rejectionReason" class="form-label">Причина отклонения</label>
+                        <textarea name="rejectionReason" id="rejectionReason" class="form-control" rows="3" placeholder="Укажите причину"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary" id="approvalSubmitButton">Подтвердить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function openApprovalModal(userId, status, fullName) {
+            document.getElementById('approvalUserId').value = userId;
+            document.getElementById('approvalStatus').value = status;
+
+            var title = document.getElementById('approvalModalTitle');
+            var text = document.getElementById('approvalModalText');
+            var submitButton = document.getElementById('approvalSubmitButton');
+            var rejectionBlock = document.getElementById('rejectionReasonBlock');
+            var rejectionReason = document.getElementById('rejectionReason');
+
+            if (status === 'Approved') {
+                title.textContent = 'Подтверждение аккаунта';
+                text.textContent = 'Подтвердить аккаунт пользователя ' + fullName + '?';
+                submitButton.textContent = 'Подтвердить';
+                submitButton.className = 'btn btn-success';
+                rejectionBlock.classList.add('d-none');
+                rejectionReason.value = '';
+            } else {
+                title.textContent = 'Отклонение аккаунта';
+                text.textContent = 'Отклонить аккаунт пользователя ' + fullName + '?';
+                submitButton.textContent = 'Отклонить';
+                submitButton.className = 'btn btn-danger';
+                rejectionBlock.classList.remove('d-none');
+            }
+
+            var modal = new bootstrap.Modal(document.getElementById('approvalModal'));
+            modal.show();
+        }
+
+        const roleIds = {
+            'Manager': '1',
+            'Approver': '2',
+            'Moderator': '3'
+        };
+
+        document.querySelectorAll('.edit-user-button').forEach(function (button) {
+            button.addEventListener('click', function () {
+                document.getElementById('editUserId').value = button.dataset.userId;
+                document.getElementById('editUserFullName').value = button.dataset.userName;
+                document.getElementById('editUserPost').value = button.dataset.userPost;
+                const isAdmin = button.dataset.userIsAdmin === 'true';
+                const roleBlock = document.getElementById('editUserRoleBlock');
+                const adminNotice = document.getElementById('editAdminRoleNotice');
+                const roleSelect = document.getElementById('editUserRoleId');
+
+                roleBlock.classList.toggle('d-none', isAdmin);
+                adminNotice.classList.toggle('d-none', !isAdmin);
+                roleSelect.disabled = isAdmin;
+                roleSelect.required = !isAdmin;
+
+                if (!isAdmin) {
+                    roleSelect.value = roleIds[button.dataset.userRole] || '1';
+                }
+                new bootstrap.Modal(document.getElementById('editUserModal')).show();
+            });
+        });
+
+        document.querySelectorAll('.reset-password-button').forEach(function (button) {
+            button.addEventListener('click', function () {
+                document.getElementById('resetPasswordUserId').value = button.dataset.userId;
+                document.getElementById('resetPasswordUserName').textContent =
+                    'Пользователь: ' + button.dataset.userName;
+                new bootstrap.Modal(document.getElementById('resetPasswordModal')).show();
+            });
+        });
+
+        document.querySelectorAll('.delete-user-button').forEach(function (button) {
+            button.addEventListener('click', function () {
+                document.getElementById('deleteUserId').value = button.dataset.userId;
+                document.getElementById('deleteUserText').textContent =
+                    'Удалить отклонённый аккаунт пользователя ' + button.dataset.userName + '?';
+                new bootstrap.Modal(document.getElementById('deleteUserModal')).show();
+            });
+        });
+    </script>
+}

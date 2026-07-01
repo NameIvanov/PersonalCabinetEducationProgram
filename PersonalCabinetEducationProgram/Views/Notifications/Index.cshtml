@@ -1,0 +1,64 @@
+@model PersonalCabinetEducationProgram.ViewModels.NotificationsViewModel
+@using PersonalCabinetEducationProgram.Models
+@{
+    ViewData["Title"] = "Уведомления";
+}
+
+<div class="container py-4 notifications-page">
+    <div class="d-flex justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <a href="javascript:history.back()" class="text-decoration-none small">← Назад</a>
+            <h4 class="fw-bold mt-2 mb-0">Уведомления</h4>
+        </div>
+        @if (Model.UnreadCount > 0)
+        {
+            <form method="post" asp-action="MarkAllRead">
+                <button type="submit" class="btn btn-primary">Отметить все как прочитанные</button>
+            </form>
+        }
+    </div>
+
+    <nav class="notification-tabs">
+        <a asp-action="Index" asp-route-unreadOnly="false"
+           class="@(!Model.UnreadOnly ? "active" : "")">
+            Все уведомления <span>@Model.AllCount</span>
+        </a>
+        <a asp-action="Index" asp-route-unreadOnly="true"
+           class="@(Model.UnreadOnly ? "active" : "")">
+            Непрочитанные <span>@Model.UnreadCount</span>
+        </a>
+    </nav>
+
+    <div class="notification-list">
+        @if (Model.Notifications.Count == 0)
+        {
+            <div class="text-center text-muted py-5">Уведомлений пока нет</div>
+        }
+        else
+        {
+            @foreach (var notification in Model.Notifications)
+            {
+                var typeClass = notification.Type switch
+                {
+                    NotificationType.FileUploaded => "file",
+                    NotificationType.CommentAdded => "comment",
+                    _ => "status"
+                };
+
+                <a asp-action="Open" asp-route-id="@notification.Id"
+                   class="notification-item @(!notification.IsRead ? "unread" : "")">
+                    <div class="notification-item-top">
+                        <span class="notification-kind @typeClass">@notification.Title</span>
+                        <time>@notification.CreatedAt.ToString("dd.MM.yyyy HH:mm")</time>
+                    </div>
+                    <div class="notification-program">
+                        @notification.Element.EducationalProgram.CodeReferral · @notification.Element.EducationalProgram.Name
+                    </div>
+                    <div class="notification-element">@notification.Element.Name</div>
+                    <div class="notification-message">@notification.Message</div>
+                    <div class="notification-actor">@notification.ActorName</div>
+                </a>
+            }
+        }
+    </div>
+</div>

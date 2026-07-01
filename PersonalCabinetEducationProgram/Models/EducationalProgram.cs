@@ -18,16 +18,16 @@ namespace PersonalCabinetEducationProgram.Models
         public string EducationalLevel { get; set; }
 
         [Column("year_approvals")]
-        public DateTime? YearApprovals { get; set; }
+        public int? YearApprovals { get; set; }
 
         public string Status { get; set; }
 
         [Column("user_id")]
-        public int UserId { get; set; }
+        public int? UserId { get; set; }
 
-        // Навигации
-        public User User { get; set; }
+        public User? User { get; set; }
         public ICollection<EducationalProgramElement> Elements { get; set; }
         public ICollection<EducationalProgramManager> Managers { get; set; }
+        public ICollection<EducationalProgramAssignment> Assignments { get; set; }
     }
 }

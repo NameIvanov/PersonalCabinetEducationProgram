@@ -25,8 +25,15 @@ namespace PersonalCabinetEducationProgram.Models
         [Column("status_approvals")]
         public string StatusApprovals { get; set; }
 
+        [Column("file_path")]
+        public string? FilePath { get; set; }
+
+        [Column("file_name")]
+        public string? FileName { get; set; }
+
         // Навигации
         public EducationalProgram EducationalProgram { get; set; }
         public ICollection<EducationalProgramElementComment> Comments { get; set; }
+        public ICollection<Notification> Notifications { get; set; } = [];
     }
 }

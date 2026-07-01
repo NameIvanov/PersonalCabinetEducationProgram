@@ -1,0 +1,136 @@
+﻿@model PersonalCabinetEducationProgram.Models.EducationalProgram
+@{
+    ViewData["Title"] = "ОПОП";
+    var assignment = Model.Assignments?.FirstOrDefault();
+    var typeNames = new Dictionary<string, string>
+    {
+        { "Main", "Основные документы" },
+        { "Discipline", "Дисциплины" },
+        { "Practice", "Практики" },
+        { "GIA", "ГИА" }
+    };
+    var typeOrder = new[] { "Main", "Discipline", "Practice", "GIA" };
+}
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-start mb-4">
+        <div>
+            <a asp-action="Programs" class="text-decoration-none">← Назад к ОПОП</a>
+            <h3 class="fw-bold mt-2 mb-1">@Model.CodeReferral @Model.Name</h3>
+            <div class="text-muted">@Model.EducationalLevel</div>
+            <div class="small text-muted mt-2">Кафедра: @(assignment?.Department?.Name ?? "—")</div>
+            <div class="small text-muted">Факультет: @(assignment?.Faculty?.Name ?? "—")</div>
+            <div class="small text-muted">Руководитель: @(Model.User?.FullName ?? "—")</div>
+        </div>
+        <span class="badge bg-warning-subtle text-warning fs-6">@Model.Status</span>
+    </div>
+
+    @foreach (var type in typeOrder)
+    {
+        var elements = Model.Elements.Where(e => e.TypeElement == type).OrderBy(e => e.Name).ToList();
+
+        <div class="card shadow-sm rounded-4 mb-4">
+            <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold mb-0">@(typeNames.GetValueOrDefault(type, type))</h5>
+                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#createElement_@type">
+                    Добавить строку
+                </button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Документ</th>
+                            <th>Шифр / описание</th>
+                            <th>Статус</th>
+                            <th>Дата загрузки</th>
+                            <th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var element in elements)
+                        {
+                            <tr>
+                                <td class="fw-semibold">@element.Name</td>
+                                <td class="text-muted small">@element.Description</td>
+                                <td>@await Html.PartialAsync("_StatusBadge", element.StatusApprovals)</td>
+                                <td>@(element.UploadDate?.ToString("dd.MM.yyyy") ?? "—")</td>
+                                <td>
+                                    <div class="d-flex gap-1 flex-wrap">
+                                        <a asp-controller="ManagerHome" asp-action="History" asp-route-elementId="@element.Id"
+                                           class="btn btn-outline-secondary btn-sm">История</a>
+                                        @if (!string.IsNullOrEmpty(element.FilePath))
+                                        {
+                                            <a asp-action="PreviewElement" asp-route-elementId="@element.Id" class="btn btn-outline-secondary btn-sm" target="_blank">Просмотр</a>
+                                            <a asp-action="DownloadElement" asp-route-elementId="@element.Id" class="btn btn-outline-secondary btn-sm">Скачать</a>
+                                        }
+                                        <form method="post" enctype="multipart/form-data" asp-action="UploadElement" class="d-inline">
+                                            <input type="hidden" name="elementId" value="@element.Id" />
+                                            <label class="btn btn-outline-primary btn-sm mb-0" title="Загрузить или заменить">
+                                                @(string.IsNullOrEmpty(element.FilePath) ? "Загрузить" : "Заменить") <input type="file" name="file" accept=".pdf,.doc,.docx" data-max-size="52428800" title="PDF, DOC или DOCX до 50 МБ" style="display:none;" onchange="if (window.validateUploadFile(this)) this.form.submit()" />
+                                            </label>
+                                        </form>
+
+                                        @if (element.StatusApprovals != "Опубликовано на сайте")
+                                        {
+                                            <form method="post" asp-action="ApproveElement" class="d-inline">
+                                                <input type="hidden" name="elementId" value="@element.Id" />
+                                                <button type="submit" class="btn btn-outline-success btn-sm">Согласовать</button>
+                                            </form>
+                                        }
+
+                                        <form method="post" asp-action="SendElementToRevision" class="d-inline">
+                                            <input type="hidden" name="elementId" value="@element.Id" />
+                                            <button type="submit" class="btn btn-outline-danger btn-sm">На доработку</button>
+                                        </form>
+
+                                        @if (element.StatusApprovals == "Согласовано")
+                                        {
+                                            <form method="post" asp-action="PublishElement" class="d-inline">
+                                                <input type="hidden" name="elementId" value="@element.Id" />
+                                                <button type="submit" class="btn btn-outline-primary btn-sm">Опубликовать</button>
+                                            </form>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                        @if (!elements.Any())
+                        {
+                            <tr><td colspan="5" class="text-center text-muted py-4">Записей пока нет</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="modal fade" id="createElement_@type" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content rounded-4">
+                    <form method="post" asp-action="CreateProgramElement">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Добавить строку: @(typeNames.GetValueOrDefault(type, type))</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <input type="hidden" name="programId" value="@Model.Id" />
+                            <input type="hidden" name="typeElement" value="@type" />
+                            <div class="mb-3">
+                                <label class="form-label">Наименование</label>
+                                <input type="text" name="name" class="form-control" required />
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Шифр / описание</label>
+                                <input type="text" name="description" class="form-control" placeholder="Например: Б1.О.01 или описание документа" />
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                            <button type="submit" class="btn btn-primary">Добавить</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    }
+</div>
