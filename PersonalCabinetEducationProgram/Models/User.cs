@@ -33,5 +33,7 @@ namespace PersonalCabinetEducationProgram.Models
         public ICollection<EducationalProgramManager> EducationalProgramManagers { get; set; } = [];
         public ICollection<ApproverAssignment> ApproverAssignments { get; set; } = [];
         public ICollection<Notification> Notifications { get; set; } = [];
+        public ICollection<EducationalProgramElementFile> UploadedElementFiles { get; set; } = [];
+        public ICollection<AuditLog> AuditLogs { get; set; } = [];
     }
 }

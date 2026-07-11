@@ -252,13 +252,7 @@
                                         <td class="small">@(element.UploadDate?.ToString("dd.MM.yyyy") ?? "—")</td>
                                         <td>
                                             <div class="d-flex gap-1 flex-wrap">
-                                                @if (!string.IsNullOrEmpty(element.FilePath))
-                                                {
-                                                    <a asp-action="Preview" asp-route-elementId="@element.Id"
-                                                       class="btn btn-outline-secondary btn-sm" title="Просмотр" target="_blank">📄</a>
-                                                    <a asp-action="Download" asp-route-elementId="@element.Id"
-                                                       class="btn btn-outline-secondary btn-sm" title="Скачать">⬇</a>
-                                                }
+                                                @await Html.PartialAsync("_ElementFileButtons", element)
                                                 @if (PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(element.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Approved)
                                                 {
                                                     <button type="button" class="btn btn-outline-primary btn-sm" title="Опубликовать"
@@ -341,7 +335,7 @@
 </div>
 
 @functions {
-    async Task RenderElementRow(PersonalCabinetEducationProgram.Models.EducationalProgramElement element, List<PersonalCabinetEducationProgram.Models.EducationalProgramElementComment> allComments)
+    async Task RenderElementRow(PersonalCabinetEducationProgram.Models.EducationalProgramElement element, List<PersonalCabinetEducationProgram.Models.EducationalProgramElementComment>? allComments)
     {
         var elementComments = allComments?.Where(c => c.EducationalProgramElementId == element.Id).ToList();
         var commentCount = elementComments?.Count ?? 0;
@@ -358,13 +352,7 @@
             <td class="small">@(element.UploadDate?.ToString("dd.MM.yyyy") ?? "—")</td>
             <td>
                 <div class="d-flex gap-1 flex-wrap">
-                    @if (!string.IsNullOrEmpty(element.FilePath))
-                    {
-                        <a asp-action="Preview" asp-route-elementId="@element.Id"
-                           class="btn btn-outline-secondary btn-sm" title="Просмотр" target="_blank">📄</a>
-                        <a asp-action="Download" asp-route-elementId="@element.Id"
-                           class="btn btn-outline-secondary btn-sm" title="Скачать">⬇</a>
-                    }
+                    @await Html.PartialAsync("_ElementFileButtons", element)
                     @if (PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(element.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Approved)
                     {
                         <button type="button" class="btn btn-outline-primary btn-sm" title="Опубликовать"

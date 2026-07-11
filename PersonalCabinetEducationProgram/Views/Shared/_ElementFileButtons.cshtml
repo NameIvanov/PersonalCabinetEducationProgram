@@ -1,0 +1,43 @@
+@model PersonalCabinetEducationProgram.Models.EducationalProgramElement
+@{
+    var files = Model.Files.Where(f => f.IsCurrent).OrderBy(f => f.OriginalFileName).ToList();
+}
+
+@if (files.Count == 1)
+{
+    <a asp-controller="ElementFiles" asp-action="Preview" asp-route-id="@files[0].Id"
+       class="btn btn-outline-secondary btn-sm" title="Просмотр" target="_blank">📄</a>
+    <a asp-controller="ElementFiles" asp-action="Download" asp-route-id="@files[0].Id"
+       class="btn btn-outline-secondary btn-sm" title="Скачать">⬇</a>
+}
+else if (files.Count > 1)
+{
+    <div class="dropdown d-inline-block">
+        <button class="btn btn-outline-secondary btn-sm position-relative" type="button"
+                data-bs-toggle="dropdown" title="Выбрать файл для просмотра">
+            📄
+            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-primary">@files.Count</span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+            @foreach (var file in files)
+            {
+                <li><a class="dropdown-item small text-truncate" style="max-width:320px"
+                       asp-controller="ElementFiles" asp-action="Preview" asp-route-id="@file.Id" target="_blank">@file.OriginalFileName</a></li>
+            }
+        </ul>
+    </div>
+    <div class="dropdown d-inline-block">
+        <button class="btn btn-outline-secondary btn-sm position-relative" type="button"
+                data-bs-toggle="dropdown" title="Выбрать файл для скачивания">
+            ⬇
+            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-primary">@files.Count</span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+            @foreach (var file in files)
+            {
+                <li><a class="dropdown-item small text-truncate" style="max-width:320px"
+                       asp-controller="ElementFiles" asp-action="Download" asp-route-id="@file.Id">@file.OriginalFileName</a></li>
+            }
+        </ul>
+    </div>
+}

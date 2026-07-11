@@ -21,8 +21,8 @@ namespace PersonalCabinetEducationProgram.Models
         [Column("assigned_at")]
         public DateTime? AssignedAt { get; set; }
 
-        public EducationalProgram EducationalProgram { get; set; }
-        public User User { get; set; }
+        public EducationalProgram EducationalProgram { get; set; } = null!;
+        public User User { get; set; } = null!;
         public User? AssignedByUser { get; set; }
     }
 }

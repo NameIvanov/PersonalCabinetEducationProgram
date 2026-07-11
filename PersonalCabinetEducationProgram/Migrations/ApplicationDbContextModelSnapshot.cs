@@ -169,6 +169,34 @@ namespace PersonalCabinetEducationProgram.Migrations
                     b.ToTable("user_tokens", (string)null);
                 });
 
+            modelBuilder.Entity("PersonalCabinetEducationProgram.Models.AuditLog", b =>
+                {
+                    b.Property<int>("Id").ValueGeneratedOnAdd().HasColumnType("int");
+                    b.Property<string>("Action").IsRequired().HasMaxLength(100).HasColumnType("varchar(100)").HasColumnName("action");
+                    b.Property<DateTime>("CreatedAt").HasColumnType("datetime(6)").HasColumnName("created_at");
+                    b.Property<string>("Details").IsRequired().HasColumnType("longtext").HasColumnName("details");
+                    b.Property<int>("EntityId").HasColumnType("int").HasColumnName("entity_id");
+                    b.Property<string>("EntityType").IsRequired().HasMaxLength(100).HasColumnType("varchar(100)").HasColumnName("entity_type");
+                    b.Property<int>("UserId").HasColumnType("int").HasColumnName("user_id");
+                    b.HasKey("Id");
+                    b.HasIndex("CreatedAt").HasDatabaseName("ix_audit_created");
+                    b.HasIndex("UserId").HasDatabaseName("ix_audit_user");
+                    b.HasIndex("EntityType", "EntityId").HasDatabaseName("ix_audit_entity");
+                    b.ToTable("audit_log", "personal_cabinet");
+                });
+
+            modelBuilder.Entity("PersonalCabinetEducationProgram.Models.AuditLog", b =>
+                {
+                    b.HasOne("PersonalCabinetEducationProgram.Models.User", "User")
+                        .WithMany("AuditLogs")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_audit_user");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("PersonalCabinetEducationProgram.Models.ApproverAssignment", b =>
                 {
                     b.Property<int>("Id")
@@ -550,6 +578,44 @@ namespace PersonalCabinetEducationProgram.Migrations
                             StatusApprovals = "",
                             TypeElement = "GIA"
                         });
+                });
+
+            modelBuilder.Entity("PersonalCabinetEducationProgram.Models.EducationalProgramElementFile", b =>
+                {
+                    b.Property<int>("Id").ValueGeneratedOnAdd().HasColumnType("int");
+                    b.Property<int>("EducationalProgramElementId").HasColumnType("int").HasColumnName("educational_program_element_id");
+                    b.Property<bool>("IsCurrent").HasColumnType("tinyint(1)").HasColumnName("is_current");
+                    b.Property<bool>("IsSubmitted").HasColumnType("tinyint(1)").HasColumnName("is_submitted");
+                    b.Property<string>("OriginalFileName").IsRequired().HasColumnType("longtext").HasColumnName("original_file_name");
+                    b.Property<int>("RevisionNumber").HasColumnType("int").HasColumnName("revision_number");
+                    b.Property<string>("StoredFileName").IsRequired().HasColumnType("longtext").HasColumnName("stored_file_name");
+                    b.Property<DateTime>("UploadedAt").HasColumnType("datetime(6)").HasColumnName("uploaded_at");
+                    b.Property<int>("UploadedByUserId").HasColumnType("int").HasColumnName("uploaded_by_user_id");
+                    b.HasKey("Id");
+                    b.HasIndex("EducationalProgramElementId").HasDatabaseName("ix_elem_file_element");
+                    b.HasIndex("UploadedByUserId");
+                    b.HasIndex("EducationalProgramElementId", "RevisionNumber").HasDatabaseName("ix_elem_file_revision");
+                    b.ToTable("educational_program_element_files", "personal_cabinet");
+                });
+
+            modelBuilder.Entity("PersonalCabinetEducationProgram.Models.EducationalProgramElementFile", b =>
+                {
+                    b.HasOne("PersonalCabinetEducationProgram.Models.EducationalProgramElement", "Element")
+                        .WithMany("Files")
+                        .HasForeignKey("EducationalProgramElementId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_elem_file_element");
+
+                    b.HasOne("PersonalCabinetEducationProgram.Models.User", "UploadedByUser")
+                        .WithMany("UploadedElementFiles")
+                        .HasForeignKey("UploadedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_elem_file_user");
+
+                    b.Navigation("Element");
+                    b.Navigation("UploadedByUser");
                 });
 
             modelBuilder.Entity("PersonalCabinetEducationProgram.Models.EducationalProgramElementComment", b =>
@@ -1287,12 +1353,16 @@ namespace PersonalCabinetEducationProgram.Migrations
                 {
                     b.Navigation("Comments");
 
+                    b.Navigation("Files");
+
                     b.Navigation("Notifications");
                 });
 
             modelBuilder.Entity("PersonalCabinetEducationProgram.Models.User", b =>
                 {
                     b.Navigation("ApproverAssignments");
+
+                    b.Navigation("AuditLogs");
 
                     b.Navigation("Comments");
 
@@ -1301,6 +1371,8 @@ namespace PersonalCabinetEducationProgram.Migrations
                     b.Navigation("EducationalPrograms");
 
                     b.Navigation("Notifications");
+
+                    b.Navigation("UploadedElementFiles");
                 });
 #pragma warning restore 612, 618
         }

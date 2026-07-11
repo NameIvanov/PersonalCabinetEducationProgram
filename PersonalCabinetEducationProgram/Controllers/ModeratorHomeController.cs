@@ -47,6 +47,7 @@ namespace PersonalCabinetEducationProgram.Controllers
                 : await _context.EducationalProgramElements
                     .Where(e => e.EducationalProgramId == selectedProgramId)
                     .Include(e => e.EducationalProgram)
+                    .Include(e => e.Files.Where(f => f.IsCurrent))
                     .ToListAsync();
 
             ViewBag.Programs = programs;
@@ -191,6 +192,12 @@ namespace PersonalCabinetEducationProgram.Controllers
                 .OrderByDescending(h => h.ChangeDate)
                 .ToListAsync();
             ViewBag.Comments = await GetElementComments(elementId);
+            ViewBag.FileGroups = await _context.EducationalProgramElementFiles
+                .Where(f => f.EducationalProgramElementId == elementId)
+                .Include(f => f.UploadedByUser)
+                .OrderByDescending(f => f.RevisionNumber)
+                .ThenBy(f => f.OriginalFileName)
+                .ToListAsync();
             ViewBag.ReturnController = returnController;
         }
 
@@ -205,7 +212,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         private static string GetContentType(string? fileName)
         {
-            return Path.GetExtension(fileName).ToLowerInvariant() switch
+            return Path.GetExtension(fileName ?? string.Empty).ToLowerInvariant() switch
             {
                 ".doc" => "application/msword",
                 ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",

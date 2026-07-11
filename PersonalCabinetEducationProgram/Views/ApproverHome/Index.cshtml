@@ -252,19 +252,8 @@
                                         <td class="small">@(element.UploadDate?.ToString("dd.MM.yyyy") ?? "—")</td>
                                         <td>
                                             <div class="d-flex gap-1 flex-wrap">
-                                                @if (!string.IsNullOrEmpty(element.FilePath))
-                                                {
-                                                    <a asp-action="Preview" asp-route-elementId="@element.Id"
-                                                       class="btn btn-outline-secondary btn-sm" title="Просмотр" target="_blank">📄</a>
-                                                    <a asp-action="Download" asp-route-elementId="@element.Id"
-                                                       class="btn btn-outline-secondary btn-sm" title="Скачать">⬇</a>
-                                                }
-                                                @if (PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(element.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Uploaded)
-                                                {
-                                                    <button type="button" class="btn btn-outline-info btn-sm" title="На согласование"
-                                                            onclick="showReviewModal(@element.Id)">📤</button>
-                                                }
-                                                @if (PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(element.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Uploaded || PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(element.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.OnApproval)
+                                                @await Html.PartialAsync("_ElementFileButtons", element)
+                                                @if (PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(element.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.OnApproval)
                                                 {
                                                     <button type="button" class="btn btn-outline-success btn-sm" title="Согласовать"
                                                             onclick="showApproveModal(@element.Id)">✔️</button>
@@ -342,29 +331,8 @@
     </div>
 </div>
 
-<div class="modal fade" id="reviewModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content rounded-4">
-            <div class="modal-header bg-info-subtle">
-                <h5 class="modal-title text-info">Отправить на согласование</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <form method="post" asp-action="SendForReview">
-                <div class="modal-body">
-                    <input type="hidden" name="elementId" id="reviewElementId" />
-                    <p>Отправить элемент на согласование?</p>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                    <button type="submit" class="btn btn-info">Отправить</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
 @functions {
-    async Task RenderElementRow(PersonalCabinetEducationProgram.Models.EducationalProgramElement element, List<PersonalCabinetEducationProgram.Models.EducationalProgramElementComment> allComments)
+    async Task RenderElementRow(PersonalCabinetEducationProgram.Models.EducationalProgramElement element, List<PersonalCabinetEducationProgram.Models.EducationalProgramElementComment>? allComments)
     {
         var elementComments = allComments?.Where(c => c.EducationalProgramElementId == element.Id).ToList();
         var commentCount = elementComments?.Count ?? 0;
@@ -381,19 +349,8 @@
             <td class="small">@(element.UploadDate?.ToString("dd.MM.yyyy") ?? "—")</td>
             <td>
                 <div class="d-flex gap-1 flex-wrap">
-                    @if (!string.IsNullOrEmpty(element.FilePath))
-                    {
-                        <a asp-action="Preview" asp-route-elementId="@element.Id"
-                           class="btn btn-outline-secondary btn-sm" title="Просмотр" target="_blank">📄</a>
-                        <a asp-action="Download" asp-route-elementId="@element.Id"
-                           class="btn btn-outline-secondary btn-sm" title="Скачать">⬇</a>
-                    }
-                    @if (PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(element.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Uploaded)
-                    {
-                        <button type="button" class="btn btn-outline-info btn-sm" title="На согласование"
-                                onclick="showReviewModal(@element.Id)">📤</button>
-                    }
-                    @if (PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(element.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Uploaded || PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(element.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.OnApproval)
+                    @await Html.PartialAsync("_ElementFileButtons", element)
+                    @if (PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(element.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.OnApproval)
                     {
                         <button type="button" class="btn btn-outline-success btn-sm" title="Согласовать"
                                 onclick="showApproveModal(@element.Id)">✔️</button>
@@ -420,11 +377,6 @@
         function showRejectModal(elementId) {
             document.getElementById('rejectElementId').value = elementId;
             var modal = new bootstrap.Modal(document.getElementById('rejectModal'));
-            modal.show();
-        }
-        function showReviewModal(elementId) {
-            document.getElementById('reviewElementId').value = elementId;
-            var modal = new bootstrap.Modal(document.getElementById('reviewModal'));
             modal.show();
         }
     </script>

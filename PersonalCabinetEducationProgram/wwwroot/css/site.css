@@ -312,6 +312,33 @@ h5 {
     white-space: nowrap;
 }
 
+.table thead th.table-sortable {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    transition: background-color 0.15s ease;
+}
+
+.table thead th.table-sortable:hover,
+.table thead th.table-sortable:focus-visible {
+    background-color: #eef3f8 !important;
+    outline: none;
+}
+
+.table-sort-indicator {
+    display: inline-block;
+    width: 1rem;
+    margin-left: 0.35rem;
+    color: #6c757d;
+    font-size: 0.78em;
+    text-align: center;
+}
+
+.table thead th[aria-sort="ascending"] .table-sort-indicator,
+.table thead th[aria-sort="descending"] .table-sort-indicator {
+    color: #0d6efd;
+}
+
 .table tbody td {
     font-size: 11px;
     line-height: 1.2;

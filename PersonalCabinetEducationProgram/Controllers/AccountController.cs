@@ -107,7 +107,8 @@ namespace PersonalCabinetEducationProgram.Controllers
             if (!ModelState.IsValid)
                 return View(model);
 
-            var roleName = model.RoleId.Value switch
+            var roleId = model.RoleId ?? throw new InvalidOperationException("Роль не выбрана.");
+            var roleName = roleId switch
             {
                 AppRoles.ManagerId => AppRoles.Manager,
                 AppRoles.ApproverId => AppRoles.Approver,

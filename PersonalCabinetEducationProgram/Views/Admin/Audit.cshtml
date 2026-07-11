@@ -1,0 +1,42 @@
+@model IReadOnlyCollection<PersonalCabinetEducationProgram.Models.AuditLog>
+@{
+    ViewData["Title"] = "Журнал аудита";
+    var page = (int)(ViewBag.Page ?? 1);
+}
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold mb-1">Журнал аудита</h3>
+            <div class="text-muted">Административные действия, назначения и изменения элементов</div>
+        </div>
+        <a asp-action="Programs" class="btn btn-outline-secondary">К ОПОП</a>
+    </div>
+    <div class="card shadow-sm rounded-4">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light"><tr><th>Дата</th><th>Пользователь</th><th>Объект</th><th>Действие</th><th>Описание</th></tr></thead>
+                <tbody>
+                    @foreach (var entry in Model)
+                    {
+                        <tr>
+                            <td class="small text-nowrap">@entry.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")</td>
+                            <td>@entry.User.FullName</td>
+                            <td class="small">@entry.EntityType #@entry.EntityId</td>
+                            <td><span class="badge bg-secondary-subtle text-secondary">@entry.Action</span></td>
+                            <td class="small">@entry.Details</td>
+                        </tr>
+                    }
+                    @if (Model.Count == 0)
+                    {
+                        <tr><td colspan="5" class="text-center text-muted py-4">Записей пока нет</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="d-flex justify-content-between mt-3">
+        <a asp-action="Audit" asp-route-page="@(page - 1)" class="btn btn-outline-secondary @(page == 1 ? "disabled" : "")">Назад</a>
+        <a asp-action="Audit" asp-route-page="@(page + 1)" class="btn btn-outline-secondary @(Model.Count < 100 ? "disabled" : "")">Далее</a>
+    </div>
+</div>

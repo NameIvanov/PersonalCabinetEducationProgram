@@ -15,17 +15,23 @@ namespace PersonalCabinetEducationProgram.Controllers
         private readonly ApplicationDbContext _context;
         private readonly ElementWorkflowService _workflowService;
         private readonly NotificationService _notificationService;
+        private readonly ElementAccessService _accessService;
+        private readonly AuditService _auditService;
 
         public ApproverHomeController(
             IOptions<FileStorageSettings> storageSettings,
             ApplicationDbContext context,
             ElementWorkflowService workflowService,
-            NotificationService notificationService)
+            NotificationService notificationService,
+            ElementAccessService accessService,
+            AuditService auditService)
         {
             _storageSettings = storageSettings.Value;
             _context = context;
             _workflowService = workflowService;
             _notificationService = notificationService;
+            _accessService = accessService;
+            _auditService = auditService;
         }
 
         private int GetCurrentUserId()
@@ -63,6 +69,7 @@ namespace PersonalCabinetEducationProgram.Controllers
                 : await _context.EducationalProgramElements
                     .Where(e => e.EducationalProgramId == selectedProgramId)
                     .Include(e => e.EducationalProgram)
+                    .Include(e => e.Files.Where(f => f.IsCurrent))
                     .ToListAsync();
 
             ViewBag.Programs = programs;
@@ -75,6 +82,8 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         public async Task<IActionResult> Download(int elementId)
         {
+            if (!await _accessService.CanApproveElementAsync(User, elementId))
+                return Forbid();
             await _notificationService.MarkElementReadAsync(GetCurrentUserId(), elementId);
             var element = await _context.EducationalProgramElements.FindAsync(elementId);
             if (element == null || string.IsNullOrEmpty(element.FilePath))
@@ -90,6 +99,8 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         public async Task<IActionResult> Preview(int elementId)
         {
+            if (!await _accessService.CanApproveElementAsync(User, elementId))
+                return Forbid();
             await _notificationService.MarkElementReadAsync(GetCurrentUserId(), elementId);
             var element = await _context.EducationalProgramElements.FindAsync(elementId);
             if (element == null || string.IsNullOrEmpty(element.FilePath))
@@ -107,6 +118,8 @@ namespace PersonalCabinetEducationProgram.Controllers
         [HttpPost]
         public async Task<IActionResult> Approve(int elementId, string? comment)
         {
+            if (!await _accessService.CanApproveElementAsync(User, elementId))
+                return Forbid();
             var element = await _workflowService.ChangeStatusAsync(
                 elementId,
                 GetCurrentUserId(),
@@ -124,6 +137,8 @@ namespace PersonalCabinetEducationProgram.Controllers
         [HttpPost]
         public async Task<IActionResult> Reject(int elementId, string? comment)
         {
+            if (!await _accessService.CanApproveElementAsync(User, elementId))
+                return Forbid();
             var element = await _workflowService.ChangeStatusAsync(
                 elementId,
                 GetCurrentUserId(),
@@ -139,25 +154,10 @@ namespace PersonalCabinetEducationProgram.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> SendForReview(int elementId)
-        {
-            var element = await _workflowService.ChangeStatusAsync(
-                elementId,
-                GetCurrentUserId(),
-                ElementApprovalStatus.OnApproval,
-                "Отправлено на согласование",
-                User.IsInRole(AppRoles.Admin),
-                [ElementApprovalStatus.Uploaded]);
-
-            if (element == null)
-                return NotFound();
-
-            return RedirectToAction(nameof(Index), new { programId = element.EducationalProgramId });
-        }
-
-        [HttpPost]
         public async Task<IActionResult> AddComment(int elementId, string commentText)
         {
+            if (!await _accessService.CanApproveElementAsync(User, elementId))
+                return Forbid();
             if (string.IsNullOrWhiteSpace(commentText))
                 return RedirectToAction(nameof(Index));
 
@@ -169,6 +169,7 @@ namespace PersonalCabinetEducationProgram.Controllers
                 CommentContent = commentText,
                 Status = CommentStatus.New
             });
+            _auditService.Record(GetCurrentUserId(), "EducationalProgramElement", elementId, "CommentAdded", commentText.Trim());
 
             await _notificationService.CreateForElementAsync(
                 elementId,
@@ -192,7 +193,12 @@ namespace PersonalCabinetEducationProgram.Controllers
             if (comment == null)
                 return NotFound();
 
+            if (!await _accessService.CanApproveElementAsync(User, comment.EducationalProgramElementId))
+                return Forbid();
+
             comment.Status = status;
+            _auditService.Record(GetCurrentUserId(), "EducationalProgramElement", comment.EducationalProgramElementId,
+                "CommentStatusChanged", $"Комментарий {comment.Id}: {status}");
             await _context.SaveChangesAsync();
 
             return RedirectToAction(nameof(Comments), new { elementId = comment.EducationalProgramElementId });
@@ -200,6 +206,8 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         public async Task<IActionResult> History(int elementId)
         {
+            if (!await _accessService.CanApproveElementAsync(User, elementId))
+                return Forbid();
             await _notificationService.MarkElementReadAsync(GetCurrentUserId(), elementId);
             await FillElementDetailsViewBag(elementId, nameof(ApproverHomeController).Replace("Controller", ""));
             return View("~/Views/ManagerHome/History.cshtml");
@@ -207,6 +215,8 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         public async Task<IActionResult> Comments(int elementId)
         {
+            if (!await _accessService.CanApproveElementAsync(User, elementId))
+                return Forbid();
             await _notificationService.MarkElementReadAsync(GetCurrentUserId(), elementId);
             await FillElementDetailsViewBag(elementId, nameof(ApproverHomeController).Replace("Controller", ""));
             var comments = await GetElementComments(elementId);
@@ -224,6 +234,12 @@ namespace PersonalCabinetEducationProgram.Controllers
                 .OrderByDescending(h => h.ChangeDate)
                 .ToListAsync();
             ViewBag.Comments = await GetElementComments(elementId);
+            ViewBag.FileGroups = await _context.EducationalProgramElementFiles
+                .Where(f => f.EducationalProgramElementId == elementId)
+                .Include(f => f.UploadedByUser)
+                .OrderByDescending(f => f.RevisionNumber)
+                .ThenBy(f => f.OriginalFileName)
+                .ToListAsync();
             ViewBag.ReturnController = returnController;
         }
 
@@ -238,7 +254,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         private static string GetContentType(string? fileName)
         {
-            return Path.GetExtension(fileName).ToLowerInvariant() switch
+            return Path.GetExtension(fileName ?? string.Empty).ToLowerInvariant() switch
             {
                 ".doc" => "application/msword",
                 ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",

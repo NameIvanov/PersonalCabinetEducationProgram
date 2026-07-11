@@ -80,11 +80,7 @@
                                             <div class="d-flex gap-1 flex-wrap">
                                                 <a asp-controller="ManagerHome" asp-action="Comments" asp-route-elementId="@element.Id" class="btn btn-outline-secondary btn-sm" title="Комментарии">💬</a>
                                                 <a asp-controller="ManagerHome" asp-action="History" asp-route-elementId="@element.Id" class="btn btn-outline-secondary btn-sm" title="История">🕐</a>
-                                                @if (!string.IsNullOrEmpty(element.FilePath))
-                                                {
-                                                    <a asp-controller="ManagerHome" asp-action="Preview" asp-route-elementId="@element.Id" class="btn btn-outline-secondary btn-sm" target="_blank" title="Просмотр">📄</a>
-                                                    <a asp-controller="ManagerHome" asp-action="Download" asp-route-elementId="@element.Id" class="btn btn-outline-secondary btn-sm" title="Скачать">⬇</a>
-                                                }
+                                                @await Html.PartialAsync("_ElementFileButtons", element)
                                             </div>
                                         </td>
                                     </tr>

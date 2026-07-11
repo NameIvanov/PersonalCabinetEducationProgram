@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using PersonalCabinetEducationProgram.Data;
 using PersonalCabinetEducationProgram.Models;
+using PersonalCabinetEducationProgram.Services;
 
 namespace PersonalCabinetEducationProgram.Controllers
 {
@@ -12,13 +13,16 @@ namespace PersonalCabinetEducationProgram.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly FileStorageSettings _storageSettings;
+        private readonly ElementAccessService _accessService;
 
         public HistoryFilesController(
             ApplicationDbContext context,
-            IOptions<FileStorageSettings> storageSettings)
+            IOptions<FileStorageSettings> storageSettings,
+            ElementAccessService accessService)
         {
             _context = context;
             _storageSettings = storageSettings.Value;
+            _accessService = accessService;
         }
 
         public async Task<IActionResult> Preview(int historyId)
@@ -47,6 +51,9 @@ namespace PersonalCabinetEducationProgram.Controllers
                 .FirstOrDefaultAsync(h => h.Id == historyId);
 
             if (history == null || string.IsNullOrWhiteSpace(history.FilePath))
+                return null;
+
+            if (!await _accessService.CanViewElementAsync(User, history.EducationalProgramElementId))
                 return null;
 
             var storageRoot = Path.GetFullPath(_storageSettings.StoragePath);

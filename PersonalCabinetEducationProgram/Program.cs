@@ -9,7 +9,8 @@ using Pomelo.EntityFrameworkCore.MySql.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllersWithViews();
+builder.Services.AddControllersWithViews(options =>
+    options.Filters.Add(new Microsoft.AspNetCore.Mvc.AutoValidateAntiforgeryTokenAttribute()));
 builder.Services.Configure<FormOptions>(options =>
     options.MultipartBodyLengthLimit = FileUploadLimits.MaxFileSizeBytes);
 builder.Services.Configure<IISServerOptions>(options =>
@@ -57,6 +58,8 @@ builder.Services.Configure<FileStorageSettings>(builder.Configuration.GetSection
 builder.Services.AddScoped<IFileStorageService, FileSystemStorageService>();
 builder.Services.AddScoped<ElementWorkflowService>();
 builder.Services.AddScoped<NotificationService>();
+builder.Services.AddScoped<ElementAccessService>();
+builder.Services.AddScoped<AuditService>();
 
 var app = builder.Build();
 

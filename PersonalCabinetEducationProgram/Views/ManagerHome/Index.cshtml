@@ -257,20 +257,21 @@
                                         <td class="small">@(element.UploadDate?.ToString("dd.MM.yyyy") ?? "—")</td>
                                         <td>
                                             <div class="d-flex gap-1 flex-wrap">
-                                                @if (!string.IsNullOrEmpty(element.FilePath))
-                                                {
-                                                    <a asp-action="Preview" asp-route-elementId="@element.Id"
-                                                       class="btn btn-outline-secondary btn-sm" title="Просмотр" target="_blank">📄</a>
-                                                    <a asp-action="Download" asp-route-elementId="@element.Id"
-                                                       class="btn btn-outline-secondary btn-sm" title="Скачать">⬇</a>
-                                                }
-                                                @if (!PersonalCabinetEducationProgram.Models.ElementApprovalStatus.IsLockedForNonAdmin(element.StatusApprovals))
+                                                @await Html.PartialAsync("_ElementFileButtons", element)
+                                                @if (PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(element.StatusApprovals) is PersonalCabinetEducationProgram.Models.ElementApprovalStatus.NotUploaded or PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Uploaded or PersonalCabinetEducationProgram.Models.ElementApprovalStatus.RevisionRequired)
                                                 {
                                                     <form method="post" enctype="multipart/form-data" asp-controller="ManagerHome" asp-action="Upload" class="d-inline">
                                                         <input type="hidden" name="elementId" value="@element.Id" />
-                                                        <label class="btn btn-outline-primary btn-sm mb-0" title="Загрузить файл">
-                                                            📤 <input type="file" name="file" accept=".pdf,.doc,.docx" data-max-size="52428800" title="PDF, DOC или DOCX до 50 МБ" style="display:none;" onchange="if (window.validateUploadFile(this)) this.form.submit()" />
+                                                        <label class="btn btn-outline-primary btn-sm mb-0" title="Прикрепить файлы">
+                                                            📎 <input type="file" name="files" multiple accept=".pdf,.doc,.docx" data-max-size="52428800" title="До 20 файлов, каждый до 50 МБ" style="display:none;" onchange="if (window.validateUploadFile(this)) this.form.submit()" />
                                                         </label>
+                                                    </form>
+                                                }
+                                                @if (PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(element.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Uploaded && element.Files.Any(f => f.IsCurrent))
+                                                {
+                                                    <form method="post" asp-action="SendForApproval" class="d-inline">
+                                                        <input type="hidden" name="elementId" value="@element.Id" />
+                                                        <button class="btn btn-outline-info btn-sm" type="submit" title="Зафиксировать группу и отправить на согласование">➤</button>
                                                     </form>
                                                 }
                                                 <a asp-action="Comments" asp-route-elementId="@element.Id" class="btn btn-outline-secondary btn-sm" title="Комментарии">💬</a>
@@ -294,7 +295,7 @@
 </div>
 
 @functions {
-    async Task RenderElementRow(PersonalCabinetEducationProgram.Models.EducationalProgramElement element, List<PersonalCabinetEducationProgram.Models.EducationalProgramElementComment> allComments)
+    async Task RenderElementRow(PersonalCabinetEducationProgram.Models.EducationalProgramElement element, List<PersonalCabinetEducationProgram.Models.EducationalProgramElementComment>? allComments)
     {
         var elementComments = allComments?.Where(c => c.EducationalProgramElementId == element.Id).ToList();
         var commentCount = elementComments?.Count ?? 0;
@@ -311,18 +312,21 @@
             <td class="small">@(element.UploadDate?.ToString("dd.MM.yyyy") ?? "—")</td>
             <td>
                 <div class="d-flex gap-1 flex-wrap">
-                    @if (!string.IsNullOrEmpty(element.FilePath))
-                    {
-                        <a asp-action="Preview" asp-route-elementId="@element.Id" class="btn btn-outline-secondary btn-sm" title="Просмотр" target="_blank">📄</a>
-                        <a asp-action="Download" asp-route-elementId="@element.Id" class="btn btn-outline-secondary btn-sm" title="Скачать">⬇</a>
-                    }
-                    @if (!PersonalCabinetEducationProgram.Models.ElementApprovalStatus.IsLockedForNonAdmin(element.StatusApprovals))
+                    @await Html.PartialAsync("_ElementFileButtons", element)
+                    @if (PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(element.StatusApprovals) is PersonalCabinetEducationProgram.Models.ElementApprovalStatus.NotUploaded or PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Uploaded or PersonalCabinetEducationProgram.Models.ElementApprovalStatus.RevisionRequired)
                     {
                         <form method="post" enctype="multipart/form-data" asp-controller="ManagerHome" asp-action="Upload" class="d-inline">
                             <input type="hidden" name="elementId" value="@element.Id" />
-                            <label class="btn btn-outline-primary btn-sm mb-0" title="Загрузить файл">
-                                📤 <input type="file" name="file" accept=".pdf,.doc,.docx" data-max-size="52428800" title="PDF, DOC или DOCX до 50 МБ" style="display:none;" onchange="if (window.validateUploadFile(this)) this.form.submit()" />
+                            <label class="btn btn-outline-primary btn-sm mb-0" title="Прикрепить файлы">
+                                📎 <input type="file" name="files" multiple accept=".pdf,.doc,.docx" data-max-size="52428800" title="До 20 файлов, каждый до 50 МБ" style="display:none;" onchange="if (window.validateUploadFile(this)) this.form.submit()" />
                             </label>
+                        </form>
+                    }
+                    @if (PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(element.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Uploaded && element.Files.Any(f => f.IsCurrent))
+                    {
+                        <form method="post" asp-action="SendForApproval" class="d-inline">
+                            <input type="hidden" name="elementId" value="@element.Id" />
+                            <button class="btn btn-outline-info btn-sm" type="submit" title="Зафиксировать группу и отправить на согласование">➤</button>
                         </form>
                     }
                     <a asp-action="Comments" asp-route-elementId="@element.Id" class="btn btn-outline-secondary btn-sm" title="Комментарии (@commentCount)">💬 @if (commentCount > 0) {<span>@commentCount</span>}</a>

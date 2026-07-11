@@ -4,6 +4,7 @@ namespace PersonalCabinetEducationProgram.Services
 {
     public interface IFileStorageService
     {
+        Task ValidateFileAsync(IFormFile file);
         Task<string> SaveFileAsync(IFormFile file);
     }
 }

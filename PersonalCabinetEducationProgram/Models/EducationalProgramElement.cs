@@ -13,17 +13,17 @@ namespace PersonalCabinetEducationProgram.Models
         public int EducationalProgramId { get; set; }
 
         [Column("type_element")]
-        public string TypeElement { get; set; }
+        public string TypeElement { get; set; } = string.Empty;
 
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
 
         [Column("upload_date")]
         public DateOnly? UploadDate { get; set; }
 
-        public string Description { get; set; }
+        public string Description { get; set; } = string.Empty;
 
         [Column("status_approvals")]
-        public string StatusApprovals { get; set; }
+        public string StatusApprovals { get; set; } = string.Empty;
 
         [Column("file_path")]
         public string? FilePath { get; set; }
@@ -32,8 +32,9 @@ namespace PersonalCabinetEducationProgram.Models
         public string? FileName { get; set; }
 
         // Навигации
-        public EducationalProgram EducationalProgram { get; set; }
-        public ICollection<EducationalProgramElementComment> Comments { get; set; }
+        public EducationalProgram EducationalProgram { get; set; } = null!;
+        public ICollection<EducationalProgramElementComment> Comments { get; set; } = [];
+        public ICollection<EducationalProgramElementFile> Files { get; set; } = [];
         public ICollection<Notification> Notifications { get; set; } = [];
     }
 }

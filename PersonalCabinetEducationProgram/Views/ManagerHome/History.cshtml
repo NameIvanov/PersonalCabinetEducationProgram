@@ -3,6 +3,7 @@
     var element = ViewBag.Element as PersonalCabinetEducationProgram.Models.EducationalProgramElement;
     var history = ViewBag.History as List<PersonalCabinetEducationProgram.Models.ElementStatusHistory>;
     var comments = ViewBag.Comments as List<PersonalCabinetEducationProgram.Models.EducationalProgramElementComment>;
+    var fileGroups = ViewBag.FileGroups as List<PersonalCabinetEducationProgram.Models.EducationalProgramElementFile> ?? new();
     var returnController = ViewBag.ReturnController as string ?? "ManagerHome";
 }
 
@@ -72,6 +73,38 @@
                         <div class="text-center text-muted py-4">
                             <div>История изменений пуста</div>
                         </div>
+                    }
+
+                    @if (fileGroups.Any())
+                    {
+                        <hr class="my-4" />
+                        <h6 class="fw-bold mb-3">Комплекты файлов</h6>
+                        @foreach (var group in fileGroups.GroupBy(f => f.RevisionNumber).OrderByDescending(g => g.Key))
+                        {
+                            var isCurrent = group.Any(f => f.IsCurrent);
+                            var submitted = group.Any(f => f.IsSubmitted);
+                            <div class="border rounded-3 p-3 mb-3">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="fw-semibold">Итерация @group.Key</span>
+                                    <span class="badge @(isCurrent ? "bg-primary-subtle text-primary" : "bg-secondary-subtle text-secondary")">
+                                        @(isCurrent ? (submitted ? "Текущая, зафиксирована" : "Текущая") : "Архив")
+                                    </span>
+                                </div>
+                                @foreach (var file in group)
+                                {
+                                    <div class="d-flex align-items-center justify-content-between gap-2 py-1">
+                                        <span class="small text-truncate" title="@file.OriginalFileName">@file.OriginalFileName</span>
+                                        <span class="d-flex gap-1 flex-shrink-0">
+                                            <a asp-controller="ElementFiles" asp-action="Preview" asp-route-id="@file.Id" class="btn btn-outline-secondary btn-sm" target="_blank">Открыть</a>
+                                            <a asp-controller="ElementFiles" asp-action="Download" asp-route-id="@file.Id" class="btn btn-outline-secondary btn-sm">Скачать</a>
+                                        </span>
+                                    </div>
+                                }
+                                <div class="text-muted mt-2" style="font-size:.72rem;">
+                                    @group.Min(f => f.UploadedAt).ToLocalTime().ToString("dd.MM.yyyy HH:mm"), файлов: @group.Count()
+                                </div>
+                            </div>
+                        }
                     }
                 </div>
             </div>

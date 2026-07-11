@@ -10,24 +10,24 @@ namespace PersonalCabinetEducationProgram.Models
         public int Id { get; set; }
 
         [Column("code_referral")]
-        public string CodeReferral { get; set; }
+        public string CodeReferral { get; set; } = string.Empty;
 
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
 
         [Column("educational_level")]
-        public string EducationalLevel { get; set; }
+        public string EducationalLevel { get; set; } = string.Empty;
 
         [Column("year_approvals")]
         public int? YearApprovals { get; set; }
 
-        public string Status { get; set; }
+        public string Status { get; set; } = EducationalProgramStatus.Draft;
 
         [Column("user_id")]
         public int? UserId { get; set; }
 
         public User? User { get; set; }
-        public ICollection<EducationalProgramElement> Elements { get; set; }
-        public ICollection<EducationalProgramManager> Managers { get; set; }
-        public ICollection<EducationalProgramAssignment> Assignments { get; set; }
+        public ICollection<EducationalProgramElement> Elements { get; set; } = [];
+        public ICollection<EducationalProgramManager> Managers { get; set; } = [];
+        public ICollection<EducationalProgramAssignment> Assignments { get; set; } = [];
     }
 }

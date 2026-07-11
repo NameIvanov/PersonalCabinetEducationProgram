@@ -53,6 +53,24 @@ namespace PersonalCabinetEducationProgram.Controllers
             return View(users);
         }
 
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> Audit(int page = 1)
+        {
+            const int pageSize = 100;
+            page = Math.Max(page, 1);
+            ViewBag.Page = page;
+
+            var entries = await _context.AuditLogs
+                .AsNoTracking()
+                .Include(a => a.User)
+                .OrderByDescending(a => a.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return View(entries);
+        }
+
         [HttpPost]
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> ChangeApprovalStatus(int id, string approvalStatus, string? rejectionReason)
@@ -283,7 +301,7 @@ namespace PersonalCabinetEducationProgram.Controllers
                 .Include(p => p.User)
                 .Include(p => p.Assignments).ThenInclude(a => a.Department)
                 .Include(p => p.Assignments).ThenInclude(a => a.Faculty)
-                .Include(p => p.Elements)
+                .Include(p => p.Elements).ThenInclude(e => e.Files.Where(f => f.IsCurrent))
                 .FirstOrDefaultAsync(p => p.Id == id);
 
             if (program == null)
@@ -452,24 +470,59 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> UploadElement(int elementId, IFormFile file)
+        public async Task<IActionResult> EditProgramElement(int elementId, string typeElement, string name, string? description)
         {
             var element = await _context.EducationalProgramElements.FindAsync(elementId);
             if (element == null)
                 return NotFound();
 
-            if (file != null && file.Length > 0)
+            if (!EducationalProgramElementTypes.All.Contains(typeElement) || string.IsNullOrWhiteSpace(name))
+                return BadRequest("Проверьте тип и наименование элемента ОПОП.");
+
+            var oldDescription = $"{element.TypeElement}: {element.Name} ({element.Description})";
+            element.TypeElement = typeElement;
+            element.Name = name.Trim();
+            element.Description = description?.Trim() ?? string.Empty;
+            _context.ElementStatusHistory.Add(new ElementStatusHistory
             {
-                if (file.Length > FileUploadLimits.MaxFileSizeBytes)
+                EducationalProgramElementId = element.Id,
+                UserId = GetCurrentUserId(),
+                OldStatus = element.StatusApprovals,
+                NewStatus = element.StatusApprovals,
+                ChangeDate = DateTime.UtcNow,
+                Comment = $"Изменена карточка элемента. Было: {oldDescription}"
+            });
+            await _context.SaveChangesAsync();
+            return RedirectToAction(nameof(ProgramDetails), new { id = element.EducationalProgramId });
+        }
+
+        [HttpPost]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> UploadElement(int elementId, List<IFormFile> files)
+        {
+            var element = await _context.EducationalProgramElements.FindAsync(elementId);
+            if (element == null)
+                return NotFound();
+
+            files = files.Where(f => f.Length > 0).ToList();
+            if (files.Count > 0)
+            {
+                if (files.Count > FileUploadLimits.MaxFilesPerGroup)
                 {
-                    TempData["ErrorMessage"] = $"Размер файла не должен превышать {FileUploadLimits.MaxFileSizeDisplay}.";
+                    TempData["ErrorMessage"] = $"За один раз можно загрузить не более {FileUploadLimits.MaxFilesPerGroup} файлов.";
                     return RedirectToAction(nameof(ProgramDetails), new { id = element.EducationalProgramId });
                 }
 
                 try
                 {
-                    var uniqueFileName = await _fileStorageService.SaveFileAsync(file);
-                    await _workflowService.MarkUploadedAsync(elementId, GetCurrentUserId(), uniqueFileName, file.FileName, adminOverride: true);
+                    foreach (var file in files)
+                        await _fileStorageService.ValidateFileAsync(file);
+
+                    var storedFiles = new List<(string StoredFileName, string OriginalFileName)>();
+                    foreach (var file in files)
+                        storedFiles.Add((await _fileStorageService.SaveFileAsync(file), Path.GetFileName(file.FileName)));
+
+                    await _workflowService.MarkFilesUploadedAsync(elementId, GetCurrentUserId(), storedFiles, adminOverride: true);
                 }
                 catch (InvalidOperationException ex)
                 {
@@ -726,7 +779,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         private static string GetContentType(string? fileName)
         {
-            return Path.GetExtension(fileName).ToLowerInvariant() switch
+            return Path.GetExtension(fileName ?? string.Empty).ToLowerInvariant() switch
             {
                 ".doc" => "application/msword",
                 ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",

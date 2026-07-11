@@ -18,8 +18,8 @@ namespace PersonalCabinetEducationProgram.Models
         [Column("faculty_id")]
         public int FacultyId { get; set; }
 
-        public EducationalProgram EducationalProgram { get; set; }
-        public Departments Department { get; set; }
-        public Facultys Faculty { get; set; }
+        public EducationalProgram EducationalProgram { get; set; } = null!;
+        public Departments Department { get; set; } = null!;
+        public Facultys Faculty { get; set; } = null!;
     }
 }

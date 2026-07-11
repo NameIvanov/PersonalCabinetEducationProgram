@@ -10,8 +10,8 @@ namespace PersonalCabinetEducationProgram.Models
         public const string Published = "Опубликовано на сайте";
 
         public static readonly string[] EditableByManager = [NotUploaded, Uploaded, OnApproval, RevisionRequired];
-        public static readonly string[] ApproverCanApprove = [Uploaded, OnApproval, RevisionRequired];
-        public static readonly string[] ApproverCanReject = [Uploaded, OnApproval];
+        public static readonly string[] ApproverCanApprove = [OnApproval];
+        public static readonly string[] ApproverCanReject = [OnApproval];
 
         public static string Normalize(string? status)
         {

@@ -19,12 +19,12 @@ namespace PersonalCabinetEducationProgram.Models
         public DateTime DateTimeComment { get; set; }
 
         [Column("comment_content")]
-        public string CommentContent { get; set; }
+        public string CommentContent { get; set; } = string.Empty;
 
-        public string Status { get; set; }
+        public string Status { get; set; } = CommentStatus.New;
 
         // Навигации
-        public EducationalProgramElement Element { get; set; }
-        public User User { get; set; }
+        public EducationalProgramElement Element { get; set; } = null!;
+        public User User { get; set; } = null!;
     }
 }

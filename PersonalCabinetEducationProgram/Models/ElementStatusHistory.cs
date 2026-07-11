@@ -16,16 +16,16 @@ namespace PersonalCabinetEducationProgram.Models
         public int UserId { get; set; }
 
         [Column("old_status")]
-        public string OldStatus { get; set; }
+        public string OldStatus { get; set; } = string.Empty;
 
         [Column("new_status")]
-        public string NewStatus { get; set; }
+        public string NewStatus { get; set; } = string.Empty;
 
         [Column("change_date")]
         public DateTime ChangeDate { get; set; }
 
         [Column("comment")]
-        public string Comment { get; set; }
+        public string Comment { get; set; } = string.Empty;
 
         [Column("file_path")]
         public string? FilePath { get; set; }
@@ -33,7 +33,7 @@ namespace PersonalCabinetEducationProgram.Models
         [Column("file_name")]
         public string? FileName { get; set; }
 
-        public EducationalProgramElement Element { get; set; }
-        public User User { get; set; }
+        public EducationalProgramElement Element { get; set; } = null!;
+        public User User { get; set; } = null!;
     }
 }

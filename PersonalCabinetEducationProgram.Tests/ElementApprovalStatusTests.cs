@@ -25,4 +25,11 @@ public class ElementApprovalStatusTests
     {
         Assert.Equal(expected, ElementApprovalStatus.IsLockedForNonAdmin(status));
     }
+
+    [Fact]
+    public void ApproverTransitions_RequireSubmittedGroup()
+    {
+        Assert.Equal([ElementApprovalStatus.OnApproval], ElementApprovalStatus.ApproverCanApprove);
+        Assert.Equal([ElementApprovalStatus.OnApproval], ElementApprovalStatus.ApproverCanReject);
+    }
 }

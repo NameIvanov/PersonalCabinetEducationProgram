@@ -17,6 +17,8 @@ namespace PersonalCabinetEducationProgram.Data
         public DbSet<ElementStatusHistory> ElementStatusHistory { get; set; }
         public DbSet<ApproverAssignment> ApproverAssignments { get; set; }
         public DbSet<Notification> Notifications { get; set; }
+        public DbSet<EducationalProgramElementFile> EducationalProgramElementFiles { get; set; }
+        public DbSet<AuditLog> AuditLogs { get; set; }
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) { }
 
@@ -182,6 +184,39 @@ namespace PersonalCabinetEducationProgram.Data
                 entity.HasIndex(n => n.UserId).HasDatabaseName("ix_notif_user");
                 entity.HasIndex(n => n.EducationalProgramElementId).HasDatabaseName("ix_notif_elem");
                 entity.HasIndex(n => new { n.UserId, n.IsRead }).HasDatabaseName("ix_notif_unread");
+            });
+
+            modelBuilder.Entity<EducationalProgramElementFile>(entity =>
+            {
+                entity.HasOne(f => f.Element)
+                    .WithMany(e => e.Files)
+                    .HasForeignKey(f => f.EducationalProgramElementId)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("fk_elem_file_element");
+
+                entity.HasOne(f => f.UploadedByUser)
+                    .WithMany(u => u.UploadedElementFiles)
+                    .HasForeignKey(f => f.UploadedByUserId)
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .HasConstraintName("fk_elem_file_user");
+
+                entity.HasIndex(f => f.EducationalProgramElementId).HasDatabaseName("ix_elem_file_element");
+                entity.HasIndex(f => new { f.EducationalProgramElementId, f.RevisionNumber })
+                    .HasDatabaseName("ix_elem_file_revision");
+            });
+
+            modelBuilder.Entity<AuditLog>(entity =>
+            {
+                entity.Property(a => a.EntityType).HasMaxLength(100);
+                entity.Property(a => a.Action).HasMaxLength(100);
+                entity.HasOne(a => a.User)
+                    .WithMany(u => u.AuditLogs)
+                    .HasForeignKey(a => a.UserId)
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .HasConstraintName("fk_audit_user");
+                entity.HasIndex(a => a.UserId).HasDatabaseName("ix_audit_user");
+                entity.HasIndex(a => new { a.EntityType, a.EntityId }).HasDatabaseName("ix_audit_entity");
+                entity.HasIndex(a => a.CreatedAt).HasDatabaseName("ix_audit_created");
             });
 
             // Seed Roles
