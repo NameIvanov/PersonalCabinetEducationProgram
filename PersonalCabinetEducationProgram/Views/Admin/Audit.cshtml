@@ -1,7 +1,22 @@
 @model IReadOnlyCollection<PersonalCabinetEducationProgram.Models.AuditLog>
+@using PersonalCabinetEducationProgram.ViewModels
 @{
     ViewData["Title"] = "Журнал аудита";
     var page = (int)(ViewBag.Page ?? 1);
+    var totalPages = (int)(ViewBag.TotalPages ?? 1);
+    var currentSort = ViewBag.Sort as string ?? "date";
+    var currentDirection = ViewBag.Direction as string ?? "desc";
+    var filters = ViewBag.Filters as AuditListFiltersViewModel ?? new();
+    const string filterFormId = "auditFilterForm";
+    string NextDirection(string column) => currentSort == column && currentDirection == "asc" ? "desc" : "asc";
+    Dictionary<string, string> RouteData(int targetPage, string targetSort, string targetDirection)
+    {
+        var values = filters.ToRouteData();
+        values["page"] = targetPage.ToString(); values["sort"] = targetSort; values["direction"] = targetDirection;
+        return values;
+    }
+    Dictionary<string, string> SortRoute(string column) => RouteData(1, column, NextDirection(column));
+    Dictionary<string, string> PageRoute(int targetPage) => RouteData(targetPage, currentSort, currentDirection);
 }
 
 <div class="container py-4">
@@ -10,12 +25,32 @@
             <h3 class="fw-bold mb-1">Журнал аудита</h3>
             <div class="text-muted">Административные действия, назначения и изменения элементов</div>
         </div>
-        <a asp-action="Programs" class="btn btn-outline-secondary">К ОПОП</a>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary" data-toggle-live-filters aria-expanded="@(filters.ShowFilters || filters.HasAnyFilter)">Поиск</button>
+            <a asp-action="Programs" class="btn btn-outline-secondary">К ОПОП</a>
+        </div>
     </div>
+    @await Html.PartialAsync("_LiveFilterForm", new LiveFilterFormViewModel
+    {
+        FormId = filterFormId,
+        PreservedRouteValues = new Dictionary<string, string>
+        {
+            ["page"] = "1", ["sort"] = currentSort, ["direction"] = currentDirection, ["ShowFilters"] = "true"
+        }
+    })
     <div class="card shadow-sm rounded-4">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
-                <thead class="table-light"><tr><th>Дата</th><th>Пользователь</th><th>Объект</th><th>Действие</th><th>Описание</th></tr></thead>
+                <thead class="table-light">
+                    <tr><th><a asp-action="Audit" asp-all-route-data="@SortRoute("date")">Дата</a></th><th><a asp-action="Audit" asp-all-route-data="@SortRoute("user")">Пользователь</a></th><th><a asp-action="Audit" asp-all-route-data="@SortRoute("entity")">Объект</a></th><th><a asp-action="Audit" asp-all-route-data="@SortRoute("action")">Действие</a></th><th><a asp-action="Audit" asp-all-route-data="@SortRoute("details")">Описание</a></th></tr>
+                    <tr class="live-filter-row @((filters.ShowFilters || filters.HasAnyFilter) ? "" : "d-none")">
+                        <th><div class="d-flex gap-1 element-date-filter"><input form="@filterFormId" type="date" name="DateFrom" value="@filters.DateFrom?.ToString("yyyy-MM-dd")" class="form-control form-control-sm" title="Дата от" /><input form="@filterFormId" type="date" name="DateTo" value="@filters.DateTo?.ToString("yyyy-MM-dd")" class="form-control form-control-sm" title="Дата до" /></div></th>
+                        <th><input form="@filterFormId" type="search" name="User" value="@filters.User" class="form-control form-control-sm" placeholder="Пользователь" /></th>
+                        <th><input form="@filterFormId" type="search" name="Entity" value="@filters.Entity" class="form-control form-control-sm" placeholder="Объект или ID" /></th>
+                        <th><input form="@filterFormId" type="search" name="Action" value="@filters.Action" class="form-control form-control-sm" placeholder="Действие" /></th>
+                        <th><div class="d-flex gap-1"><input form="@filterFormId" type="search" name="Details" value="@filters.Details" class="form-control form-control-sm" placeholder="Описание" /><a asp-action="Audit" asp-route-sort="@currentSort" asp-route-direction="@currentDirection" asp-route-ShowFilters="true" class="btn btn-outline-secondary btn-sm">Сбросить</a></div></th>
+                    </tr>
+                </thead>
                 <tbody>
                     @foreach (var entry in Model)
                     {
@@ -36,7 +71,8 @@
         </div>
     </div>
     <div class="d-flex justify-content-between mt-3">
-        <a asp-action="Audit" asp-route-page="@(page - 1)" class="btn btn-outline-secondary @(page == 1 ? "disabled" : "")">Назад</a>
-        <a asp-action="Audit" asp-route-page="@(page + 1)" class="btn btn-outline-secondary @(Model.Count < 100 ? "disabled" : "")">Далее</a>
+        <a asp-action="Audit" asp-all-route-data="@PageRoute(page - 1)" class="btn btn-outline-secondary @(page == 1 ? "disabled" : "")">Назад</a>
+        <span class="align-self-center">@(page) из @totalPages</span>
+        <a asp-action="Audit" asp-all-route-data="@PageRoute(page + 1)" class="btn btn-outline-secondary @(page >= totalPages ? "disabled" : "")">Далее</a>
     </div>
 </div>

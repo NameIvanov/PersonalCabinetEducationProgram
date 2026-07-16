@@ -59,6 +59,8 @@ builder.Services.AddScoped<IFileStorageService, FileSystemStorageService>();
 builder.Services.AddScoped<ElementWorkflowService>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<ElementAccessService>();
+builder.Services.AddScoped<ElementListQueryService>();
+builder.Services.AddScoped<ElementFilterService>();
 builder.Services.AddScoped<AuditService>();
 
 var app = builder.Build();

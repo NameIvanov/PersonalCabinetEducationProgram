@@ -296,6 +296,18 @@ namespace PersonalCabinetEducationProgram.Migrations
                         .HasColumnType("longtext")
                         .HasColumnName("educational_level");
 
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("archived_at");
+
+                    b.Property<int?>("ArchivedByUserId")
+                        .HasColumnType("int")
+                        .HasColumnName("archived_by_user_id");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("is_archived");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("longtext");
@@ -308,6 +320,13 @@ namespace PersonalCabinetEducationProgram.Migrations
                         .HasColumnType("int")
                         .HasColumnName("user_id");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1)
+                        .HasColumnName("version");
+
                     b.Property<int?>("YearApprovals")
                         .HasColumnType("int")
                         .HasColumnName("year_approvals");
@@ -316,6 +335,9 @@ namespace PersonalCabinetEducationProgram.Migrations
 
                     b.HasIndex("UserId")
                         .HasDatabaseName("ix_prog_user");
+
+                    b.HasIndex("IsArchived")
+                        .HasDatabaseName("ix_prog_archived");
 
                     b.ToTable("educational_programs", "personal_cabinet");
 
@@ -378,6 +400,10 @@ namespace PersonalCabinetEducationProgram.Migrations
                     b.HasIndex("FacultyId")
                         .HasDatabaseName("ix_epa_fac");
 
+                    b.HasIndex("EducationalProgramId", "DepartmentId", "FacultyId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_epa_program_department_faculty");
+
                     b.ToTable("educational_program_assignments", "personal_cabinet");
 
                     b.HasData(
@@ -414,6 +440,14 @@ namespace PersonalCabinetEducationProgram.Migrations
                         .IsRequired()
                         .HasColumnType("longtext");
 
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("archived_at");
+
+                    b.Property<int?>("ArchivedByUserId")
+                        .HasColumnType("int")
+                        .HasColumnName("archived_by_user_id");
+
                     b.Property<int>("EducationalProgramId")
                         .HasColumnType("int")
                         .HasColumnName("educational_program_id");
@@ -430,6 +464,10 @@ namespace PersonalCabinetEducationProgram.Migrations
                         .IsRequired()
                         .HasColumnType("longtext");
 
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("is_archived");
+
                     b.Property<string>("StatusApprovals")
                         .IsRequired()
                         .HasColumnType("longtext")
@@ -444,10 +482,20 @@ namespace PersonalCabinetEducationProgram.Migrations
                         .HasColumnType("date")
                         .HasColumnName("upload_date");
 
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1)
+                        .HasColumnName("version");
+
                     b.HasKey("Id");
 
                     b.HasIndex("EducationalProgramId")
                         .HasDatabaseName("ix_elem_prog");
+
+                    b.HasIndex("IsArchived")
+                        .HasDatabaseName("ix_elem_archived");
 
                     b.ToTable("educational_program_elements", "personal_cabinet");
 

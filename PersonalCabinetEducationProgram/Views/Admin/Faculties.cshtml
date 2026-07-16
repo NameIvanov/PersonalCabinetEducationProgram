@@ -1,20 +1,54 @@
 ﻿@model IEnumerable<PersonalCabinetEducationProgram.Models.Facultys>
+@using PersonalCabinetEducationProgram.ViewModels
 @{
     ViewData["Title"] = "Факультеты";
     var approvers = ViewBag.Approvers as List<PersonalCabinetEducationProgram.Models.User>;
     var currentApprovers = ViewBag.CurrentApprovers as Dictionary<int, int> ?? new Dictionary<int, int>();
+    var page = ViewBag.Page as int? ?? 1; var totalPages = ViewBag.TotalPages as int? ?? 1;
+    var currentSort = ViewBag.Sort as string ?? "name"; var currentDirection = ViewBag.Direction as string ?? "asc";
+    var filters = ViewBag.Filters as FacultyListFiltersViewModel ?? new();
+    const string filterFormId = "facultiesFilterForm";
+    string NextDirection(string column) => currentSort == column && currentDirection == "asc" ? "desc" : "asc";
+    Dictionary<string, string> RouteData(int targetPage, string targetSort, string targetDirection)
+    {
+        var values = filters.ToRouteData();
+        values["page"] = targetPage.ToString(); values["sort"] = targetSort; values["direction"] = targetDirection;
+        return values;
+    }
+    Dictionary<string, string> SortRoute(string column) => RouteData(1, column, NextDirection(column));
+    Dictionary<string, string> PageRoute(int targetPage) => RouteData(targetPage, currentSort, currentDirection);
 }
 
 <div class="container py-4">
+    @if (TempData["ErrorMessage"] is string errorMessage) { <div class="alert alert-danger">@errorMessage</div> }
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h4 class="fw-bold mb-0">Факультеты</h4>
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createModal">Добавить факультет</button>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary" data-toggle-live-filters aria-expanded="@(filters.ShowFilters || filters.HasAnyFilter)">Поиск</button>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createModal">Добавить факультет</button>
+        </div>
     </div>
+
+    @await Html.PartialAsync("_LiveFilterForm", new LiveFilterFormViewModel
+    {
+        FormId = filterFormId,
+        PreservedRouteValues = new Dictionary<string, string>
+        {
+            ["page"] = "1", ["sort"] = currentSort, ["direction"] = currentDirection, ["ShowFilters"] = "true"
+        }
+    })
 
     <div class="card shadow-sm rounded-4">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
-                <thead class="table-light"><tr><th>ID</th><th>Наименование</th><th>Действия</th></tr></thead>
+                <thead class="table-light">
+                    <tr><th><a asp-action="Faculties" asp-all-route-data="@SortRoute("id")">ID</a></th><th><a asp-action="Faculties" asp-all-route-data="@SortRoute("name")">Наименование</a></th><th>Действия</th></tr>
+                    <tr class="live-filter-row @((filters.ShowFilters || filters.HasAnyFilter) ? "" : "d-none")">
+                        <th><input form="@filterFormId" type="number" min="1" name="Id" value="@filters.Id" class="form-control form-control-sm" placeholder="ID" /></th>
+                        <th><input form="@filterFormId" type="search" name="Name" value="@filters.Name" class="form-control form-control-sm" placeholder="Наименование" /></th>
+                        <th><a asp-action="Faculties" asp-route-sort="@currentSort" asp-route-direction="@currentDirection" asp-route-ShowFilters="true" class="btn btn-outline-secondary btn-sm">Сбросить</a></th>
+                    </tr>
+                </thead>
                 <tbody>
                     @foreach (var f in Model)
                     {
@@ -32,15 +66,18 @@
                                 </a>
                                 @if (User.IsInRole("Admin"))
                                 {
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#editFaculty_@f.Id">Изменить</button>
                                     <button type="button" class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#assignApproverFaculty_@f.Id">
                                         Назначить согласующего
                                     </button>
+                                    <form method="post" asp-action="DeleteFaculty" class="d-inline" onsubmit="return confirm('Удалить факультет?')"><input type="hidden" name="id" value="@f.Id" /><button type="submit" class="btn btn-outline-danger btn-sm">Удалить</button></form>
                                 }
                             </td>
                         </tr>
 
                         @if (User.IsInRole("Admin"))
                         {
+                            <div class="modal fade" id="editFaculty_@f.Id" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" asp-action="EditFaculty"><div class="modal-header"><h5 class="modal-title">Изменить факультет</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><input type="hidden" name="id" value="@f.Id" /><div class="mb-3"><label class="form-label">Наименование</label><input name="name" value="@f.Name" class="form-control" required /></div></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button><button type="submit" class="btn btn-primary">Сохранить</button></div></form></div></div></div>
                             <div class="modal fade" id="assignApproverFaculty_@f.Id" tabindex="-1">
                                 <div class="modal-dialog">
                                     <div class="modal-content rounded-4">
@@ -74,6 +111,7 @@
             </table>
         </div>
     </div>
+    @if (totalPages > 1) { <div class="d-flex justify-content-between mt-3"><a asp-action="Faculties" asp-all-route-data="@PageRoute(page - 1)" class="btn btn-outline-secondary @(page<=1?"disabled":"")">Назад</a><span>@(page) из @totalPages</span><a asp-action="Faculties" asp-all-route-data="@PageRoute(page + 1)" class="btn btn-outline-secondary @(page>=totalPages?"disabled":"")">Далее</a></div> }
 
     <div class="modal fade" id="createModal" tabindex="-1">
         <div class="modal-dialog">

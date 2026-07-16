@@ -7,21 +7,53 @@
     var selectedProgram = programs?.FirstOrDefault(p => p.Id == selectedProgramId);
     string activeTab = ViewBag.ActiveTab as string ?? "disciplines";
     var allComments = ViewBag.Comments as List<PersonalCabinetEducationProgram.Models.EducationalProgramElementComment>;
+    var statusValues = ViewBag.ElementStatuses as List<string> ?? [];
+    var elementPage = ViewBag.ElementPage as int? ?? 1; var elementTotalPages = ViewBag.ElementTotalPages as int? ?? 1;
+    var elementSort = ViewBag.ElementSort as string ?? "name"; var elementDirection = ViewBag.ElementDirection as string ?? "asc";
+    var elementFilters = ViewBag.ElementFilters as PersonalCabinetEducationProgram.ViewModels.ElementListFiltersViewModel ?? new();
+    string NextDirection(string column) => elementSort == column && elementDirection == "asc" ? "desc" : "asc";
+    Dictionary<string, string> ElementRouteData(string tabValue, int pageValue, string sortValue, string directionValue, bool includeMain = true, bool includeTab = true)
+    {
+        var values = elementFilters.ToRouteData(includeMain, includeTab);
+        if (selectedProgramId.HasValue) values["programId"] = selectedProgramId.Value.ToString();
+        values["tab"] = tabValue;
+        values["page"] = pageValue.ToString();
+        values["sort"] = sortValue;
+        values["direction"] = directionValue;
+        return values;
+    }
+    var mainFilterUi = new PersonalCabinetEducationProgram.ViewModels.ElementFilterUiViewModel
+    {
+        Filters = elementFilters,
+        FormId = "moderatorMainFilterForm",
+        PreservedRouteValues = ElementRouteData(activeTab, 1, elementSort, elementDirection, includeMain: false),
+        ResetUrl = Url.Action("Index", ElementRouteData(activeTab, 1, elementSort, elementDirection, includeMain: false))!,
+        IsMain = true
+    };
+    var tabFilterUi = new PersonalCabinetEducationProgram.ViewModels.ElementFilterUiViewModel
+    {
+        Filters = elementFilters,
+        FormId = "moderatorTabFilterForm",
+        PreservedRouteValues = ElementRouteData(activeTab, 1, elementSort, elementDirection, includeTab: false),
+        ResetUrl = Url.Action("Index", ElementRouteData(activeTab, 1, elementSort, elementDirection, includeTab: false))!,
+        IsMain = false
+    };
 
     var mainElements = Model.Where(e => e.TypeElement == "Main").ToList();
     var disciplines = Model.Where(e => e.TypeElement == "Discipline").ToList();
     var practices = Model.Where(e => e.TypeElement == "Practice").ToList();
     var gia = Model.Where(e => e.TypeElement == "GIA").ToList();
 
-    int countNew = Model.Count(e => string.IsNullOrEmpty(PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(e.StatusApprovals)));
-    int countUploaded = Model.Count(e => PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(e.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Uploaded);
-    int countOnReview = Model.Count(e => PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(e.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.OnApproval);
-    int countApproved = Model.Count(e => PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(e.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Approved);
-    int countRejected = Model.Count(e => PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(e.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.RevisionRequired);
-    int countPublished = Model.Count(e => PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(e.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Published);
+    int countNew = statusValues.Count(s => string.IsNullOrEmpty(PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(s)));
+    int countUploaded = statusValues.Count(s => PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(s) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Uploaded);
+    int countOnReview = statusValues.Count(s => PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(s) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.OnApproval);
+    int countApproved = statusValues.Count(s => PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(s) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Approved);
+    int countRejected = statusValues.Count(s => PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(s) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.RevisionRequired);
+    int countPublished = statusValues.Count(s => PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(s) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Published);
 }
 
 <div class="container-fluid p-0 m-0 app-shell">
+    @if (TempData["ErrorMessage"] is string errorMessage) { <div class="alert alert-danger m-3">@errorMessage</div> }
     <div class="row g-0 m-0">
 
         <div class="col-12 col-lg-2 app-sidebar">
@@ -99,6 +131,7 @@
                                             {
                                                 "Согласована" => "bg-success-subtle text-success",
                                                 "Опубликована" => "bg-primary-subtle text-primary",
+                                                "Требует доработки" => "bg-danger-subtle text-danger",
                                                 _ => "bg-warning-subtle text-warning"
                                             };
                                         }
@@ -134,7 +167,7 @@
                                             <div class="position-relative d-inline-block rounded-circle" style="width:140px;height:140px;@chartStyle">
                                                 <div class="position-absolute top-50 start-50 translate-middle rounded-circle bg-white d-flex flex-column align-items-center justify-content-center"
                                                      style="width:92px;height:92px;box-shadow: inset 0 0 0 1px rgba(0,0,0,.06);">
-                                                    <div class="fw-bold fs-4">@Model.Count()</div>
+                                                    <div class="fw-bold fs-4">@statusValues.Count</div>
                                                     <div class="text-muted small">всего</div>
                                                 </div>
                                             </div>
@@ -178,7 +211,10 @@
                 <div class="mb-4">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h4 class="fw-bold mb-0">Основные элементы ОПОП</h4>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-toggle-element-filters
+                                aria-expanded="@(elementFilters.ShowFilters || elementFilters.HasAnyFilter ? "true" : "false")">Поиск</button>
                     </div>
+                    @await Html.PartialAsync("_ElementFilterForm", mainFilterUi)
                     <div class="card shadow-sm rounded-4">
                         <div class="table-responsive">
                             <table class="table table-hover align-middle mb-0">
@@ -189,6 +225,7 @@
                                         <th>Дата загрузки</th>
                                         <th>Действия</th>
                                     </tr>
+                                    @await Html.PartialAsync("_ElementFilterRow", mainFilterUi)
                                 </thead>
                                 <tbody>
                                     @foreach (var element in mainElements)
@@ -209,30 +246,32 @@
                             <ul class="nav nav-pills gap-1">
                                 <li class="nav-item">
                                     <a class="nav-link tab-custom @(activeTab == "disciplines" ? "active" : "")"
-                                       asp-action="Index" asp-route-programId="@selectedProgramId" asp-route-tab="disciplines">Дисциплины</a>
+                                       asp-action="Index" asp-all-route-data="@ElementRouteData("disciplines", 1, elementSort, elementDirection, includeTab: false)">Дисциплины</a>
                                 </li>
                                 <li class="nav-item">
                                     <a class="nav-link tab-custom @(activeTab == "practices" ? "active" : "")"
-                                       asp-action="Index" asp-route-programId="@selectedProgramId" asp-route-tab="practices">Практика</a>
+                                       asp-action="Index" asp-all-route-data="@ElementRouteData("practices", 1, elementSort, elementDirection, includeTab: false)">Практика</a>
                                 </li>
                                 <li class="nav-item">
                                     <a class="nav-link tab-custom @(activeTab == "gia" ? "active" : "")"
-                                       asp-action="Index" asp-route-programId="@selectedProgramId" asp-route-tab="gia">ГИА</a>
+                                       asp-action="Index" asp-all-route-data="@ElementRouteData("gia", 1, elementSort, elementDirection, includeTab: false)">ГИА</a>
                                 </li>
                             </ul>
                 </div>
 
+                @await Html.PartialAsync("_ElementFilterForm", tabFilterUi)
                 <div class="card shadow-sm rounded-4">
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0">
                             <thead class="table-light">
                                 <tr>
-                                    <th>Шифр</th>
-                                    <th>Наименование</th>
-                                    <th>Статус</th>
-                                    <th>Дата загрузки</th>
+                                    <th><a asp-action="Index" asp-all-route-data="@ElementRouteData(activeTab, 1, "description", NextDirection("description"))">Шифр</a></th>
+                                    <th><a asp-action="Index" asp-all-route-data="@ElementRouteData(activeTab, 1, "name", NextDirection("name"))">Наименование</a></th>
+                                    <th><a asp-action="Index" asp-all-route-data="@ElementRouteData(activeTab, 1, "status", NextDirection("status"))">Статус</a></th>
+                                    <th><a asp-action="Index" asp-all-route-data="@ElementRouteData(activeTab, 1, "date", NextDirection("date"))">Дата загрузки</a></th>
                                     <th>Действия</th>
                                 </tr>
+                                @await Html.PartialAsync("_ElementFilterRow", tabFilterUi)
                             </thead>
                             <tbody>
                                 @{
@@ -279,6 +318,10 @@
                         </table>
                     </div>
                 </div>
+                @if (elementTotalPages > 1)
+                {
+                    <div class="d-flex justify-content-between mt-3"><a asp-action="Index" asp-all-route-data="@ElementRouteData(activeTab, elementPage - 1, elementSort, elementDirection)" class="btn btn-outline-secondary @(elementPage <= 1 ? "disabled" : "")">Назад</a><span>@(elementPage) из @elementTotalPages</span><a asp-action="Index" asp-all-route-data="@ElementRouteData(activeTab, elementPage + 1, elementSort, elementDirection)" class="btn btn-outline-secondary @(elementPage >= elementTotalPages ? "disabled" : "")">Далее</a></div>
+                }
                 }
 
             </div>
@@ -296,10 +339,7 @@
             <form method="post" asp-action="Publish">
                 <div class="modal-body">
                     <input type="hidden" name="elementId" id="publishElementId" />
-                    <div class="mb-3">
-                        <label class="form-label">Комментарий к публикации</label>
-                        <textarea name="comment" class="form-control" rows="3" placeholder="Введите комментарий (необязательно)"></textarea>
-                    </div>
+                    <p class="mb-0">Опубликовать согласованный элемент на сайте?</p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
@@ -320,10 +360,7 @@
             <form method="post" asp-action="Unpublish">
                 <div class="modal-body">
                     <input type="hidden" name="elementId" id="unpublishElementId" />
-                    <div class="mb-3">
-                        <label class="form-label">Причина снятия с публикации</label>
-                        <textarea name="comment" class="form-control" rows="3" placeholder="Укажите причину"></textarea>
-                    </div>
+                    <p class="mb-0">Снять элемент с публикации и вернуть в статус «Согласовано»?</p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>

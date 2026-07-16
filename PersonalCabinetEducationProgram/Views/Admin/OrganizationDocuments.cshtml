@@ -1,6 +1,11 @@
 ﻿@model PersonalCabinetEducationProgram.ViewModels.OrganizationDocumentsViewModel
+@using PersonalCabinetEducationProgram.ViewModels
+@using PersonalCabinetEducationProgram.Models
 @{
     ViewData["Title"] = Model.PageTitle;
+    var filters = Model.Filters;
+    var detailsAction = Model.EntityType == "Faculty" ? "FacultyDetails" : "DepartmentDetails";
+    const string filterFormId = "organizationDocumentsFilterForm";
 }
 
 <div class="container py-4">
@@ -17,7 +22,25 @@
             <h3 class="fw-bold mt-2 mb-1">@Model.EntityName</h3>
             <div class="text-muted">@Model.PageTitle</div>
         </div>
-        <div class="badge bg-primary-subtle text-primary fs-6">ОПОП: @Model.Programs.Count</div>
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-toggle-live-filters aria-expanded="@(filters.ShowFilters || filters.HasAnyFilter)">Поиск</button>
+            <div class="badge bg-primary-subtle text-primary fs-6">ОПОП: @Model.Programs.Count</div>
+        </div>
+    </div>
+
+    @await Html.PartialAsync("_LiveFilterForm", new LiveFilterFormViewModel
+    {
+        FormId = filterFormId,
+        PreservedRouteValues = new Dictionary<string, string> { ["ShowFilters"] = "true" }
+    })
+    <div class="live-filter-panel live-filter-row @((filters.ShowFilters || filters.HasAnyFilter) ? "" : "d-none") mb-4">
+        <div><label class="form-label small">ОПОП</label><input form="@filterFormId" type="search" name="Program" value="@filters.Program" class="form-control form-control-sm" placeholder="Шифр или название" /></div>
+        <div><label class="form-label small">Тип</label><select form="@filterFormId" name="Type" class="form-select form-select-sm"><option value="">Все типы</option><option value="@EducationalProgramElementTypes.Main" selected="@(filters.Type == EducationalProgramElementTypes.Main)">Основные документы</option><option value="@EducationalProgramElementTypes.Discipline" selected="@(filters.Type == EducationalProgramElementTypes.Discipline)">Дисциплины</option><option value="@EducationalProgramElementTypes.Practice" selected="@(filters.Type == EducationalProgramElementTypes.Practice)">Практики</option><option value="@EducationalProgramElementTypes.Gia" selected="@(filters.Type == EducationalProgramElementTypes.Gia)">ГИА</option></select></div>
+        <div><label class="form-label small">Документ</label><input form="@filterFormId" type="search" name="Name" value="@filters.Name" class="form-control form-control-sm" placeholder="Наименование" /></div>
+        <div><label class="form-label small">Шифр / описание</label><input form="@filterFormId" type="search" name="Description" value="@filters.Description" class="form-control form-control-sm" placeholder="Шифр или описание" /></div>
+        <div><label class="form-label small">Статус</label><select form="@filterFormId" name="Status" class="form-select form-select-sm"><option value="">Все статусы</option>@foreach (var status in ElementListFiltersViewModel.Statuses) { <option value="@status" selected="@(filters.Status == status)">@ElementListFiltersViewModel.GetStatusLabel(status)</option> }</select></div>
+        <div><label class="form-label small">Дата загрузки</label><div class="d-flex gap-1 element-date-filter"><input form="@filterFormId" type="date" name="DateFrom" value="@filters.DateFrom?.ToString("yyyy-MM-dd")" class="form-control form-control-sm" title="Дата от" /><input form="@filterFormId" type="date" name="DateTo" value="@filters.DateTo?.ToString("yyyy-MM-dd")" class="form-control form-control-sm" title="Дата до" /></div></div>
+        <div class="d-flex align-items-end"><a asp-action="@detailsAction" asp-route-id="@Model.EntityId" asp-route-ShowFilters="true" class="btn btn-outline-secondary btn-sm">Сбросить</a></div>
     </div>
 
     @if (!Model.Programs.Any())
@@ -43,10 +66,10 @@
                             <h5 class="fw-bold mb-1">@program.CodeReferral @program.Name</h5>
                             <div class="text-muted mb-1">@program.EducationalLevel</div>
                             <div class="small text-muted">
-                                Кафедра: @assignment?.Department?.Name ?? "—"
+                                Кафедра: @(assignment?.Department?.Name ?? "—")
                             </div>
                             <div class="small text-muted">
-                                Факультет: @assignment?.Faculty?.Name ?? "—"
+                                Факультет: @(assignment?.Faculty?.Name ?? "—")
                             </div>
                         </div>
                         <div>

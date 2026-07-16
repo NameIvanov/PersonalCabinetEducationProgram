@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using PersonalCabinetEducationProgram.Data;
 using PersonalCabinetEducationProgram.Models;
 using PersonalCabinetEducationProgram.Services;
+using PersonalCabinetEducationProgram.ViewModels;
 
 namespace PersonalCabinetEducationProgram.Controllers
 {
@@ -17,6 +18,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         private readonly NotificationService _notificationService;
         private readonly ElementAccessService _accessService;
         private readonly AuditService _auditService;
+        private readonly ElementListQueryService _elementListQueryService;
 
         public ApproverHomeController(
             IOptions<FileStorageSettings> storageSettings,
@@ -24,7 +26,8 @@ namespace PersonalCabinetEducationProgram.Controllers
             ElementWorkflowService workflowService,
             NotificationService notificationService,
             ElementAccessService accessService,
-            AuditService auditService)
+            AuditService auditService,
+            ElementListQueryService elementListQueryService)
         {
             _storageSettings = storageSettings.Value;
             _context = context;
@@ -32,6 +35,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             _notificationService = notificationService;
             _accessService = accessService;
             _auditService = auditService;
+            _elementListQueryService = elementListQueryService;
         }
 
         private int GetCurrentUserId()
@@ -39,9 +43,14 @@ namespace PersonalCabinetEducationProgram.Controllers
             return int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
         }
 
-        public async Task<IActionResult> Index(int? programId, string tab = "disciplines")
+        public async Task<IActionResult> Index(
+            int? programId, string tab = "disciplines", int page = 1,
+            string sort = "name", string direction = "asc",
+            [FromQuery] ElementListFiltersViewModel? filters = null)
         {
+            filters ??= new ElementListFiltersViewModel();
             var programs = await _context.EducationalPrograms
+                .Where(p => !p.IsArchived)
                 .Include(p => p.Assignments).ThenInclude(a => a.Department)
                 .Include(p => p.Assignments).ThenInclude(a => a.Faculty)
                 .ToListAsync();
@@ -64,20 +73,25 @@ namespace PersonalCabinetEducationProgram.Controllers
                 ? programId
                 : programs.FirstOrDefault()?.Id;
 
-            var elements = selectedProgramId == null
-                ? new List<EducationalProgramElement>()
-                : await _context.EducationalProgramElements
-                    .Where(e => e.EducationalProgramId == selectedProgramId)
-                    .Include(e => e.EducationalProgram)
-                    .Include(e => e.Files.Where(f => f.IsCurrent))
-                    .ToListAsync();
+            var elementPage = await _elementListQueryService.GetAsync(selectedProgramId, tab, page, sort, direction, filters);
 
             ViewBag.Programs = programs;
             ViewBag.SelectedProgramId = selectedProgramId;
             ViewBag.ActiveTab = tab;
             ViewBag.Comments = await _context.EducationalProgramElementComment.Include(c => c.User).ToListAsync();
+            FillElementPagination(elementPage);
 
-            return View(elements);
+            return View(elementPage.Elements);
+        }
+
+        private void FillElementPagination(PersonalCabinetEducationProgram.ViewModels.ElementListPageViewModel result)
+        {
+            ViewBag.ElementStatuses = result.Statuses;
+            ViewBag.ElementPage = result.Page;
+            ViewBag.ElementTotalPages = result.TotalPages;
+            ViewBag.ElementSort = result.Sort;
+            ViewBag.ElementDirection = result.Direction;
+            ViewBag.ElementFilters = result.Filters;
         }
 
         public async Task<IActionResult> Download(int elementId)
@@ -120,13 +134,19 @@ namespace PersonalCabinetEducationProgram.Controllers
         {
             if (!await _accessService.CanApproveElementAsync(User, elementId))
                 return Forbid();
-            var element = await _workflowService.ChangeStatusAsync(
-                elementId,
-                GetCurrentUserId(),
-                ElementApprovalStatus.Approved,
-                comment ?? ElementApprovalStatus.Approved,
-                User.IsInRole(AppRoles.Admin),
-                ElementApprovalStatus.ApproverCanApprove);
+            EducationalProgramElement? element;
+            try
+            {
+                element = await _workflowService.ChangeStatusAsync(
+                    elementId, GetCurrentUserId(), ElementApprovalStatus.Approved,
+                    comment ?? ElementApprovalStatus.Approved, User.IsInRole(AppRoles.Admin),
+                    ElementApprovalStatus.ApproverCanApprove);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                TempData["ErrorMessage"] = "Элемент уже изменён другим пользователем. Обновите страницу и повторите действие.";
+                return RedirectToAction(nameof(Index));
+            }
 
             if (element == null)
                 return NotFound();
@@ -139,13 +159,19 @@ namespace PersonalCabinetEducationProgram.Controllers
         {
             if (!await _accessService.CanApproveElementAsync(User, elementId))
                 return Forbid();
-            var element = await _workflowService.ChangeStatusAsync(
-                elementId,
-                GetCurrentUserId(),
-                ElementApprovalStatus.RevisionRequired,
-                comment ?? "Отправлено на доработку",
-                User.IsInRole(AppRoles.Admin),
-                ElementApprovalStatus.ApproverCanReject);
+            EducationalProgramElement? element;
+            try
+            {
+                element = await _workflowService.ChangeStatusAsync(
+                    elementId, GetCurrentUserId(), ElementApprovalStatus.RevisionRequired,
+                    comment ?? "Отправлено на доработку", User.IsInRole(AppRoles.Admin),
+                    ElementApprovalStatus.ApproverCanReject);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                TempData["ErrorMessage"] = "Элемент уже изменён другим пользователем. Обновите страницу и повторите действие.";
+                return RedirectToAction(nameof(Index));
+            }
 
             if (element == null)
                 return NotFound();

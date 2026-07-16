@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using PersonalCabinetEducationProgram.Data;
 using PersonalCabinetEducationProgram.Models;
 using PersonalCabinetEducationProgram.Services;
+using PersonalCabinetEducationProgram.ViewModels;
 
 namespace PersonalCabinetEducationProgram.Controllers
 {
@@ -18,6 +19,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         private readonly NotificationService _notificationService;
         private readonly ElementAccessService _accessService;
         private readonly AuditService _auditService;
+        private readonly ElementListQueryService _elementListQueryService;
 
         public ManagerHomeController(
             IFileStorageService fileStorageService,
@@ -26,7 +28,8 @@ namespace PersonalCabinetEducationProgram.Controllers
             ElementWorkflowService workflowService,
             NotificationService notificationService,
             ElementAccessService accessService,
-            AuditService auditService)
+            AuditService auditService,
+            ElementListQueryService elementListQueryService)
         {
             _fileStorageService = fileStorageService;
             _storageSettings = storageSettings.Value;
@@ -35,6 +38,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             _notificationService = notificationService;
             _accessService = accessService;
             _auditService = auditService;
+            _elementListQueryService = elementListQueryService;
         }
 
         private int GetCurrentUserId()
@@ -42,12 +46,16 @@ namespace PersonalCabinetEducationProgram.Controllers
             return int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
         }
 
-        public async Task<IActionResult> Index(int? programId, string tab = "disciplines")
+        public async Task<IActionResult> Index(
+            int? programId, string tab = "disciplines", int page = 1,
+            string sort = "name", string direction = "asc",
+            [FromQuery] ElementListFiltersViewModel? filters = null)
         {
+            filters ??= new ElementListFiltersViewModel();
             var currentUserId = GetCurrentUserId();
 
             var programs = await _context.EducationalPrograms
-                .Where(p => User.IsInRole("Admin") || p.UserId == currentUserId || p.Managers.Any(m => m.UserId == currentUserId))
+                .Where(p => !p.IsArchived && (User.IsInRole("Admin") || p.UserId == currentUserId || p.Managers.Any(m => m.UserId == currentUserId)))
                 .Include(p => p.Assignments).ThenInclude(a => a.Department)
                 .Include(p => p.Assignments).ThenInclude(a => a.Faculty)
                 .Include(p => p.Managers)
@@ -57,11 +65,7 @@ namespace PersonalCabinetEducationProgram.Controllers
                 ? programId
                 : programs.FirstOrDefault()?.Id;
 
-            var elements = await _context.EducationalProgramElements
-                .Where(e => e.EducationalProgramId == selectedProgramId)
-                .Include(e => e.EducationalProgram)
-                .Include(e => e.Files.Where(f => f.IsCurrent))
-                .ToListAsync();
+            var elementPage = await _elementListQueryService.GetAsync(selectedProgramId, tab, page, sort, direction, filters);
 
             var comments = await _context.EducationalProgramElementComment
                 .Where(c => c.Element.EducationalProgramId == selectedProgramId)
@@ -72,8 +76,19 @@ namespace PersonalCabinetEducationProgram.Controllers
             ViewBag.SelectedProgramId = selectedProgramId;
             ViewBag.ActiveTab = tab;
             ViewBag.Comments = comments;
+            FillElementPagination(elementPage);
 
-            return View(elements);
+            return View(elementPage.Elements);
+        }
+
+        private void FillElementPagination(PersonalCabinetEducationProgram.ViewModels.ElementListPageViewModel result)
+        {
+            ViewBag.ElementStatuses = result.Statuses;
+            ViewBag.ElementPage = result.Page;
+            ViewBag.ElementTotalPages = result.TotalPages;
+            ViewBag.ElementSort = result.Sort;
+            ViewBag.ElementDirection = result.Direction;
+            ViewBag.ElementFilters = result.Filters;
         }
 
         [HttpPost]
@@ -112,14 +127,25 @@ namespace PersonalCabinetEducationProgram.Controllers
                     await _fileStorageService.ValidateFileAsync(file);
 
                 var storedFiles = new List<(string StoredFileName, string OriginalFileName)>();
-                foreach (var file in files)
-                    storedFiles.Add((await _fileStorageService.SaveFileAsync(file), Path.GetFileName(file.FileName)));
+                try
+                {
+                    foreach (var file in files)
+                        storedFiles.Add((await _fileStorageService.SaveFileAsync(file), Path.GetFileName(file.FileName)));
 
-                await _workflowService.MarkFilesUploadedAsync(elementId, GetCurrentUserId(), storedFiles);
+                    await _workflowService.MarkFilesUploadedAsync(elementId, GetCurrentUserId(), storedFiles);
+                }
+                catch
+                {
+                    foreach (var storedFile in storedFiles)
+                        await _fileStorageService.DeleteFileAsync(storedFile.StoredFileName);
+                    throw;
+                }
             }
-            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or IOException or DbUpdateException)
             {
-                TempData["ErrorMessage"] = ex.Message;
+                TempData["ErrorMessage"] = ex is DbUpdateConcurrencyException
+                    ? "Данные были изменены другим пользователем. Обновите страницу и повторите действие."
+                    : ex.Message;
             }
 
             return RedirectToAction(nameof(Index), new { programId });
@@ -169,7 +195,16 @@ namespace PersonalCabinetEducationProgram.Controllers
             if (!await _accessService.CanManageElementAsync(User, elementId))
                 return Forbid();
 
-            var element = await _workflowService.SubmitForApprovalAsync(elementId, GetCurrentUserId());
+            EducationalProgramElement? element;
+            try
+            {
+                element = await _workflowService.SubmitForApprovalAsync(elementId, GetCurrentUserId());
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                TempData["ErrorMessage"] = "Элемент уже изменён другим пользователем. Обновите страницу и повторите действие.";
+                return RedirectToAction(nameof(Index));
+            }
             if (element == null) return NotFound();
 
             return RedirectToAction(nameof(Index), new { programId = element.EducationalProgramId });

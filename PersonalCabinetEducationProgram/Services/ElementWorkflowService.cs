@@ -45,11 +45,14 @@ namespace PersonalCabinetEducationProgram.Services
 
             var element = await _context.EducationalProgramElements
                 .Include(e => e.Files)
-                .FirstOrDefaultAsync(e => e.Id == elementId);
+                .FirstOrDefaultAsync(e => e.Id == elementId && !e.IsArchived && !e.EducationalProgram.IsArchived);
             if (element == null)
             {
                 return null;
             }
+
+            if (element.IsArchived)
+                throw new InvalidOperationException("Архивный элемент нельзя изменять.");
 
             var oldStatus = ElementApprovalStatus.Normalize(element.StatusApprovals);
             if (ElementApprovalStatus.IsLockedForNonAdmin(oldStatus))
@@ -88,6 +91,7 @@ namespace PersonalCabinetEducationProgram.Services
             element.FileName = firstFile.OriginalFileName;
             element.UploadDate = DateOnly.FromDateTime(uploadedAt);
             element.StatusApprovals = ElementApprovalStatus.Uploaded;
+            element.Version++;
 
             AddHistory(
                 element.Id,
@@ -117,10 +121,13 @@ namespace PersonalCabinetEducationProgram.Services
         {
             var element = await _context.EducationalProgramElements
                 .Include(e => e.Files)
-                .FirstOrDefaultAsync(e => e.Id == elementId);
+                .FirstOrDefaultAsync(e => e.Id == elementId && !e.IsArchived && !e.EducationalProgram.IsArchived);
 
             if (element == null)
                 return null;
+
+            if (element.IsArchived)
+                throw new InvalidOperationException("Архивный элемент нельзя отправить на согласование.");
 
             if (ElementApprovalStatus.Normalize(element.StatusApprovals) != ElementApprovalStatus.Uploaded)
                 throw new InvalidOperationException("На согласование можно отправить только загруженный элемент.");
@@ -164,11 +171,14 @@ namespace PersonalCabinetEducationProgram.Services
         {
             var element = await _context.EducationalProgramElements
                 .Include(e => e.Files)
-                .FirstOrDefaultAsync(e => e.Id == elementId);
+                .FirstOrDefaultAsync(e => e.Id == elementId && !e.IsArchived && !e.EducationalProgram.IsArchived);
             if (element == null)
             {
                 return null;
             }
+
+            if (element.IsArchived)
+                throw new InvalidOperationException("Архивный элемент нельзя изменить.");
 
             var oldStatus = ElementApprovalStatus.Normalize(element.StatusApprovals);
             var normalizedNewStatus = ElementApprovalStatus.Normalize(newStatus);
@@ -187,6 +197,7 @@ namespace PersonalCabinetEducationProgram.Services
             }
 
             element.StatusApprovals = normalizedNewStatus;
+            element.Version++;
 
             if (normalizedNewStatus == ElementApprovalStatus.RevisionRequired)
             {
@@ -224,28 +235,31 @@ namespace PersonalCabinetEducationProgram.Services
             }
 
             var elementStatuses = program.Elements
-                .Select(e => ElementApprovalStatus.Normalize(e.StatusApprovals))
+                .Where(e => !e.IsArchived)
+                .Select(e => e.StatusApprovals)
                 .ToList();
 
-            if (elementStatuses.Count == 0 || elementStatuses.Any(string.IsNullOrEmpty))
-            {
-                program.Status = EducationalProgramStatus.Draft;
-                return;
-            }
+            var newStatus = CalculateProgramStatus(elementStatuses);
 
-            if (elementStatuses.All(s => s == ElementApprovalStatus.Published))
+            if (program.Status != newStatus)
             {
-                program.Status = EducationalProgramStatus.Published;
-                return;
+                program.Status = newStatus;
+                program.Version++;
             }
+        }
 
-            if (elementStatuses.All(s => s is ElementApprovalStatus.Approved or ElementApprovalStatus.Published))
-            {
-                program.Status = EducationalProgramStatus.Approved;
-                return;
-            }
-
-            program.Status = EducationalProgramStatus.Draft;
+        public static string CalculateProgramStatus(IEnumerable<string?> statuses)
+        {
+            var elementStatuses = statuses.Select(ElementApprovalStatus.Normalize).ToList();
+            return elementStatuses.Any(s => s == ElementApprovalStatus.RevisionRequired)
+                ? EducationalProgramStatus.RevisionRequired
+                : elementStatuses.Count == 0 || elementStatuses.Any(string.IsNullOrEmpty)
+                    ? EducationalProgramStatus.Draft
+                    : elementStatuses.All(s => s == ElementApprovalStatus.Published)
+                        ? EducationalProgramStatus.Published
+                        : elementStatuses.All(s => s is ElementApprovalStatus.Approved or ElementApprovalStatus.Published)
+                            ? EducationalProgramStatus.Approved
+                            : EducationalProgramStatus.Draft;
         }
 
         private void AddHistory(

@@ -1,36 +1,107 @@
 ﻿@model IEnumerable<PersonalCabinetEducationProgram.Models.EducationalProgram>
+@using PersonalCabinetEducationProgram.ViewModels
+@using PersonalCabinetEducationProgram.Models
 @{ 
     ViewData["Title"] = "Управление ОПОП";
-    var departments = ViewBag.Departments as List<PersonalCabinetEducationProgram.Models.Departments>;
-    var faculties = ViewBag.Facultys as List<PersonalCabinetEducationProgram.Models.Facultys>;
-    var managers = ViewBag.Managers as List<PersonalCabinetEducationProgram.Models.User>;
+    var departments = ViewBag.Departments as List<PersonalCabinetEducationProgram.Models.Departments> ?? [];
+    var faculties = ViewBag.Facultys as List<PersonalCabinetEducationProgram.Models.Facultys> ?? [];
+    var managers = ViewBag.Managers as List<PersonalCabinetEducationProgram.Models.User> ?? [];
+    var showArchived = ViewBag.ShowArchived as bool? ?? false;
+    var currentSort = ViewBag.Sort as string ?? "code";
+    var currentDirection = ViewBag.Direction as string ?? "asc";
+    var page = ViewBag.Page as int? ?? 1;
+    var totalPages = ViewBag.TotalPages as int? ?? 1;
+    var filters = ViewBag.Filters as ProgramListFiltersViewModel ?? new();
+    var programLevels = ViewBag.ProgramLevels as List<string> ?? [];
+    const string filterFormId = "programsFilterForm";
+    string NextDirection(string column) => currentSort == column && currentDirection == "asc" ? "desc" : "asc";
+    Dictionary<string, string> RouteData(int targetPage, string targetSort, string targetDirection)
+    {
+        var values = filters.ToRouteData();
+        values["showArchived"] = showArchived.ToString().ToLowerInvariant();
+        values["page"] = targetPage.ToString();
+        values["sort"] = targetSort;
+        values["direction"] = targetDirection;
+        return values;
+    }
+    Dictionary<string, string> SortRoute(string column) => RouteData(1, column, NextDirection(column));
+    Dictionary<string, string> PageRoute(int targetPage) => RouteData(targetPage, currentSort, currentDirection);
 }
 
 <div class="container py-4">
+    @if (TempData["ErrorMessage"] is string errorMessage)
+    {
+        <div class="alert alert-danger">@errorMessage</div>
+    }
+    @if (TempData["SuccessMessage"] is string successMessage)
+    {
+        <div class="alert alert-success">@successMessage</div>
+    }
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h4 class="fw-bold mb-0">Образовательные программы</h4>
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createProgramModal">Добавить программу</button>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary" data-toggle-live-filters aria-expanded="@(filters.ShowFilters || filters.HasAnyFilter)">Поиск</button>
+            <a asp-action="Programs" asp-route-showArchived="@(!showArchived)" class="btn btn-outline-secondary">@(showArchived ? "Активные" : "Архив")</a>
+            @if (!showArchived) { <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createProgramModal">Добавить программу</button> }
+        </div>
     </div>
+
+    @await Html.PartialAsync("_LiveFilterForm", new LiveFilterFormViewModel
+    {
+        FormId = filterFormId,
+        PreservedRouteValues = new Dictionary<string, string>
+        {
+            ["showArchived"] = showArchived.ToString().ToLowerInvariant(), ["page"] = "1",
+            ["sort"] = currentSort, ["direction"] = currentDirection, ["ShowFilters"] = "true"
+        }
+    })
 
     <div class="card shadow-sm rounded-4">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th>Шифр</th>
-                        <th>Наименование</th>
-                        <th>Уровень</th>
-                        <th>Кафедра</th>
-                        <th>Факультет</th>
-                        <th>Статус</th>
-                        <th>Руководитель</th>
+                        <th><a asp-action="Programs" asp-all-route-data="@SortRoute("code")">Шифр</a></th>
+                        <th><a asp-action="Programs" asp-all-route-data="@SortRoute("name")">Наименование</a></th>
+                        <th><a asp-action="Programs" asp-all-route-data="@SortRoute("level")">Уровень</a></th>
+                        <th><a asp-action="Programs" asp-all-route-data="@SortRoute("year")">Год</a></th>
+                        <th><a asp-action="Programs" asp-all-route-data="@SortRoute("department")">Кафедра</a></th>
+                        <th><a asp-action="Programs" asp-all-route-data="@SortRoute("faculty")">Факультет</a></th>
+                        <th><a asp-action="Programs" asp-all-route-data="@SortRoute("status")">Статус</a></th>
+                        <th><a asp-action="Programs" asp-all-route-data="@SortRoute("manager")">Руководитель</a></th>
                         <th>Действия</th>
+                    </tr>
+                    <tr class="live-filter-row @((filters.ShowFilters || filters.HasAnyFilter) ? "" : "d-none")">
+                        <th><input form="@filterFormId" type="search" name="Code" value="@filters.Code" class="form-control form-control-sm" placeholder="Шифр" /></th>
+                        <th><input form="@filterFormId" type="search" name="Name" value="@filters.Name" class="form-control form-control-sm" placeholder="Наименование" /></th>
+                        <th>
+                            <select form="@filterFormId" name="Level" class="form-select form-select-sm">
+                                <option value="">Все уровни</option>
+                                @foreach (var level in programLevels)
+                                {
+                                    <option value="@level" selected="@(filters.Level == level)">@level</option>
+                                }
+                            </select>
+                        </th>
+                        <th><input form="@filterFormId" type="number" min="1900" max="2200" name="Year" value="@filters.Year" class="form-control form-control-sm" placeholder="Год" /></th>
+                        <th><input form="@filterFormId" type="search" name="Department" value="@filters.Department" class="form-control form-control-sm" placeholder="Кафедра" /></th>
+                        <th><input form="@filterFormId" type="search" name="Faculty" value="@filters.Faculty" class="form-control form-control-sm" placeholder="Факультет" /></th>
+                        <th>
+                            <select form="@filterFormId" name="Status" class="form-select form-select-sm">
+                                <option value="">Все статусы</option>
+                                <option value="@EducationalProgramStatus.Draft" selected="@(filters.Status == EducationalProgramStatus.Draft)">@EducationalProgramStatus.Draft</option>
+                                <option value="@EducationalProgramStatus.RevisionRequired" selected="@(filters.Status == EducationalProgramStatus.RevisionRequired)">@EducationalProgramStatus.RevisionRequired</option>
+                                <option value="@EducationalProgramStatus.Approved" selected="@(filters.Status == EducationalProgramStatus.Approved)">@EducationalProgramStatus.Approved</option>
+                                <option value="@EducationalProgramStatus.Published" selected="@(filters.Status == EducationalProgramStatus.Published)">@EducationalProgramStatus.Published</option>
+                            </select>
+                        </th>
+                        <th><input form="@filterFormId" type="search" name="Manager" value="@filters.Manager" class="form-control form-control-sm" placeholder="Руководитель" /></th>
+                        <th><a asp-action="Programs" asp-route-showArchived="@showArchived" asp-route-sort="@currentSort" asp-route-direction="@currentDirection" asp-route-ShowFilters="true" class="btn btn-outline-secondary btn-sm">Сбросить</a></th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach (var program in Model)
                     {
-                        var assignment = program.Assignments?.FirstOrDefault();
                         <tr class="@(program.UserId.HasValue ? "assignment-present" : "assignment-missing")">
                             <td class="fw-semibold">
                                 <a asp-action="ProgramDetails" asp-route-id="@program.Id" class="text-decoration-none">@program.CodeReferral</a>
@@ -39,14 +110,16 @@
                                 <a asp-action="ProgramDetails" asp-route-id="@program.Id" class="text-decoration-none fw-semibold">@program.Name</a>
                             </td>
                             <td>@program.EducationalLevel</td>
-                            <td class="small">@assignment?.Department?.Name</td>
-                            <td class="small">@assignment?.Faculty?.Name</td>
+                            <td>@(program.YearApprovals?.ToString() ?? "—")</td>
+                            <td class="small">@string.Join("; ", program.Assignments.Select(a => a.Department?.Name).Where(n => !string.IsNullOrWhiteSpace(n)))</td>
+                            <td class="small">@string.Join("; ", program.Assignments.Select(a => a.Faculty?.Name).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct())</td>
                             <td>
                                 @{
                                     var statusClass = program.Status switch
                                     {
                                         "Согласована" => "bg-success-subtle text-success",
                                         "Опубликована" => "bg-primary-subtle text-primary",
+                                        "Требует доработки" => "bg-danger-subtle text-danger",
                                         _ => "bg-warning-subtle text-warning"
                                     };
                                 }
@@ -54,55 +127,107 @@
                             </td>
                             <td class="small">@(program.User?.FullName ?? "Не назначен")</td>
                             <td>
-                                <button type="button" class="btn btn-outline-primary btn-sm"
-                                        data-bs-toggle="modal" data-bs-target="#assignManagerModal_@program.Id">
-                                    Назначить
-                                </button>
+                                @if (!program.IsArchived)
+                                {
+                                    <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#assignManagerModal_@program.Id">Назначить</button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#assignmentsModal_@program.Id">Привязки</button>
+                                }
                                 <a asp-action="ProgramDetails" asp-route-id="@program.Id" class="btn btn-outline-secondary btn-sm">Документы</a>
+                                <form method="post" asp-action="SetProgramArchived" class="d-inline" onsubmit="return confirm('@(program.IsArchived ? "Восстановить ОПОП?" : "Перенести ОПОП в архив?")')">
+                                    <input type="hidden" name="programId" value="@program.Id" />
+                                    <input type="hidden" name="version" value="@program.Version" />
+                                    <input type="hidden" name="archived" value="@((!program.IsArchived).ToString().ToLowerInvariant())" />
+                                    <button type="submit" class="btn @(program.IsArchived ? "btn-outline-success" : "btn-outline-danger") btn-sm">@(program.IsArchived ? "Восстановить" : "В архив")</button>
+                                </form>
                             </td>
                         </tr>
 
-                        <div class="modal fade" id="assignManagerModal_@program.Id" tabindex="-1">
-                            <div class="modal-dialog">
-                                <div class="modal-content rounded-4">
-                                    <form method="post" asp-action="AssignProgramManager">
-                                        <div class="modal-header">
-                                            <h5 class="modal-title">Назначить руководителя</h5>
-                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                        </div>
-                                        <div class="modal-body">
-                                            <input type="hidden" name="programId" value="@program.Id" />
-                                            <div class="mb-3">
-                                                <div class="fw-semibold mb-1">@program.CodeReferral @program.Name</div>
-                                                <div class="text-muted small">Текущий руководитель: @(program.User?.FullName ?? "не назначен")</div>
-                                            </div>
-                                            <div class="mb-3">
-                                                <label class="form-label">Новый руководитель</label>
-                                                <select name="managerUserId" class="form-select">
-                                                    <option value="" selected="@(!program.UserId.HasValue)">Не назначен</option>
-                                                    @if (managers != null)
-                                                    {
-                                                        @foreach (var manager in managers)
-                                                        {
-                                                            <option value="@manager.Id" selected="@(program.UserId == manager.Id)">@manager.FullName</option>
-                                                        }
-                                                    }
-                                                </select>
-                                            </div>
-                                        </div>
-                                        <div class="modal-footer">
-                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                                            <button type="submit" class="btn btn-primary">Сохранить</button>
-                                        </div>
-                                    </form>
-                                </div>
-                            </div>
-                        </div>
                     }
                 </tbody>
             </table>
         </div>
     </div>
+
+    @foreach (var program in Model.Where(p => !p.IsArchived))
+    {
+        <div class="modal fade" id="assignManagerModal_@program.Id" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <form method="post" asp-action="AssignProgramManager">
+                        <div class="modal-header"><h5 class="modal-title">Назначить руководителя</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                        <div class="modal-body">
+                            <input type="hidden" name="programId" value="@program.Id" />
+                            <input type="hidden" name="version" value="@program.Version" />
+                            <div class="fw-semibold mb-1">@program.CodeReferral @program.Name</div>
+                            <div class="text-muted small mb-3">Текущий руководитель: @(program.User?.FullName ?? "не назначен")</div>
+                            <label class="form-label">Новый руководитель</label>
+                            <select name="managerUserId" class="form-select">
+                                <option value="" selected="@(!program.UserId.HasValue)">Не назначен</option>
+                                @foreach (var manager in managers)
+                                {
+                                    <option value="@manager.Id" selected="@(program.UserId == manager.Id)">@manager.FullName</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button><button type="submit" class="btn btn-primary">Сохранить</button></div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="assignmentsModal_@program.Id" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <form method="post" asp-action="UpdateProgramAssignments">
+                        <div class="modal-header"><h5 class="modal-title">Привязки: @program.CodeReferral @program.Name</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                        <div class="modal-body">
+                            <input type="hidden" name="programId" value="@program.Id" />
+                            <input type="hidden" name="version" value="@program.Version" />
+                            <div class="assignment-rows" data-program-id="@program.Id">
+                                @foreach (var current in program.Assignments.DefaultIfEmpty(new PersonalCabinetEducationProgram.Models.EducationalProgramAssignment()))
+                                {
+                                    <div class="row g-2 mb-2 assignment-row">
+                                        <div class="col-md-5">
+                                            <label class="visually-hidden">Факультет</label>
+                                            <select name="facultyIds" class="form-select" required>
+                                                @foreach (var faculty in faculties)
+                                                {
+                                                    <option value="@faculty.Id" selected="@(faculty.Id == current.FacultyId)">@faculty.Name</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="col-md-5">
+                                            <label class="visually-hidden">Кафедра</label>
+                                            <select name="departmentIds" class="form-select" required>
+                                                @foreach (var department in departments)
+                                                {
+                                                    <option value="@department.Id" selected="@(department.Id == current.DepartmentId)">@department.Name</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div class="col-md-2"><button type="button" class="btn btn-outline-danger w-100 remove-assignment">Удалить</button></div>
+                                    </div>
+                                }
+                            </div>
+                            <button type="button" class="btn btn-outline-primary btn-sm mt-2 add-assignment" data-program-id="@program.Id">Добавить привязку</button>
+                        </div>
+                        <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button><button type="submit" class="btn btn-primary">Сохранить</button></div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (totalPages > 1)
+    {
+        <nav class="mt-3" aria-label="Страницы ОПОП">
+            <ul class="pagination justify-content-center">
+                <li class="page-item @(page <= 1 ? "disabled" : "")"><a class="page-link" asp-action="Programs" asp-all-route-data="@PageRoute(page - 1)">Назад</a></li>
+                <li class="page-item disabled"><span class="page-link">@(page) из @totalPages</span></li>
+                <li class="page-item @(page >= totalPages ? "disabled" : "")"><a class="page-link" asp-action="Programs" asp-all-route-data="@PageRoute(page + 1)">Вперёд</a></li>
+            </ul>
+        </nav>
+    }
 
     <div class="modal fade" id="createProgramModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
@@ -185,3 +310,29 @@
         </div>
     </div>
 </div>
+
+@section Scripts {
+    <script>
+        document.addEventListener('click', event => {
+            const addButton = event.target.closest('.add-assignment');
+            if (addButton) {
+                const rows = document.querySelector(`.assignment-rows[data-program-id="${addButton.dataset.programId}"]`);
+                const source = rows?.querySelector('.assignment-row');
+                if (source) {
+                    const clone = source.cloneNode(true);
+                    clone.querySelectorAll('select').forEach(select => select.selectedIndex = 0);
+                    rows.appendChild(clone);
+                }
+                return;
+            }
+
+            const removeButton = event.target.closest('.remove-assignment');
+            if (removeButton) {
+                const rows = removeButton.closest('.assignment-rows');
+                if (rows?.querySelectorAll('.assignment-row').length > 1) {
+                    removeButton.closest('.assignment-row').remove();
+                }
+            }
+        });
+    </script>
+}

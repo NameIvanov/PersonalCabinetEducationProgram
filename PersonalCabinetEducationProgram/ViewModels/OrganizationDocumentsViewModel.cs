@@ -9,5 +9,6 @@ namespace PersonalCabinetEducationProgram.ViewModels
         public int EntityId { get; set; }
         public string EntityName { get; set; } = string.Empty;
         public List<EducationalProgram> Programs { get; set; } = new();
+        public OrganizationDocumentFiltersViewModel Filters { get; set; } = new();
     }
 }

@@ -17,5 +17,6 @@ public class MigrationRegistrationTests
         using var context = new ApplicationDbContext(options);
 
         Assert.Contains("20260711000100_AddElementFileGroups", context.Database.GetMigrations());
+        Assert.Contains("20260716000100_AddProgramRevisionRequiredStatus", context.Database.GetMigrations());
     }
 }

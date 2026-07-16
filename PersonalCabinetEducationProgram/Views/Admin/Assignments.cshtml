@@ -1,23 +1,57 @@
 @model IEnumerable<PersonalCabinetEducationProgram.ViewModels.AssignmentListItemViewModel>
+@using PersonalCabinetEducationProgram.ViewModels
 @{
     ViewData["Title"] = "Назначения";
+    var page = ViewBag.Page as int? ?? 1;
+    var totalPages = ViewBag.TotalPages as int? ?? 1;
+    var currentSort = ViewBag.Sort as string ?? "date";
+    var currentDirection = ViewBag.Direction as string ?? "desc";
+    var filters = ViewBag.Filters as AssignmentListFiltersViewModel ?? new();
+    var assignmentTypes = ViewBag.AssignmentTypes as List<string> ?? [];
+    const string filterFormId = "assignmentsFilterForm";
+    string NextDirection(string column) => currentSort == column && currentDirection == "asc" ? "desc" : "asc";
+    Dictionary<string, string> RouteData(int targetPage, string targetSort, string targetDirection)
+    {
+        var values = filters.ToRouteData();
+        values["page"] = targetPage.ToString(); values["sort"] = targetSort; values["direction"] = targetDirection;
+        return values;
+    }
+    Dictionary<string, string> SortRoute(string column) => RouteData(1, column, NextDirection(column));
+    Dictionary<string, string> PageRoute(int targetPage) => RouteData(targetPage, currentSort, currentDirection);
 }
 
 <div class="container py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h4 class="fw-bold mb-0">Назначения</h4>
+        <button type="button" class="btn btn-outline-secondary" data-toggle-live-filters aria-expanded="@(filters.ShowFilters || filters.HasAnyFilter)">Поиск</button>
     </div>
+
+    @await Html.PartialAsync("_LiveFilterForm", new LiveFilterFormViewModel
+    {
+        FormId = filterFormId,
+        PreservedRouteValues = new Dictionary<string, string>
+        {
+            ["page"] = "1", ["sort"] = currentSort, ["direction"] = currentDirection, ["ShowFilters"] = "true"
+        }
+    })
 
     <div class="card">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
                 <thead>
                     <tr>
-                        <th>Дата</th>
-                        <th>Пользователь</th>
-                        <th>Тип назначения</th>
-                        <th>Куда назначен</th>
-                        <th>Кто назначил</th>
+                        <th><a asp-action="Assignments" asp-all-route-data="@SortRoute("date")">Дата</a></th>
+                        <th><a asp-action="Assignments" asp-all-route-data="@SortRoute("user")">Пользователь</a></th>
+                        <th><a asp-action="Assignments" asp-all-route-data="@SortRoute("type")">Тип назначения</a></th>
+                        <th><a asp-action="Assignments" asp-all-route-data="@SortRoute("target")">Куда назначен</a></th>
+                        <th><a asp-action="Assignments" asp-all-route-data="@SortRoute("author")">Кто назначил</a></th>
+                    </tr>
+                    <tr class="live-filter-row @((filters.ShowFilters || filters.HasAnyFilter) ? "" : "d-none")">
+                        <th><div class="d-flex gap-1 element-date-filter"><input form="@filterFormId" type="date" name="DateFrom" value="@filters.DateFrom?.ToString("yyyy-MM-dd")" class="form-control form-control-sm" title="Дата от" /><input form="@filterFormId" type="date" name="DateTo" value="@filters.DateTo?.ToString("yyyy-MM-dd")" class="form-control form-control-sm" title="Дата до" /></div></th>
+                        <th><input form="@filterFormId" type="search" name="User" value="@filters.User" class="form-control form-control-sm" placeholder="Пользователь" /></th>
+                        <th><select form="@filterFormId" name="AssignmentType" class="form-select form-select-sm"><option value="">Все типы</option>@foreach (var type in assignmentTypes) { <option value="@type" selected="@(filters.AssignmentType == type)">@type</option> }</select></th>
+                        <th><input form="@filterFormId" type="search" name="Target" value="@filters.Target" class="form-control form-control-sm" placeholder="Назначение" /></th>
+                        <th><div class="d-flex gap-1"><input form="@filterFormId" type="search" name="Author" value="@filters.Author" class="form-control form-control-sm" placeholder="Автор" /><a asp-action="Assignments" asp-route-sort="@currentSort" asp-route-direction="@currentDirection" asp-route-ShowFilters="true" class="btn btn-outline-secondary btn-sm">Сбросить</a></div></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -39,4 +73,8 @@
             </table>
         </div>
     </div>
+    @if (totalPages > 1)
+    {
+        <div class="d-flex justify-content-between mt-3"><a asp-action="Assignments" asp-all-route-data="@PageRoute(page - 1)" class="btn btn-outline-secondary @(page <= 1 ? "disabled" : "")">Назад</a><span class="align-self-center">@(page) из @totalPages</span><a asp-action="Assignments" asp-all-route-data="@PageRoute(page + 1)" class="btn btn-outline-secondary @(page >= totalPages ? "disabled" : "")">Далее</a></div>
+    }
 </div>

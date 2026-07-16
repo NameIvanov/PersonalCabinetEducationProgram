@@ -1,7 +1,19 @@
 @model PersonalCabinetEducationProgram.ViewModels.NotificationsViewModel
 @using PersonalCabinetEducationProgram.Models
+@using PersonalCabinetEducationProgram.ViewModels
 @{
     ViewData["Title"] = "Уведомления";
+    var filters = Model.Filters;
+    const string filterFormId = "notificationsFilterForm";
+    Dictionary<string, string> RouteData(bool unreadOnly, int page)
+    {
+        var values = filters.ToRouteData();
+        values["unreadOnly"] = unreadOnly.ToString().ToLowerInvariant();
+        values["page"] = page.ToString();
+        values["sort"] = Model.Sort;
+        values["direction"] = Model.Direction;
+        return values;
+    }
 }
 
 <div class="container py-4 notifications-page">
@@ -10,24 +22,47 @@
             <a href="javascript:history.back()" class="text-decoration-none small">← Назад</a>
             <h4 class="fw-bold mt-2 mb-0">Уведомления</h4>
         </div>
-        @if (Model.UnreadCount > 0)
-        {
-            <form method="post" asp-action="MarkAllRead">
-                <button type="submit" class="btn btn-primary">Отметить все как прочитанные</button>
-            </form>
-        }
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary" data-toggle-live-filters aria-expanded="@(filters.ShowFilters || filters.HasAnyFilter)">Поиск</button>
+            @if (Model.UnreadCount > 0)
+            {
+                <form method="post" asp-action="MarkAllRead">
+                    <button type="submit" class="btn btn-primary">Отметить все как прочитанные</button>
+                </form>
+            }
+        </div>
     </div>
 
     <nav class="notification-tabs">
-        <a asp-action="Index" asp-route-unreadOnly="false"
+        <a asp-action="Index" asp-all-route-data="@RouteData(false, 1)"
            class="@(!Model.UnreadOnly ? "active" : "")">
             Все уведомления <span>@Model.AllCount</span>
         </a>
-        <a asp-action="Index" asp-route-unreadOnly="true"
+        <a asp-action="Index" asp-all-route-data="@RouteData(true, 1)"
            class="@(Model.UnreadOnly ? "active" : "")">
             Непрочитанные <span>@Model.UnreadCount</span>
         </a>
     </nav>
+
+    @await Html.PartialAsync("_LiveFilterForm", new LiveFilterFormViewModel
+    {
+        FormId = filterFormId,
+        PreservedRouteValues = new Dictionary<string, string>
+        {
+            ["unreadOnly"] = Model.UnreadOnly.ToString().ToLowerInvariant(), ["page"] = "1", ["ShowFilters"] = "true"
+        }
+    })
+    <div class="live-filter-panel live-filter-row @((filters.ShowFilters || filters.HasAnyFilter) ? "" : "d-none") my-3">
+        <div><label class="form-label small">Тип / текст</label><input form="@filterFormId" type="search" name="Title" value="@filters.Title" class="form-control form-control-sm" placeholder="Тип или сообщение" /></div>
+        <div><label class="form-label small">ОПОП</label><input form="@filterFormId" type="search" name="Program" value="@filters.Program" class="form-control form-control-sm" placeholder="Шифр или название" /></div>
+        <div><label class="form-label small">Элемент</label><input form="@filterFormId" type="search" name="Element" value="@filters.Element" class="form-control form-control-sm" placeholder="Элемент ОПОП" /></div>
+        <div><label class="form-label small">Автор</label><input form="@filterFormId" type="search" name="Actor" value="@filters.Actor" class="form-control form-control-sm" placeholder="Автор" /></div>
+        <div><label class="form-label small">Прочтение</label><select form="@filterFormId" name="ReadStatus" class="form-select form-select-sm"><option value="">Все</option><option value="@NotificationListFiltersViewModel.Unread" selected="@(filters.ReadStatus == NotificationListFiltersViewModel.Unread)">Непрочитанные</option><option value="@NotificationListFiltersViewModel.Read" selected="@(filters.ReadStatus == NotificationListFiltersViewModel.Read)">Прочитанные</option></select></div>
+        <div><label class="form-label small">Дата</label><div class="d-flex gap-1 element-date-filter"><input form="@filterFormId" type="date" name="DateFrom" value="@filters.DateFrom?.ToString("yyyy-MM-dd")" class="form-control form-control-sm" title="Дата от" /><input form="@filterFormId" type="date" name="DateTo" value="@filters.DateTo?.ToString("yyyy-MM-dd")" class="form-control form-control-sm" title="Дата до" /></div></div>
+        <div><label class="form-label small">Сортировать</label><select form="@filterFormId" name="sort" class="form-select form-select-sm"><option value="date" selected="@(Model.Sort == "date")">По дате</option><option value="title" selected="@(Model.Sort == "title")">По типу</option><option value="program" selected="@(Model.Sort == "program")">По ОПОП</option><option value="element" selected="@(Model.Sort == "element")">По элементу</option><option value="actor" selected="@(Model.Sort == "actor")">По автору</option></select></div>
+        <div><label class="form-label small">Направление</label><select form="@filterFormId" name="direction" class="form-select form-select-sm"><option value="desc" selected="@(Model.Direction == "desc")">По убыванию</option><option value="asc" selected="@(Model.Direction == "asc")">По возрастанию</option></select></div>
+        <div class="d-flex align-items-end"><a asp-action="Index" asp-route-unreadOnly="@Model.UnreadOnly" asp-route-sort="@Model.Sort" asp-route-direction="@Model.Direction" asp-route-ShowFilters="true" class="btn btn-outline-secondary btn-sm">Сбросить</a></div>
+    </div>
 
     <div class="notification-list">
         @if (Model.Notifications.Count == 0)
@@ -61,4 +96,8 @@
             }
         }
     </div>
+    @if (Model.TotalPages > 1)
+    {
+        <div class="d-flex justify-content-between mt-3"><a asp-action="Index" asp-all-route-data="@RouteData(Model.UnreadOnly, Model.Page - 1)" class="btn btn-outline-secondary @(Model.Page <= 1 ? "disabled" : "")">Назад</a><span class="align-self-center">@Model.Page из @Model.TotalPages</span><a asp-action="Index" asp-all-route-data="@RouteData(Model.UnreadOnly, Model.Page + 1)" class="btn btn-outline-secondary @(Model.Page >= Model.TotalPages ? "disabled" : "")">Далее</a></div>
+    }
 </div>

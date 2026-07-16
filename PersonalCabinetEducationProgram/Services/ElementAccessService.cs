@@ -21,7 +21,7 @@ namespace PersonalCabinetEducationProgram.Services
 
             var userId = GetUserId(user);
             return _context.EducationalPrograms.AnyAsync(p =>
-                p.Id == programId &&
+                p.Id == programId && !p.IsArchived &&
                 (p.UserId == userId || p.Managers.Any(m => m.UserId == userId)));
         }
 
@@ -38,7 +38,7 @@ namespace PersonalCabinetEducationProgram.Services
 
             var userId = GetUserId(user);
             return _context.EducationalPrograms.AnyAsync(p =>
-                p.Id == programId &&
+                p.Id == programId && !p.IsArchived &&
                 p.Assignments.Any(pa => _context.ApproverAssignments.Any(a =>
                     a.ApproverUserId == userId &&
                     ((a.FacultyId != null && a.FacultyId == pa.FacultyId) ||
@@ -53,8 +53,12 @@ namespace PersonalCabinetEducationProgram.Services
 
         public async Task<bool> CanViewElementAsync(ClaimsPrincipal user, int elementId)
         {
-            if (user.IsInRole(AppRoles.Admin) || user.IsInRole(AppRoles.Moderator))
+            if (user.IsInRole(AppRoles.Admin))
                 return true;
+
+            if (user.IsInRole(AppRoles.Moderator))
+                return await _context.EducationalProgramElements.AnyAsync(e =>
+                    e.Id == elementId && !e.IsArchived && !e.EducationalProgram.IsArchived);
 
             if (user.IsInRole(AppRoles.Manager) && await CanManageElementAsync(user, elementId))
                 return true;
@@ -65,7 +69,7 @@ namespace PersonalCabinetEducationProgram.Services
         private Task<int?> GetProgramIdAsync(int elementId)
         {
             return _context.EducationalProgramElements
-                .Where(e => e.Id == elementId)
+                .Where(e => e.Id == elementId && !e.IsArchived)
                 .Select(e => (int?)e.EducationalProgramId)
                 .FirstOrDefaultAsync();
         }

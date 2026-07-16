@@ -4,6 +4,7 @@
     ViewData["Title"] = "Комментарии";
     var element = ViewBag.Element as PersonalCabinetEducationProgram.Models.EducationalProgramElement;
     var returnController = ViewBag.ReturnController as string ?? "ManagerHome";
+    var readOnly = returnController == "ModeratorHome";
 }
 
 <div class="container py-4">
@@ -19,7 +20,7 @@
     </div>
 
     <div class="row">
-        <div class="col-12 col-lg-8">
+        <div class="col-12 @(readOnly ? "" : "col-lg-8")">
             @if (Model.Any())
             {
                 @foreach (var comment in Model)
@@ -38,16 +39,23 @@
                             <div class="text-muted small" style="font-size:0.72rem;">@comment.DateTimeComment.ToString("dd.MM.yyyy HH:mm")</div>
                         </div>
                         <div class="small">@comment.CommentContent</div>
-                        <form method="post" asp-controller="@returnController" asp-action="UpdateCommentStatus" class="mt-2 d-flex gap-2 align-items-center">
-                            <input type="hidden" name="commentId" value="@comment.Id" />
-                            <select name="status" class="form-select form-select-sm" style="max-width: 180px;">
-                                @foreach (var status in CommentStatus.All)
-                                {
-                                    <option value="@status" selected="@(comment.Status == status)">@status</option>
-                                }
-                            </select>
-                            <button type="submit" class="btn btn-outline-secondary btn-sm">Сохранить</button>
-                        </form>
+                        @if (readOnly)
+                        {
+                            <span class="badge bg-light text-dark border mt-2">@comment.Status</span>
+                        }
+                        else
+                        {
+                            <form method="post" asp-controller="@returnController" asp-action="UpdateCommentStatus" class="mt-2 d-flex gap-2 align-items-center">
+                                <input type="hidden" name="commentId" value="@comment.Id" />
+                                <select name="status" class="form-select form-select-sm" style="max-width: 180px;">
+                                    @foreach (var status in CommentStatus.All)
+                                    {
+                                        <option value="@status" selected="@(comment.Status == status)">@status</option>
+                                    }
+                                </select>
+                                <button type="submit" class="btn btn-outline-secondary btn-sm">Сохранить</button>
+                            </form>
+                        }
                     </div>
                 }
             }
@@ -60,6 +68,8 @@
             }
         </div>
 
+        @if (!readOnly)
+        {
         <div class="col-12 col-lg-4">
             <div class="card shadow-sm rounded-4 sticky-top" style="top: 80px;">
                 <div class="card-body">
@@ -75,5 +85,6 @@
                 </div>
             </div>
         </div>
+        }
     </div>
 </div>

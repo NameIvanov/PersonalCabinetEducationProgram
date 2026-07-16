@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using PersonalCabinetEducationProgram.Data;
 using PersonalCabinetEducationProgram.Models;
 using PersonalCabinetEducationProgram.Services;
+using PersonalCabinetEducationProgram.ViewModels;
 
 namespace PersonalCabinetEducationProgram.Controllers
 {
@@ -15,17 +16,20 @@ namespace PersonalCabinetEducationProgram.Controllers
         private readonly ApplicationDbContext _context;
         private readonly ElementWorkflowService _workflowService;
         private readonly NotificationService _notificationService;
+        private readonly ElementListQueryService _elementListQueryService;
 
         public ModeratorHomeController(
             IOptions<FileStorageSettings> storageSettings,
             ApplicationDbContext context,
             ElementWorkflowService workflowService,
-            NotificationService notificationService)
+            NotificationService notificationService,
+            ElementListQueryService elementListQueryService)
         {
             _storageSettings = storageSettings.Value;
             _context = context;
             _workflowService = workflowService;
             _notificationService = notificationService;
+            _elementListQueryService = elementListQueryService;
         }
 
         private int GetCurrentUserId()
@@ -33,35 +37,48 @@ namespace PersonalCabinetEducationProgram.Controllers
             return int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
         }
 
-        public async Task<IActionResult> Index(int? programId, string tab = "disciplines")
+        public async Task<IActionResult> Index(
+            int? programId, string tab = "disciplines", int page = 1,
+            string sort = "name", string direction = "asc",
+            [FromQuery] ElementListFiltersViewModel? filters = null)
         {
+            filters ??= new ElementListFiltersViewModel();
             var programs = await _context.EducationalPrograms
+                .Where(p => !p.IsArchived)
                 .Include(p => p.Assignments).ThenInclude(a => a.Department)
                 .Include(p => p.Assignments).ThenInclude(a => a.Faculty)
                 .ToListAsync();
 
-            int? selectedProgramId = programId ?? programs.FirstOrDefault()?.Id;
+            int? selectedProgramId = programId.HasValue && programs.Any(p => p.Id == programId.Value)
+                ? programId
+                : programs.FirstOrDefault()?.Id;
 
-            var elements = selectedProgramId == null
-                ? new List<EducationalProgramElement>()
-                : await _context.EducationalProgramElements
-                    .Where(e => e.EducationalProgramId == selectedProgramId)
-                    .Include(e => e.EducationalProgram)
-                    .Include(e => e.Files.Where(f => f.IsCurrent))
-                    .ToListAsync();
+            var elementPage = await _elementListQueryService.GetAsync(selectedProgramId, tab, page, sort, direction, filters);
 
             ViewBag.Programs = programs;
             ViewBag.SelectedProgramId = selectedProgramId;
             ViewBag.ActiveTab = tab;
             ViewBag.Comments = await _context.EducationalProgramElementComment.Include(c => c.User).ToListAsync();
+            FillElementPagination(elementPage);
 
-            return View(elements);
+            return View(elementPage.Elements);
+        }
+
+        private void FillElementPagination(PersonalCabinetEducationProgram.ViewModels.ElementListPageViewModel result)
+        {
+            ViewBag.ElementStatuses = result.Statuses;
+            ViewBag.ElementPage = result.Page;
+            ViewBag.ElementTotalPages = result.TotalPages;
+            ViewBag.ElementSort = result.Sort;
+            ViewBag.ElementDirection = result.Direction;
+            ViewBag.ElementFilters = result.Filters;
         }
 
         public async Task<IActionResult> Download(int elementId)
         {
             await _notificationService.MarkElementReadAsync(GetCurrentUserId(), elementId);
-            var element = await _context.EducationalProgramElements.FindAsync(elementId);
+            var element = await _context.EducationalProgramElements
+                .FirstOrDefaultAsync(e => e.Id == elementId && !e.IsArchived && !e.EducationalProgram.IsArchived);
             if (element == null || string.IsNullOrEmpty(element.FilePath))
                 return NotFound();
 
@@ -76,7 +93,8 @@ namespace PersonalCabinetEducationProgram.Controllers
         public async Task<IActionResult> Preview(int elementId)
         {
             await _notificationService.MarkElementReadAsync(GetCurrentUserId(), elementId);
-            var element = await _context.EducationalProgramElements.FindAsync(elementId);
+            var element = await _context.EducationalProgramElements
+                .FirstOrDefaultAsync(e => e.Id == elementId && !e.IsArchived && !e.EducationalProgram.IsArchived);
             if (element == null || string.IsNullOrEmpty(element.FilePath))
                 return NotFound();
 
@@ -92,13 +110,19 @@ namespace PersonalCabinetEducationProgram.Controllers
         [HttpPost]
         public async Task<IActionResult> Publish(int elementId, string? comment)
         {
-            var element = await _workflowService.ChangeStatusAsync(
-                elementId,
-                GetCurrentUserId(),
-                ElementApprovalStatus.Published,
-                comment ?? ElementApprovalStatus.Published,
-                User.IsInRole(AppRoles.Admin),
-                [ElementApprovalStatus.Approved]);
+            EducationalProgramElement? element;
+            try
+            {
+                element = await _workflowService.ChangeStatusAsync(
+                    elementId, GetCurrentUserId(), ElementApprovalStatus.Published,
+                    comment ?? ElementApprovalStatus.Published, User.IsInRole(AppRoles.Admin),
+                    [ElementApprovalStatus.Approved]);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                TempData["ErrorMessage"] = "Элемент уже изменён другим пользователем. Обновите страницу и повторите действие.";
+                return RedirectToAction(nameof(Index));
+            }
 
             if (element == null)
                 return NotFound();
@@ -109,13 +133,19 @@ namespace PersonalCabinetEducationProgram.Controllers
         [HttpPost]
         public async Task<IActionResult> Unpublish(int elementId, string? comment)
         {
-            var element = await _workflowService.ChangeStatusAsync(
-                elementId,
-                GetCurrentUserId(),
-                ElementApprovalStatus.Approved,
-                comment ?? "Снято с публикации",
-                User.IsInRole(AppRoles.Admin),
-                [ElementApprovalStatus.Published]);
+            EducationalProgramElement? element;
+            try
+            {
+                element = await _workflowService.ChangeStatusAsync(
+                    elementId, GetCurrentUserId(), ElementApprovalStatus.Approved,
+                    comment ?? "Снято с публикации", User.IsInRole(AppRoles.Admin),
+                    [ElementApprovalStatus.Published]);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                TempData["ErrorMessage"] = "Элемент уже изменён другим пользователем. Обновите страницу и повторите действие.";
+                return RedirectToAction(nameof(Index));
+            }
 
             if (element == null)
                 return NotFound();
@@ -123,48 +153,6 @@ namespace PersonalCabinetEducationProgram.Controllers
             return RedirectToAction(nameof(Index), new { programId = element.EducationalProgramId });
         }
 
-        [HttpPost]
-        public async Task<IActionResult> AddComment(int elementId, string commentText)
-        {
-            if (string.IsNullOrWhiteSpace(commentText))
-                return RedirectToAction(nameof(Index));
-
-            _context.EducationalProgramElementComment.Add(new EducationalProgramElementComment
-            {
-                EducationalProgramElementId = elementId,
-                UserId = GetCurrentUserId(),
-                DateTimeComment = DateTime.Now,
-                CommentContent = commentText,
-                Status = CommentStatus.New
-            });
-
-            await _notificationService.CreateForElementAsync(
-                elementId,
-                GetCurrentUserId(),
-                NotificationType.CommentAdded,
-                "Добавлен комментарий",
-                commentText.Trim());
-            await _context.SaveChangesAsync();
-
-            var element = await _context.EducationalProgramElements.FindAsync(elementId);
-            return RedirectToAction(nameof(Index), new { programId = element?.EducationalProgramId ?? 1 });
-        }
-
-        [HttpPost]
-        public async Task<IActionResult> UpdateCommentStatus(int commentId, string status)
-        {
-            if (!CommentStatus.All.Contains(status))
-                return BadRequest();
-
-            var comment = await _context.EducationalProgramElementComment.FindAsync(commentId);
-            if (comment == null)
-                return NotFound();
-
-            comment.Status = status;
-            await _context.SaveChangesAsync();
-
-            return RedirectToAction(nameof(Comments), new { elementId = comment.EducationalProgramElementId });
-        }
 
         public async Task<IActionResult> History(int elementId)
         {

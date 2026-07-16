@@ -1,4 +1,5 @@
 ﻿@model IEnumerable<PersonalCabinetEducationProgram.Models.User>
+@using PersonalCabinetEducationProgram.ViewModels
 @{
     ViewData["Title"] = "Управление пользователями";
     var roleNames = new Dictionary<string, string>
@@ -8,14 +9,34 @@
         { "Moderator", "Модератор" },
         { "Admin", "Администратор" }
     };
+    var currentSort = ViewBag.Sort as string ?? "id";
+    var currentDirection = ViewBag.Direction as string ?? "asc";
+    var page = ViewBag.Page as int? ?? 1;
+    var totalPages = ViewBag.TotalPages as int? ?? 1;
+    var filters = ViewBag.Filters as UserListFiltersViewModel ?? new();
+    const string filterFormId = "usersFilterForm";
+    string NextDirection(string column) => currentSort == column && currentDirection == "asc" ? "desc" : "asc";
+    Dictionary<string, string> RouteData(int targetPage, string targetSort, string targetDirection)
+    {
+        var values = filters.ToRouteData();
+        values["page"] = targetPage.ToString();
+        values["sort"] = targetSort;
+        values["direction"] = targetDirection;
+        return values;
+    }
+    Dictionary<string, string> SortRoute(string column) => RouteData(1, column, NextDirection(column));
+    Dictionary<string, string> PageRoute(int targetPage) => RouteData(targetPage, currentSort, currentDirection);
 }
 
 <div class="container py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h4 class="fw-bold mb-0">Пользователи</h4>
-        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createUserModal">
-            Создать аккаунт
-        </button>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary" data-toggle-live-filters aria-expanded="@(filters.ShowFilters || filters.HasAnyFilter)">Поиск</button>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createUserModal">
+                Создать аккаунт
+            </button>
+        </div>
     </div>
 
     @if (TempData["UsersSuccess"] != null)
@@ -28,22 +49,55 @@
         <div class="alert alert-danger">@TempData["UsersError"]</div>
     }
 
+    @await Html.PartialAsync("_LiveFilterForm", new LiveFilterFormViewModel
+    {
+        FormId = filterFormId,
+        PreservedRouteValues = new Dictionary<string, string>
+        {
+            ["page"] = "1", ["sort"] = currentSort, ["direction"] = currentDirection, ["ShowFilters"] = "true"
+        }
+    })
+
     <div class="card shadow-sm rounded-4">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th>ID</th>
-                        <th>Логин</th>
-                        <th>ФИО</th>
-                        <th>Должность</th>
-                        <th>Роль</th>
-                        <th>Статус</th>
+                        <th><a asp-action="Users" asp-all-route-data="@SortRoute("id")">ID</a></th>
+                        <th><a asp-action="Users" asp-all-route-data="@SortRoute("login")">Логин</a></th>
+                        <th><a asp-action="Users" asp-all-route-data="@SortRoute("name")">ФИО</a></th>
+                        <th><a asp-action="Users" asp-all-route-data="@SortRoute("post")">Должность</a></th>
+                        <th><a asp-action="Users" asp-all-route-data="@SortRoute("role")">Роль</a></th>
+                        <th><a asp-action="Users" asp-all-route-data="@SortRoute("status")">Статус</a></th>
                         <th>Действия</th>
+                    </tr>
+                    <tr class="live-filter-row @((filters.ShowFilters || filters.HasAnyFilter) ? "" : "d-none")">
+                        <th><input form="@filterFormId" type="number" min="1" name="Id" value="@filters.Id" class="form-control form-control-sm" placeholder="ID" /></th>
+                        <th><input form="@filterFormId" type="search" name="Login" value="@filters.Login" class="form-control form-control-sm" placeholder="Логин" /></th>
+                        <th><input form="@filterFormId" type="search" name="FullName" value="@filters.FullName" class="form-control form-control-sm" placeholder="ФИО" /></th>
+                        <th><input form="@filterFormId" type="search" name="Post" value="@filters.Post" class="form-control form-control-sm" placeholder="Должность" /></th>
+                        <th>
+                            <select form="@filterFormId" name="Role" class="form-select form-select-sm">
+                                <option value="">Все роли</option>
+                                @foreach (var role in roleNames)
+                                {
+                                    <option value="@role.Key" selected="@(filters.Role == role.Key)">@role.Value</option>
+                                }
+                            </select>
+                        </th>
+                        <th>
+                            <select form="@filterFormId" name="ApprovalStatus" class="form-select form-select-sm">
+                                <option value="">Все статусы</option>
+                                <option value="Pending" selected="@(filters.ApprovalStatus == "Pending")">Ожидает решения</option>
+                                <option value="Approved" selected="@(filters.ApprovalStatus == "Approved")">Подтвержден</option>
+                                <option value="Rejected" selected="@(filters.ApprovalStatus == "Rejected")">Отклонен</option>
+                            </select>
+                        </th>
+                        <th><a asp-action="Users" asp-route-sort="@currentSort" asp-route-direction="@currentDirection" asp-route-ShowFilters="true" class="btn btn-outline-secondary btn-sm">Сбросить</a></th>
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var user in Model.OrderByDescending(u => u.ApprovalStatus == "Pending").ThenBy(u => u.Id))
+                    @foreach (var user in Model)
                     {
                         var approvalBadge = user.ApprovalStatus switch
                         {
@@ -121,6 +175,10 @@
             </table>
         </div>
     </div>
+    @if (totalPages > 1)
+    {
+        <div class="d-flex justify-content-between mt-3"><a asp-action="Users" asp-all-route-data="@PageRoute(page - 1)" class="btn btn-outline-secondary @(page <= 1 ? "disabled" : "")">Назад</a><span class="align-self-center">@(page) из @totalPages</span><a asp-action="Users" asp-all-route-data="@PageRoute(page + 1)" class="btn btn-outline-secondary @(page >= totalPages ? "disabled" : "")">Далее</a></div>
+    }
 </div>
 
 <div class="modal fade" id="editUserModal" tabindex="-1">

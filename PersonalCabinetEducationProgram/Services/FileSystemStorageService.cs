@@ -35,11 +35,36 @@ namespace PersonalCabinetEducationProgram.Services
             string uniqueFileName = Guid.NewGuid().ToString() + "_" + Path.GetFileName(file.FileName);
             string filePath = Path.Combine(uploadsFolder, uniqueFileName);
 
-            await using var fileStream = new FileStream(filePath, FileMode.CreateNew);
-            await file.CopyToAsync(fileStream);
+            try
+            {
+                await using var fileStream = new FileStream(filePath, FileMode.CreateNew);
+                await file.CopyToAsync(fileStream);
+            }
+            catch
+            {
+                if (File.Exists(filePath))
+                    File.Delete(filePath);
+                throw;
+            }
 
             // Return either the full URL or a relative path that can be combined with BaseUrl
             return uniqueFileName;
+        }
+
+        public Task DeleteFileAsync(string storedFileName)
+        {
+            if (string.IsNullOrWhiteSpace(storedFileName))
+                return Task.CompletedTask;
+
+            var storageRoot = Path.GetFullPath(_settings.StoragePath);
+            var filePath = Path.GetFullPath(Path.Combine(storageRoot, Path.GetFileName(storedFileName)));
+            if (!filePath.StartsWith(storageRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Недопустимый путь к файлу.");
+
+            if (File.Exists(filePath))
+                File.Delete(filePath);
+
+            return Task.CompletedTask;
         }
 
         public async Task ValidateFileAsync(IFormFile file)

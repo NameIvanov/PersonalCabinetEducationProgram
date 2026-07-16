@@ -1,0 +1,66 @@
+@model PersonalCabinetEducationProgram.ViewModels.ElementFilterUiViewModel
+@using PersonalCabinetEducationProgram.ViewModels
+@{
+    var filters = Model.Filters;
+    var visible = filters.ShowFilters || filters.HasAnyFilter;
+}
+
+<tr class="element-filter-row live-filter-row @(visible ? "" : "d-none")">
+    @if (Model.IsMain)
+    {
+        <th>
+            <input form="@Model.FormId" type="search" name="MainName" value="@filters.MainName"
+                   class="form-control form-control-sm" placeholder="Название или описание" aria-label="Поиск основного элемента" />
+        </th>
+        <th>
+            <select form="@Model.FormId" name="MainStatus" class="form-select form-select-sm" aria-label="Статус основного элемента">
+                <option value="">Все статусы</option>
+                @foreach (var status in ElementListFiltersViewModel.Statuses)
+                {
+                    <option value="@status" selected="@(filters.MainStatus == status)">@ElementListFiltersViewModel.GetStatusLabel(status)</option>
+                }
+            </select>
+        </th>
+        <th>
+            <div class="d-flex gap-1 element-date-filter">
+                <input form="@Model.FormId" type="date" name="MainDateFrom" value="@filters.MainDateFrom?.ToString("yyyy-MM-dd")"
+                       class="form-control form-control-sm" title="Дата от" aria-label="Дата загрузки от" />
+                <input form="@Model.FormId" type="date" name="MainDateTo" value="@filters.MainDateTo?.ToString("yyyy-MM-dd")"
+                       class="form-control form-control-sm" title="Дата до" aria-label="Дата загрузки до" />
+            </div>
+        </th>
+    }
+    else
+    {
+        <th>
+            <input form="@Model.FormId" type="search" name="Code" value="@filters.Code"
+                   class="form-control form-control-sm" placeholder="Шифр / описание" aria-label="Поиск по шифру или описанию" />
+        </th>
+        <th>
+            <input form="@Model.FormId" type="search" name="Name" value="@filters.Name"
+                   class="form-control form-control-sm" placeholder="Наименование" aria-label="Поиск по наименованию" />
+        </th>
+        <th>
+            <select form="@Model.FormId" name="Status" class="form-select form-select-sm" aria-label="Статус элемента">
+                <option value="">Все статусы</option>
+                @foreach (var status in ElementListFiltersViewModel.Statuses)
+                {
+                    <option value="@status" selected="@(filters.Status == status)">@ElementListFiltersViewModel.GetStatusLabel(status)</option>
+                }
+            </select>
+        </th>
+        <th>
+            <div class="d-flex gap-1 element-date-filter">
+                <input form="@Model.FormId" type="date" name="DateFrom" value="@filters.DateFrom?.ToString("yyyy-MM-dd")"
+                       class="form-control form-control-sm" title="Дата от" aria-label="Дата загрузки от" />
+                <input form="@Model.FormId" type="date" name="DateTo" value="@filters.DateTo?.ToString("yyyy-MM-dd")"
+                       class="form-control form-control-sm" title="Дата до" aria-label="Дата загрузки до" />
+            </div>
+        </th>
+    }
+    <th>
+        <div class="d-flex gap-1">
+            <a href="@Model.ResetUrl" class="btn btn-outline-secondary btn-sm">Сбросить</a>
+        </div>
+    </th>
+</tr>

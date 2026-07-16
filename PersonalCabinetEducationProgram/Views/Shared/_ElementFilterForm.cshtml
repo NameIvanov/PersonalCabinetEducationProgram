@@ -1,0 +1,8 @@
+@model PersonalCabinetEducationProgram.ViewModels.ElementFilterUiViewModel
+
+<form id="@Model.FormId" method="get">
+    @foreach (var routeValue in Model.PreservedRouteValues)
+    {
+        <input type="hidden" name="@routeValue.Key" value="@routeValue.Value" />
+    }
+</form>

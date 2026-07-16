@@ -19,6 +19,8 @@ namespace PersonalCabinetEducationProgram.Controllers
         private readonly ElementWorkflowService _workflowService;
         private readonly UserManager<User> _userManager;
         private readonly NotificationService _notificationService;
+        private readonly AuditService _auditService;
+        private readonly ElementFilterService _elementFilterService;
 
         public AdminController(
             ApplicationDbContext context,
@@ -26,7 +28,9 @@ namespace PersonalCabinetEducationProgram.Controllers
             IOptions<FileStorageSettings> storageSettings,
             ElementWorkflowService workflowService,
             UserManager<User> userManager,
-            NotificationService notificationService)
+            NotificationService notificationService,
+            AuditService auditService,
+            ElementFilterService elementFilterService)
         {
             _context = context;
             _fileStorageService = fileStorageService;
@@ -34,6 +38,8 @@ namespace PersonalCabinetEducationProgram.Controllers
             _workflowService = workflowService;
             _userManager = userManager;
             _notificationService = notificationService;
+            _auditService = auditService;
+            _elementFilterService = elementFilterService;
         }
 
         private int GetCurrentUserId()
@@ -42,31 +48,84 @@ namespace PersonalCabinetEducationProgram.Controllers
         }
 
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> Users()
+        public async Task<IActionResult> Users(
+            int page = 1, string sort = "id", string direction = "asc",
+            [FromQuery] UserListFiltersViewModel? filters = null)
         {
-            var users = await _userManager.Users.OrderBy(u => u.Id).ToListAsync();
-            foreach (var user in users)
+            filters ??= new UserListFiltersViewModel();
+            const int pageSize = 25;
+            page = Math.Max(page, 1);
+            var roleRows = await (
+                from userRole in _context.UserRoles
+                join role in _context.Roles on userRole.RoleId equals role.Id
+                select new { userRole.UserId, RoleName = role.Name ?? string.Empty })
+                .ToListAsync();
+            var rolesByUser = roleRows
+                .GroupBy(row => row.UserId)
+                .ToDictionary(group => group.Key, group => group.First().RoleName);
+            var allUsers = await _userManager.Users.AsNoTracking().ToListAsync();
+            foreach (var user in allUsers)
+                user.RoleName = rolesByUser.GetValueOrDefault(user.Id, string.Empty);
+
+            IEnumerable<User> query = allUsers.Where(user =>
+                (!filters.Id.HasValue || user.Id == filters.Id.Value) &&
+                ListFilterMatcher.Text(user.UserName, filters.Login) &&
+                ListFilterMatcher.Text(user.FullName, filters.FullName) &&
+                ListFilterMatcher.Text(user.Post, filters.Post) &&
+                ListFilterMatcher.Exact(user.RoleName, filters.Role) &&
+                ListFilterMatcher.Exact(user.ApprovalStatus, filters.ApprovalStatus));
+            var descending = direction.Equals("desc", StringComparison.OrdinalIgnoreCase);
+            query = sort switch
             {
-                user.RoleName = (await _userManager.GetRolesAsync(user)).SingleOrDefault() ?? string.Empty;
-            }
+                "login" => descending ? query.OrderByDescending(u => u.UserName) : query.OrderBy(u => u.UserName),
+                "name" => descending ? query.OrderByDescending(u => u.FullName) : query.OrderBy(u => u.FullName),
+                "post" => descending ? query.OrderByDescending(u => u.Post) : query.OrderBy(u => u.Post),
+                "role" => descending
+                    ? query.OrderByDescending(u => _context.Roles.Where(role => _context.UserRoles.Any(link => link.UserId == u.Id && link.RoleId == role.Id)).Select(role => role.Name).FirstOrDefault())
+                    : query.OrderBy(u => _context.Roles.Where(role => _context.UserRoles.Any(link => link.UserId == u.Id && link.RoleId == role.Id)).Select(role => role.Name).FirstOrDefault()),
+                "status" => descending ? query.OrderByDescending(u => u.ApprovalStatus) : query.OrderBy(u => u.ApprovalStatus),
+                _ => descending ? query.OrderByDescending(u => u.Id) : query.OrderBy(u => u.Id)
+            };
+            var totalCount = query.Count();
+            var users = query.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+
+            SetPagination(totalCount, page, pageSize, sort, direction);
+            ViewBag.Filters = filters;
 
             return View(users);
         }
 
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> Audit(int page = 1)
+        public async Task<IActionResult> Audit(
+            int page = 1, string sort = "date", string direction = "desc",
+            [FromQuery] AuditListFiltersViewModel? filters = null)
         {
-            const int pageSize = 100;
+            filters ??= new AuditListFiltersViewModel();
+            const int pageSize = 50;
             page = Math.Max(page, 1);
-            ViewBag.Page = page;
-
-            var entries = await _context.AuditLogs
+            var entriesQuery = await _context.AuditLogs
                 .AsNoTracking()
                 .Include(a => a.User)
-                .OrderByDescending(a => a.CreatedAt)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
                 .ToListAsync();
+            IEnumerable<AuditLog> query = entriesQuery.Where(entry =>
+                ListFilterMatcher.Date(entry.CreatedAt, filters.DateFrom, filters.DateTo) &&
+                ListFilterMatcher.Text(entry.User?.FullName, filters.User) &&
+                ListFilterMatcher.Text($"{entry.EntityType} #{entry.EntityId}", filters.Entity) &&
+                ListFilterMatcher.Text(entry.Action, filters.Action) &&
+                ListFilterMatcher.Text(entry.Details, filters.Details));
+            var descending = direction.Equals("desc", StringComparison.OrdinalIgnoreCase);
+            query = sort switch
+            {
+                "user" => descending ? query.OrderByDescending(a => a.User.FullName) : query.OrderBy(a => a.User.FullName),
+                "entity" => descending ? query.OrderByDescending(a => a.EntityType).ThenByDescending(a => a.EntityId) : query.OrderBy(a => a.EntityType).ThenBy(a => a.EntityId),
+                "action" => descending ? query.OrderByDescending(a => a.Action) : query.OrderBy(a => a.Action),
+                "details" => descending ? query.OrderByDescending(a => a.Details) : query.OrderBy(a => a.Details),
+                _ => descending ? query.OrderByDescending(a => a.CreatedAt) : query.OrderBy(a => a.CreatedAt)
+            };
+            var totalCount = query.Count();
+            var entries = query.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+            SetPagination(totalCount, page, pageSize, sort, direction);
+            ViewBag.Filters = filters;
 
             return View(entries);
         }
@@ -278,41 +337,120 @@ namespace PersonalCabinetEducationProgram.Controllers
             return RedirectToAction(nameof(Users));
         }
 
-        public async Task<IActionResult> Programs()
+        public async Task<IActionResult> Programs(
+            bool showArchived = false, int page = 1, string sort = "code", string direction = "asc",
+            [FromQuery] ProgramListFiltersViewModel? filters = null)
         {
-            var programs = await _context.EducationalPrograms
+            filters ??= new ProgramListFiltersViewModel();
+            const int pageSize = 25;
+            page = Math.Max(1, page);
+            var query = _context.EducationalPrograms
+                .Where(p => p.IsArchived == showArchived)
                 .Include(p => p.User)
                 .Include(p => p.Managers).ThenInclude(m => m.User)
                 .Include(p => p.Assignments).ThenInclude(a => a.Department)
                 .Include(p => p.Assignments).ThenInclude(a => a.Faculty)
-                .ToListAsync();
+                .AsSplitQuery()
+                .AsNoTracking();
+
+            var allPrograms = await query.ToListAsync();
+            IEnumerable<EducationalProgram> programsQuery = allPrograms.Where(program =>
+                ListFilterMatcher.Text(program.CodeReferral, filters.Code) &&
+                ListFilterMatcher.Text(program.Name, filters.Name) &&
+                ListFilterMatcher.Exact(program.EducationalLevel, filters.Level) &&
+                (!filters.Year.HasValue || program.YearApprovals == filters.Year.Value) &&
+                ListFilterMatcher.AnyText(program.Assignments.Select(a => a.Department?.Name), filters.Department) &&
+                ListFilterMatcher.AnyText(program.Assignments.Select(a => a.Faculty?.Name), filters.Faculty) &&
+                ListFilterMatcher.Exact(program.Status, filters.Status) &&
+                ListFilterMatcher.Text(program.User?.FullName, filters.Manager));
+
+            var descending = direction.Equals("desc", StringComparison.OrdinalIgnoreCase);
+            programsQuery = sort switch
+            {
+                "name" => descending ? programsQuery.OrderByDescending(p => p.Name) : programsQuery.OrderBy(p => p.Name),
+                "level" => descending ? programsQuery.OrderByDescending(p => p.EducationalLevel) : programsQuery.OrderBy(p => p.EducationalLevel),
+                "year" => descending ? programsQuery.OrderByDescending(p => p.YearApprovals) : programsQuery.OrderBy(p => p.YearApprovals),
+                "department" => descending
+                    ? programsQuery.OrderByDescending(p => p.Assignments.Select(a => a.Department?.Name).OrderBy(name => name).FirstOrDefault())
+                    : programsQuery.OrderBy(p => p.Assignments.Select(a => a.Department?.Name).OrderBy(name => name).FirstOrDefault()),
+                "faculty" => descending
+                    ? programsQuery.OrderByDescending(p => p.Assignments.Select(a => a.Faculty?.Name).OrderBy(name => name).FirstOrDefault())
+                    : programsQuery.OrderBy(p => p.Assignments.Select(a => a.Faculty?.Name).OrderBy(name => name).FirstOrDefault()),
+                "status" => descending ? programsQuery.OrderByDescending(p => p.Status) : programsQuery.OrderBy(p => p.Status),
+                "manager" => descending ? programsQuery.OrderByDescending(p => p.User?.FullName) : programsQuery.OrderBy(p => p.User?.FullName),
+                _ => descending ? programsQuery.OrderByDescending(p => p.CodeReferral) : programsQuery.OrderBy(p => p.CodeReferral)
+            };
+
+            var totalCount = programsQuery.Count();
+            var programs = programsQuery.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+
+            SetPagination(totalCount, page, pageSize, sort, direction);
+            ViewBag.ShowArchived = showArchived;
+            ViewBag.Filters = filters;
 
             ViewBag.Departments = await _context.Departments.ToListAsync();
             ViewBag.Facultys = await _context.Facultys.ToListAsync();
             ViewBag.Managers = await GetApprovedUsersInRole(AppRoles.Manager);
+            ViewBag.ProgramLevels = await _context.EducationalPrograms
+                .Select(program => program.EducationalLevel)
+                .Distinct()
+                .OrderBy(level => level)
+                .ToListAsync();
 
             return View(programs);
         }
 
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> ProgramDetails(int id)
+        public async Task<IActionResult> ProgramDetails(
+            int id, bool showArchivedElements = false, int page = 1,
+            string sort = "name", string direction = "asc",
+            [FromQuery] ElementListFiltersViewModel? filters = null)
         {
+            filters ??= new ElementListFiltersViewModel();
             var program = await _context.EducationalPrograms
                 .Include(p => p.User)
                 .Include(p => p.Assignments).ThenInclude(a => a.Department)
                 .Include(p => p.Assignments).ThenInclude(a => a.Faculty)
-                .Include(p => p.Elements).ThenInclude(e => e.Files.Where(f => f.IsCurrent))
                 .FirstOrDefaultAsync(p => p.Id == id);
 
             if (program == null)
                 return NotFound();
 
+            const int pageSize = 25;
+            page = Math.Max(page, 1);
+            var elementsQuery = _context.EducationalProgramElements
+                .Where(e => e.EducationalProgramId == id && e.IsArchived == showArchivedElements)
+                .Include(e => e.Files.Where(f => f.IsCurrent))
+                .AsQueryable();
+            var descending = direction.Equals("desc", StringComparison.OrdinalIgnoreCase);
+            elementsQuery = sort switch
+            {
+                "type" => descending ? elementsQuery.OrderByDescending(e => e.TypeElement).ThenByDescending(e => e.Name) : elementsQuery.OrderBy(e => e.TypeElement).ThenBy(e => e.Name),
+                "description" => descending ? elementsQuery.OrderByDescending(e => e.Description) : elementsQuery.OrderBy(e => e.Description),
+                "status" => descending ? elementsQuery.OrderByDescending(e => e.StatusApprovals) : elementsQuery.OrderBy(e => e.StatusApprovals),
+                "date" => descending ? elementsQuery.OrderByDescending(e => e.UploadDate) : elementsQuery.OrderBy(e => e.UploadDate),
+                _ => descending ? elementsQuery.OrderByDescending(e => e.Name) : elementsQuery.OrderBy(e => e.Name)
+            };
+            var filteredElements = await _elementFilterService.FilterAndPageAsync(
+                elementsQuery, filters.Tab, page, pageSize);
+            var totalCount = filteredElements.TotalCount;
+            program.Elements = filteredElements.Items;
+            SetPagination(totalCount, page, pageSize, sort, direction);
+
+            ViewBag.ShowArchivedElements = showArchivedElements;
+            ViewBag.ElementFilters = filters;
+            ViewBag.Departments = await _context.Departments.OrderBy(d => d.Name).ToListAsync();
+            ViewBag.Faculties = await _context.Facultys.OrderBy(f => f.Name).ToListAsync();
+
             return View(program);
         }
 
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> Assignments()
+        public async Task<IActionResult> Assignments(
+            int page = 1, string sort = "date", string direction = "desc",
+            [FromQuery] AssignmentListFiltersViewModel? filters = null)
         {
+            filters ??= new AssignmentListFiltersViewModel();
             var approverAssignments = await _context.ApproverAssignments
                 .Include(a => a.ApproverUser)
                 .Include(a => a.AssignedByUser)
@@ -326,7 +464,7 @@ namespace PersonalCabinetEducationProgram.Controllers
                 .Include(m => m.EducationalProgram)
                 .ToListAsync();
 
-            var assignments = approverAssignments
+            var assignmentsQuery = approverAssignments
                 .Select(a => new AssignmentListItemViewModel
                 {
                     AssignedAt = a.AssignedAt,
@@ -345,10 +483,36 @@ namespace PersonalCabinetEducationProgram.Controllers
                         : $"{m.EducationalProgram.CodeReferral} {m.EducationalProgram.Name}",
                     AssignedByFullName = m.AssignedByUser?.FullName ?? "—"
                 }))
-                .OrderByDescending(a => a.AssignedAt.HasValue)
-                .ThenByDescending(a => a.AssignedAt)
-                .ThenBy(a => a.UserFullName)
-                .ToList();
+                .AsEnumerable();
+
+            assignmentsQuery = assignmentsQuery.Where(assignment =>
+                ListFilterMatcher.Date(assignment.AssignedAt, filters.DateFrom, filters.DateTo) &&
+                ListFilterMatcher.Text(assignment.UserFullName, filters.User) &&
+                ListFilterMatcher.Exact(assignment.AssignmentType, filters.AssignmentType) &&
+                ListFilterMatcher.Text(assignment.TargetName, filters.Target) &&
+                ListFilterMatcher.Text(assignment.AssignedByFullName, filters.Author));
+
+            var descending = direction.Equals("desc", StringComparison.OrdinalIgnoreCase);
+            assignmentsQuery = sort switch
+            {
+                "user" => descending ? assignmentsQuery.OrderByDescending(a => a.UserFullName) : assignmentsQuery.OrderBy(a => a.UserFullName),
+                "type" => descending ? assignmentsQuery.OrderByDescending(a => a.AssignmentType) : assignmentsQuery.OrderBy(a => a.AssignmentType),
+                "target" => descending ? assignmentsQuery.OrderByDescending(a => a.TargetName) : assignmentsQuery.OrderBy(a => a.TargetName),
+                "author" => descending ? assignmentsQuery.OrderByDescending(a => a.AssignedByFullName) : assignmentsQuery.OrderBy(a => a.AssignedByFullName),
+                _ => descending ? assignmentsQuery.OrderByDescending(a => a.AssignedAt) : assignmentsQuery.OrderBy(a => a.AssignedAt)
+            };
+            const int pageSize = 25;
+            page = Math.Max(page, 1);
+            var totalCount = assignmentsQuery.Count();
+            var assignments = assignmentsQuery.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+            SetPagination(totalCount, page, pageSize, sort, direction);
+            ViewBag.Filters = filters;
+            ViewBag.AssignmentTypes = approverAssignments.Count > 0 || managerAssignments.Count > 0
+                ? approverAssignments.Select(_ => "Согласующий")
+                    .Concat(managerAssignments.Select(_ => "Руководитель ОПОП"))
+                    .Distinct()
+                    .ToList()
+                : new List<string> { "Согласующий", "Руководитель ОПОП" };
 
             return View(assignments);
         }
@@ -404,7 +568,124 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> AssignProgramManager(int programId, int? managerUserId)
+        public async Task<IActionResult> EditProgram(
+            int programId, int version, string codeReferral, string name,
+            string educationalLevel, int yearApprovals)
+        {
+            var program = await _context.EducationalPrograms.FindAsync(programId);
+            if (program == null)
+                return NotFound();
+            if (program.IsArchived)
+                return ArchivedProgram(programId);
+            if (program.Version != version)
+                return ProgramConflict(programId);
+            if (string.IsNullOrWhiteSpace(codeReferral) || string.IsNullOrWhiteSpace(name))
+                return BadRequest("Шифр и наименование обязательны.");
+
+            program.CodeReferral = codeReferral.Trim();
+            program.Name = name.Trim();
+            program.EducationalLevel = educationalLevel.Trim();
+            program.YearApprovals = yearApprovals;
+            program.Version++;
+            _auditService.Record(GetCurrentUserId(), "EducationalProgram", program.Id, "Edited", "Изменена карточка ОПОП.");
+
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return ProgramConflict(programId);
+            }
+
+            TempData["SuccessMessage"] = "Карточка ОПОП сохранена.";
+            return RedirectToAction(nameof(ProgramDetails), new { id = programId });
+        }
+
+        [HttpPost]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> UpdateProgramAssignments(
+            int programId, int version, List<int> departmentIds, List<int> facultyIds)
+        {
+            var program = await _context.EducationalPrograms
+                .Include(p => p.Assignments)
+                .FirstOrDefaultAsync(p => p.Id == programId);
+            if (program == null)
+                return NotFound();
+            if (program.IsArchived)
+                return ArchivedProgram(programId);
+            if (program.Version != version)
+                return ProgramConflict(programId);
+            if (departmentIds.Count == 0 || departmentIds.Count != facultyIds.Count)
+            {
+                TempData["ErrorMessage"] = "Добавьте хотя бы одну полную пару «кафедра — факультет».";
+                return RedirectToAction(nameof(ProgramDetails), new { id = programId });
+            }
+
+            var pairs = departmentIds.Zip(facultyIds).Distinct().ToList();
+            var validDepartments = await _context.Departments.CountAsync(d => departmentIds.Contains(d.Id));
+            var validFaculties = await _context.Facultys.CountAsync(f => facultyIds.Contains(f.Id));
+            if (validDepartments != departmentIds.Distinct().Count() || validFaculties != facultyIds.Distinct().Count())
+                return BadRequest("Одна из кафедр или факультетов не найдена.");
+
+            _context.EducationalProgramAssignments.RemoveRange(program.Assignments);
+            foreach (var pair in pairs)
+            {
+                _context.EducationalProgramAssignments.Add(new EducationalProgramAssignment
+                {
+                    EducationalProgramId = programId,
+                    DepartmentId = pair.First,
+                    FacultyId = pair.Second
+                });
+            }
+
+            program.Version++;
+            _auditService.Record(GetCurrentUserId(), "EducationalProgram", program.Id, "AssignmentsChanged",
+                $"Установлено привязок: {pairs.Count}.");
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return ProgramConflict(programId);
+            }
+
+            TempData["SuccessMessage"] = "Привязки ОПОП сохранены.";
+            return RedirectToAction(nameof(ProgramDetails), new { id = programId });
+        }
+
+        [HttpPost]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> SetProgramArchived(int programId, int version, bool archived)
+        {
+            var program = await _context.EducationalPrograms.FindAsync(programId);
+            if (program == null)
+                return NotFound();
+            if (program.Version != version)
+                return ProgramConflict(programId);
+
+            program.IsArchived = archived;
+            program.ArchivedAt = archived ? DateTime.UtcNow : null;
+            program.ArchivedByUserId = archived ? GetCurrentUserId() : null;
+            program.Version++;
+            _auditService.Record(GetCurrentUserId(), "EducationalProgram", program.Id,
+                archived ? "Archived" : "Restored", archived ? "ОПОП перенесена в архив." : "ОПОП восстановлена из архива.");
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return ProgramConflict(programId);
+            }
+
+            return RedirectToAction(nameof(Programs), new { showArchived = archived });
+        }
+
+        [HttpPost]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> AssignProgramManager(int programId, int version, int? managerUserId)
         {
             var program = await _context.EducationalPrograms
                 .Include(p => p.Managers)
@@ -412,6 +693,10 @@ namespace PersonalCabinetEducationProgram.Controllers
 
             if (program == null)
                 return NotFound();
+            if (program.IsArchived)
+                return ArchivedProgram(programId);
+            if (program.Version != version)
+                return ProgramConflict(programId);
 
             User? manager = null;
             if (managerUserId.HasValue)
@@ -424,6 +709,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             }
 
             program.UserId = managerUserId;
+            program.Version++;
 
             var currentAssignments = await _context.EducationalProgramManagers
                 .Where(m => m.EducationalProgramId == programId)
@@ -441,7 +727,14 @@ namespace PersonalCabinetEducationProgram.Controllers
                 });
             }
 
-            await _context.SaveChangesAsync();
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return ProgramConflict(programId);
+            }
             return RedirectToAction(nameof(Programs));
         }
 
@@ -449,7 +742,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> CreateProgramElement(int programId, string typeElement, string name, string description)
         {
-            if (!await _context.EducationalPrograms.AnyAsync(p => p.Id == programId))
+            if (!await _context.EducationalPrograms.AnyAsync(p => p.Id == programId && !p.IsArchived))
                 return NotFound();
 
             if (!EducationalProgramElementTypes.All.Contains(typeElement))
@@ -470,11 +763,14 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> EditProgramElement(int elementId, string typeElement, string name, string? description)
+        public async Task<IActionResult> EditProgramElement(int elementId, int version, string typeElement, string name, string? description)
         {
             var element = await _context.EducationalProgramElements.FindAsync(elementId);
             if (element == null)
                 return NotFound();
+
+            if (element.Version != version)
+                return ElementConflict(element.EducationalProgramId);
 
             if (!EducationalProgramElementTypes.All.Contains(typeElement) || string.IsNullOrWhiteSpace(name))
                 return BadRequest("Проверьте тип и наименование элемента ОПОП.");
@@ -483,6 +779,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             element.TypeElement = typeElement;
             element.Name = name.Trim();
             element.Description = description?.Trim() ?? string.Empty;
+            element.Version++;
             _context.ElementStatusHistory.Add(new ElementStatusHistory
             {
                 EducationalProgramElementId = element.Id,
@@ -492,8 +789,44 @@ namespace PersonalCabinetEducationProgram.Controllers
                 ChangeDate = DateTime.UtcNow,
                 Comment = $"Изменена карточка элемента. Было: {oldDescription}"
             });
-            await _context.SaveChangesAsync();
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return ElementConflict(element.EducationalProgramId);
+            }
             return RedirectToAction(nameof(ProgramDetails), new { id = element.EducationalProgramId });
+        }
+
+        [HttpPost]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> SetElementArchived(int elementId, int version, bool archived)
+        {
+            var element = await _context.EducationalProgramElements.FindAsync(elementId);
+            if (element == null)
+                return NotFound();
+            if (element.Version != version)
+                return ElementConflict(element.EducationalProgramId);
+
+            element.IsArchived = archived;
+            element.ArchivedAt = archived ? DateTime.UtcNow : null;
+            element.ArchivedByUserId = archived ? GetCurrentUserId() : null;
+            element.Version++;
+            _auditService.Record(GetCurrentUserId(), "EducationalProgramElement", element.Id,
+                archived ? "Archived" : "Restored", archived ? "Элемент перенесён в архив." : "Элемент восстановлен из архива.");
+            await _workflowService.RecalculateProgramStatusAsync(element.EducationalProgramId);
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                return ElementConflict(element.EducationalProgramId);
+            }
+
+            return RedirectToAction(nameof(ProgramDetails), new { id = element.EducationalProgramId, showArchivedElements = archived });
         }
 
         [HttpPost]
@@ -519,14 +852,25 @@ namespace PersonalCabinetEducationProgram.Controllers
                         await _fileStorageService.ValidateFileAsync(file);
 
                     var storedFiles = new List<(string StoredFileName, string OriginalFileName)>();
-                    foreach (var file in files)
-                        storedFiles.Add((await _fileStorageService.SaveFileAsync(file), Path.GetFileName(file.FileName)));
+                    try
+                    {
+                        foreach (var file in files)
+                            storedFiles.Add((await _fileStorageService.SaveFileAsync(file), Path.GetFileName(file.FileName)));
 
-                    await _workflowService.MarkFilesUploadedAsync(elementId, GetCurrentUserId(), storedFiles, adminOverride: true);
+                        await _workflowService.MarkFilesUploadedAsync(elementId, GetCurrentUserId(), storedFiles, adminOverride: true);
+                    }
+                    catch
+                    {
+                        foreach (var storedFile in storedFiles)
+                            await _fileStorageService.DeleteFileAsync(storedFile.StoredFileName);
+                        throw;
+                    }
                 }
-                catch (InvalidOperationException ex)
+                catch (Exception ex) when (ex is InvalidOperationException or IOException or DbUpdateException)
                 {
-                    TempData["ErrorMessage"] = ex.Message;
+                    TempData["ErrorMessage"] = ex is DbUpdateConcurrencyException
+                        ? "Данные были изменены другим пользователем. Обновите страницу и повторите действие."
+                        : ex.Message;
                 }
             }
 
@@ -596,7 +940,17 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         private async Task<IActionResult> ChangeElementStatus(int elementId, string newStatus, string comment)
         {
-            var element = await _workflowService.ChangeStatusAsync(elementId, GetCurrentUserId(), newStatus, comment, adminOverride: true);
+            EducationalProgramElement? element;
+            try
+            {
+                element = await _workflowService.ChangeStatusAsync(elementId, GetCurrentUserId(), newStatus, comment, adminOverride: true);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                var programId = await _context.EducationalProgramElements
+                    .Where(e => e.Id == elementId).Select(e => e.EducationalProgramId).FirstOrDefaultAsync();
+                return ElementConflict(programId);
+            }
             if (element == null)
                 return NotFound();
 
@@ -655,9 +1009,29 @@ namespace PersonalCabinetEducationProgram.Controllers
             return RedirectToAction(redirectAction);
         }
 
-        public async Task<IActionResult> Departments()
+        public async Task<IActionResult> Departments(
+            int page = 1, string sort = "name", string direction = "asc",
+            [FromQuery] DepartmentListFiltersViewModel? filters = null)
         {
-            var departments = await _context.Departments.ToListAsync();
+            filters ??= new DepartmentListFiltersViewModel();
+            const int pageSize = 25;
+            page = Math.Max(page, 1);
+            var allDepartments = await _context.Departments.AsNoTracking().ToListAsync();
+            IEnumerable<Departments> query = allDepartments.Where(department =>
+                (!filters.Id.HasValue || department.Id == filters.Id.Value) &&
+                ListFilterMatcher.Text(department.CodeDepartment, filters.Code) &&
+                ListFilterMatcher.Text(department.Name, filters.Name));
+            var descending = direction.Equals("desc", StringComparison.OrdinalIgnoreCase);
+            query = sort switch
+            {
+                "id" => descending ? query.OrderByDescending(d => d.Id) : query.OrderBy(d => d.Id),
+                "code" => descending ? query.OrderByDescending(d => d.CodeDepartment) : query.OrderBy(d => d.CodeDepartment),
+                _ => descending ? query.OrderByDescending(d => d.Name) : query.OrderBy(d => d.Name)
+            };
+            var totalCount = query.Count();
+            var departments = query.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+            SetPagination(totalCount, page, pageSize, sort, direction);
+            ViewBag.Filters = filters;
             var currentAssignments = await _context.ApproverAssignments
                 .Where(a => a.DepartmentId.HasValue)
                 .OrderByDescending(a => a.AssignedAt)
@@ -670,19 +1044,24 @@ namespace PersonalCabinetEducationProgram.Controllers
             return View(departments);
         }
 
-        public async Task<IActionResult> DepartmentDetails(int id)
+        public async Task<IActionResult> DepartmentDetails(
+            int id, [FromQuery] OrganizationDocumentFiltersViewModel? filters = null)
         {
+            filters ??= new OrganizationDocumentFiltersViewModel();
             var department = await _context.Departments.FindAsync(id);
             if (department == null)
                 return NotFound();
 
             var programs = await _context.EducationalPrograms
-                .Where(p => p.Assignments.Any(a => a.DepartmentId == id))
+                .Where(p => !p.IsArchived && p.Assignments.Any(a => a.DepartmentId == id))
                 .Include(p => p.Assignments).ThenInclude(a => a.Department)
                 .Include(p => p.Assignments).ThenInclude(a => a.Faculty)
                 .Include(p => p.Elements)
+                .AsSplitQuery()
                 .OrderBy(p => p.CodeReferral)
                 .ToListAsync();
+
+            FilterOrganizationDocuments(programs, filters);
 
             return View("OrganizationDocuments", new OrganizationDocumentsViewModel
             {
@@ -690,7 +1069,8 @@ namespace PersonalCabinetEducationProgram.Controllers
                 EntityType = "Department",
                 EntityId = department.Id,
                 EntityName = department.Name,
-                Programs = programs
+                Programs = programs,
+                Filters = filters
             });
         }
 
@@ -703,9 +1083,54 @@ namespace PersonalCabinetEducationProgram.Controllers
             return RedirectToAction(nameof(Departments));
         }
 
-        public async Task<IActionResult> Faculties()
+        [HttpPost]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> EditDepartment(int id, string codeDepartment, string name)
         {
-            var faculties = await _context.Facultys.ToListAsync();
+            var department = await _context.Departments.FindAsync(id);
+            if (department == null) return NotFound();
+            department.CodeDepartment = codeDepartment.Trim();
+            department.Name = name.Trim();
+            await _context.SaveChangesAsync();
+            return RedirectToAction(nameof(Departments));
+        }
+
+        [HttpPost]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> DeleteDepartment(int id)
+        {
+            var department = await _context.Departments.FindAsync(id);
+            if (department == null) return NotFound();
+            if (await _context.EducationalProgramAssignments.AnyAsync(a => a.DepartmentId == id) ||
+                await _context.ApproverAssignments.AnyAsync(a => a.DepartmentId == id))
+            {
+                TempData["ErrorMessage"] = "Кафедра используется в привязках ОПОП или согласующих и не может быть удалена.";
+                return RedirectToAction(nameof(Departments));
+            }
+            _context.Departments.Remove(department);
+            await _context.SaveChangesAsync();
+            return RedirectToAction(nameof(Departments));
+        }
+
+        public async Task<IActionResult> Faculties(
+            int page = 1, string sort = "name", string direction = "asc",
+            [FromQuery] FacultyListFiltersViewModel? filters = null)
+        {
+            filters ??= new FacultyListFiltersViewModel();
+            const int pageSize = 25;
+            page = Math.Max(page, 1);
+            var allFaculties = await _context.Facultys.AsNoTracking().ToListAsync();
+            IEnumerable<Facultys> query = allFaculties.Where(faculty =>
+                (!filters.Id.HasValue || faculty.Id == filters.Id.Value) &&
+                ListFilterMatcher.Text(faculty.Name, filters.Name));
+            var descending = direction.Equals("desc", StringComparison.OrdinalIgnoreCase);
+            query = sort == "id"
+                ? (descending ? query.OrderByDescending(f => f.Id) : query.OrderBy(f => f.Id))
+                : (descending ? query.OrderByDescending(f => f.Name) : query.OrderBy(f => f.Name));
+            var totalCount = query.Count();
+            var faculties = query.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+            SetPagination(totalCount, page, pageSize, sort, direction);
+            ViewBag.Filters = filters;
             var currentAssignments = await _context.ApproverAssignments
                 .Where(a => a.FacultyId.HasValue)
                 .OrderByDescending(a => a.AssignedAt)
@@ -718,19 +1143,24 @@ namespace PersonalCabinetEducationProgram.Controllers
             return View(faculties);
         }
 
-        public async Task<IActionResult> FacultyDetails(int id)
+        public async Task<IActionResult> FacultyDetails(
+            int id, [FromQuery] OrganizationDocumentFiltersViewModel? filters = null)
         {
+            filters ??= new OrganizationDocumentFiltersViewModel();
             var faculty = await _context.Facultys.FindAsync(id);
             if (faculty == null)
                 return NotFound();
 
             var programs = await _context.EducationalPrograms
-                .Where(p => p.Assignments.Any(a => a.FacultyId == id))
+                .Where(p => !p.IsArchived && p.Assignments.Any(a => a.FacultyId == id))
                 .Include(p => p.Assignments).ThenInclude(a => a.Department)
                 .Include(p => p.Assignments).ThenInclude(a => a.Faculty)
                 .Include(p => p.Elements)
+                .AsSplitQuery()
                 .OrderBy(p => p.CodeReferral)
                 .ToListAsync();
+
+            FilterOrganizationDocuments(programs, filters);
 
             return View("OrganizationDocuments", new OrganizationDocumentsViewModel
             {
@@ -738,7 +1168,8 @@ namespace PersonalCabinetEducationProgram.Controllers
                 EntityType = "Faculty",
                 EntityId = faculty.Id,
                 EntityName = faculty.Name,
-                Programs = programs
+                Programs = programs,
+                Filters = filters
             });
         }
 
@@ -749,6 +1180,89 @@ namespace PersonalCabinetEducationProgram.Controllers
             _context.Facultys.Add(new Facultys { Name = name });
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Faculties));
+        }
+
+        [HttpPost]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> EditFaculty(int id, string name)
+        {
+            var faculty = await _context.Facultys.FindAsync(id);
+            if (faculty == null) return NotFound();
+            faculty.Name = name.Trim();
+            await _context.SaveChangesAsync();
+            return RedirectToAction(nameof(Faculties));
+        }
+
+        [HttpPost]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> DeleteFaculty(int id)
+        {
+            var faculty = await _context.Facultys.FindAsync(id);
+            if (faculty == null) return NotFound();
+            if (await _context.EducationalProgramAssignments.AnyAsync(a => a.FacultyId == id) ||
+                await _context.ApproverAssignments.AnyAsync(a => a.FacultyId == id))
+            {
+                TempData["ErrorMessage"] = "Факультет используется в привязках ОПОП или согласующих и не может быть удалён.";
+                return RedirectToAction(nameof(Faculties));
+            }
+            _context.Facultys.Remove(faculty);
+            await _context.SaveChangesAsync();
+            return RedirectToAction(nameof(Faculties));
+        }
+
+        private IActionResult ProgramConflict(int programId)
+        {
+            TempData["ErrorMessage"] = "ОПОП уже изменена другим пользователем. Страница обновлена, повторите действие.";
+            return RedirectToAction(nameof(ProgramDetails), new { id = programId });
+        }
+
+        private IActionResult ElementConflict(int programId)
+        {
+            TempData["ErrorMessage"] = "Элемент уже изменён другим пользователем. Страница обновлена, повторите действие.";
+            return RedirectToAction(nameof(ProgramDetails), new { id = programId });
+        }
+
+        private IActionResult ArchivedProgram(int programId)
+        {
+            TempData["ErrorMessage"] = "Архивную ОПОП сначала необходимо восстановить.";
+            return RedirectToAction(nameof(ProgramDetails), new { id = programId });
+        }
+
+        private static void FilterOrganizationDocuments(
+            List<EducationalProgram> programs,
+            OrganizationDocumentFiltersViewModel filters)
+        {
+            programs.RemoveAll(program => !ListFilterMatcher.AnyText(
+                [program.CodeReferral, program.Name], filters.Program));
+
+            if (!filters.HasElementFilter)
+                return;
+
+            foreach (var program in programs)
+            {
+                program.Elements = program.Elements
+                    .Where(element =>
+                        ListFilterMatcher.Exact(element.TypeElement, filters.Type) &&
+                        ListFilterMatcher.Text(element.Name, filters.Name) &&
+                        ListFilterMatcher.Text(element.Description, filters.Description) &&
+                        (filters.Status == ElementListFiltersViewModel.NotUploadedFilterValue
+                            ? string.IsNullOrWhiteSpace(element.StatusApprovals)
+                            : ListFilterMatcher.Exact(element.StatusApprovals, filters.Status)) &&
+                        ListFilterMatcher.Date(element.UploadDate, filters.DateFrom, filters.DateTo))
+                    .ToList();
+            }
+
+            programs.RemoveAll(program => program.Elements.Count == 0);
+        }
+
+        private void SetPagination(int totalCount, int page, int pageSize, string sort, string direction)
+        {
+            ViewBag.Page = page;
+            ViewBag.PageSize = pageSize;
+            ViewBag.TotalCount = totalCount;
+            ViewBag.TotalPages = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
+            ViewBag.Sort = sort;
+            ViewBag.Direction = direction.Equals("desc", StringComparison.OrdinalIgnoreCase) ? "desc" : "asc";
         }
 
         private async Task<List<User>> GetApprovedApprovers()

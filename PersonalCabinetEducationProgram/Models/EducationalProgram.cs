@@ -22,6 +22,18 @@ namespace PersonalCabinetEducationProgram.Models
 
         public string Status { get; set; } = EducationalProgramStatus.Draft;
 
+        [Column("is_archived")]
+        public bool IsArchived { get; set; }
+
+        [Column("archived_at")]
+        public DateTime? ArchivedAt { get; set; }
+
+        [Column("archived_by_user_id")]
+        public int? ArchivedByUserId { get; set; }
+
+        [Column("version")]
+        public int Version { get; set; } = 1;
+
         [Column("user_id")]
         public int? UserId { get; set; }
 

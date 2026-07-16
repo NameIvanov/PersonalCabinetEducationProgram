@@ -6,5 +6,6 @@ namespace PersonalCabinetEducationProgram.Services
     {
         Task ValidateFileAsync(IFormFile file);
         Task<string> SaveFileAsync(IFormFile file);
+        Task DeleteFileAsync(string storedFileName);
     }
 }

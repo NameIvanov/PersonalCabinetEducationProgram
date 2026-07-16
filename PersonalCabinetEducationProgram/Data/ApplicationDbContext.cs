@@ -29,6 +29,8 @@ namespace PersonalCabinetEducationProgram.Data
 
             modelBuilder.Entity<EducationalProgram>(entity =>
             {
+                entity.Property(p => p.Version).IsConcurrencyToken().HasDefaultValue(1);
+                entity.HasIndex(p => p.IsArchived).HasDatabaseName("ix_prog_archived");
                 entity.HasOne(p => p.User)
                     .WithMany(u => u.EducationalPrograms)
                     .HasForeignKey(p => p.UserId)
@@ -118,10 +120,15 @@ namespace PersonalCabinetEducationProgram.Data
                 entity.HasIndex(a => a.EducationalProgramId).HasDatabaseName("ix_epa_prog");
                 entity.HasIndex(a => a.DepartmentId).HasDatabaseName("ix_epa_dept");
                 entity.HasIndex(a => a.FacultyId).HasDatabaseName("ix_epa_fac");
+                entity.HasIndex(a => new { a.EducationalProgramId, a.DepartmentId, a.FacultyId })
+                    .IsUnique()
+                    .HasDatabaseName("ux_epa_program_department_faculty");
             });
 
             modelBuilder.Entity<EducationalProgramElement>(entity =>
             {
+                entity.Property(e => e.Version).IsConcurrencyToken().HasDefaultValue(1);
+                entity.HasIndex(e => e.IsArchived).HasDatabaseName("ix_elem_archived");
                 entity.HasOne(e => e.EducationalProgram)
                     .WithMany(p => p.Elements)
                     .HasForeignKey(e => e.EducationalProgramId)

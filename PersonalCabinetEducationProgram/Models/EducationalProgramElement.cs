@@ -31,6 +31,18 @@ namespace PersonalCabinetEducationProgram.Models
         [Column("file_name")]
         public string? FileName { get; set; }
 
+        [Column("is_archived")]
+        public bool IsArchived { get; set; }
+
+        [Column("archived_at")]
+        public DateTime? ArchivedAt { get; set; }
+
+        [Column("archived_by_user_id")]
+        public int? ArchivedByUserId { get; set; }
+
+        [Column("version")]
+        public int Version { get; set; } = 1;
+
         // Навигации
         public EducationalProgram EducationalProgram { get; set; } = null!;
         public ICollection<EducationalProgramElementComment> Comments { get; set; } = [];

@@ -1,7 +1,21 @@
 ﻿@model PersonalCabinetEducationProgram.Models.EducationalProgram
 @{
     ViewData["Title"] = "ОПОП";
-    var assignment = Model.Assignments?.FirstOrDefault();
+    var showArchivedElements = ViewBag.ShowArchivedElements as bool? ?? false;
+    var page = ViewBag.Page as int? ?? 1; var totalPages = ViewBag.TotalPages as int? ?? 1;
+    var currentSort = ViewBag.Sort as string ?? "name"; var currentDirection = ViewBag.Direction as string ?? "asc";
+    var elementFilters = ViewBag.ElementFilters as PersonalCabinetEducationProgram.ViewModels.ElementListFiltersViewModel ?? new();
+    string NextDirection(string column) => currentSort == column && currentDirection == "asc" ? "desc" : "asc";
+    Dictionary<string, string> ElementRouteData(int pageValue, string sortValue, string directionValue, bool includeTab = true)
+    {
+        var values = elementFilters.ToRouteData(includeMain: false, includeTab: includeTab);
+        values["id"] = Model.Id.ToString();
+        values["showArchivedElements"] = showArchivedElements.ToString().ToLowerInvariant();
+        values["page"] = pageValue.ToString();
+        values["sort"] = sortValue;
+        values["direction"] = directionValue;
+        return values;
+    }
     var typeNames = new Dictionary<string, string>
     {
         { "Main", "Основные документы" },
@@ -10,42 +24,92 @@
         { "GIA", "ГИА" }
     };
     var typeOrder = new[] { "Main", "Discipline", "Practice", "GIA" };
+    var programStatusClass = Model.Status switch
+    {
+        "Согласована" => "bg-success-subtle text-success",
+        "Опубликована" => "bg-primary-subtle text-primary",
+        "Требует доработки" => "bg-danger-subtle text-danger",
+        _ => "bg-warning-subtle text-warning"
+    };
 }
 
 <div class="container py-4">
+    @if (TempData["ErrorMessage"] is string errorMessage)
+    {
+        <div class="alert alert-danger">@errorMessage</div>
+    }
+    @if (TempData["SuccessMessage"] is string successMessage)
+    {
+        <div class="alert alert-success">@successMessage</div>
+    }
     <div class="d-flex justify-content-between align-items-start mb-4">
         <div>
             <a asp-action="Programs" class="text-decoration-none">← Назад к ОПОП</a>
             <h3 class="fw-bold mt-2 mb-1">@Model.CodeReferral @Model.Name</h3>
             <div class="text-muted">@Model.EducationalLevel</div>
-            <div class="small text-muted mt-2">Кафедра: @(assignment?.Department?.Name ?? "—")</div>
-            <div class="small text-muted">Факультет: @(assignment?.Faculty?.Name ?? "—")</div>
+            <div class="small text-muted mt-2">
+                Привязки:
+                @if (Model.Assignments.Any())
+                {
+                    @string.Join("; ", Model.Assignments.Select(a => $"{a.Faculty?.Name} / {a.Department?.Name}"))
+                }
+                else
+                {
+                    <span>—</span>
+                }
+            </div>
             <div class="small text-muted">Руководитель: @(Model.User?.FullName ?? "—")</div>
         </div>
-        <span class="badge bg-warning-subtle text-warning fs-6">@Model.Status</span>
+        <div class="d-flex gap-2 flex-wrap justify-content-end">
+            @if (!Model.IsArchived)
+            {
+                <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#editProgramModal">Изменить ОПОП</button>
+            }
+            <a asp-action="ProgramDetails" asp-route-id="@Model.Id" asp-route-showArchivedElements="@(!showArchivedElements)" class="btn btn-outline-secondary btn-sm">
+                @(showArchivedElements ? "Активные элементы" : "Архив элементов")
+            </a>
+            <span class="badge @programStatusClass fs-6 align-self-center">@Model.Status</span>
+        </div>
     </div>
 
-    @foreach (var type in typeOrder)
+    @foreach (var type in typeOrder.Where(type => string.IsNullOrWhiteSpace(elementFilters.Type) || elementFilters.Type == type))
     {
-        var elements = Model.Elements.Where(e => e.TypeElement == type).OrderBy(e => e.Name).ToList();
+        var elements = Model.Elements.Where(e => e.TypeElement == type).ToList();
+        var preservedFilterRoutes = ElementRouteData(1, currentSort, currentDirection, includeTab: false);
+        preservedFilterRoutes["Type"] = type;
+        var filterUi = new PersonalCabinetEducationProgram.ViewModels.ElementFilterUiViewModel
+        {
+            Filters = elementFilters,
+            FormId = $"adminElementFilterForm_{type}",
+            PreservedRouteValues = preservedFilterRoutes,
+            ResetUrl = Url.Action("ProgramDetails", ElementRouteData(1, currentSort, currentDirection, includeTab: false))!,
+            IsMain = false
+        };
 
+        @await Html.PartialAsync("_ElementFilterForm", filterUi)
         <div class="card shadow-sm rounded-4 mb-4">
             <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
                 <h5 class="fw-bold mb-0">@(typeNames.GetValueOrDefault(type, type))</h5>
-                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#createElement_@type">
-                    Добавить строку
-                </button>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-toggle-element-filters
+                            aria-expanded="@(elementFilters.ShowFilters || elementFilters.HasAnyFilter ? "true" : "false")">Поиск</button>
+                    @if (!showArchivedElements && !Model.IsArchived)
+                    {
+                        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#createElement_@type">Добавить строку</button>
+                    }
+                </div>
             </div>
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th>Документ</th>
-                            <th>Шифр / описание</th>
-                            <th>Статус</th>
-                            <th>Дата загрузки</th>
+                            <th><a asp-action="ProgramDetails" asp-all-route-data="@ElementRouteData(1, "name", NextDirection("name"))">Документ</a></th>
+                            <th><a asp-action="ProgramDetails" asp-all-route-data="@ElementRouteData(1, "description", NextDirection("description"))">Шифр / описание</a></th>
+                            <th><a asp-action="ProgramDetails" asp-all-route-data="@ElementRouteData(1, "status", NextDirection("status"))">Статус</a></th>
+                            <th><a asp-action="ProgramDetails" asp-all-route-data="@ElementRouteData(1, "date", NextDirection("date"))">Дата загрузки</a></th>
                             <th>Действия</th>
                         </tr>
+                        @await Html.PartialAsync("_ElementFilterRow", filterUi)
                     </thead>
                     <tbody>
                         @foreach (var element in elements)
@@ -60,7 +124,7 @@
                                         <a asp-controller="ManagerHome" asp-action="History" asp-route-elementId="@element.Id"
                                            class="btn btn-outline-secondary btn-sm">История</a>
                                         @await Html.PartialAsync("_ElementFileButtons", element)
-                                        @if (PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(element.StatusApprovals) is PersonalCabinetEducationProgram.Models.ElementApprovalStatus.NotUploaded or PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Uploaded or PersonalCabinetEducationProgram.Models.ElementApprovalStatus.RevisionRequired)
+                                        @if (!element.IsArchived && (PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(element.StatusApprovals) is PersonalCabinetEducationProgram.Models.ElementApprovalStatus.NotUploaded or PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Uploaded or PersonalCabinetEducationProgram.Models.ElementApprovalStatus.RevisionRequired))
                                         {
                                             <form method="post" enctype="multipart/form-data" asp-action="UploadElement" class="d-inline">
                                                 <input type="hidden" name="elementId" value="@element.Id" />
@@ -69,6 +133,8 @@
                                                 </label>
                                             </form>
                                         }
+                                        @if (!element.IsArchived)
+                                        {
                                         <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#editElement_@element.Id">Изменить</button>
 
                                         @if (element.StatusApprovals != "Опубликовано на сайте")
@@ -91,6 +157,13 @@
                                                 <button type="submit" class="btn btn-outline-primary btn-sm">Опубликовать</button>
                                             </form>
                                         }
+                                        }
+                                        <form method="post" asp-action="SetElementArchived" class="d-inline" onsubmit="return confirm('@(element.IsArchived ? "Восстановить элемент из архива?" : "Перенести элемент в архив?")')">
+                                            <input type="hidden" name="elementId" value="@element.Id" />
+                                            <input type="hidden" name="version" value="@element.Version" />
+                                            <input type="hidden" name="archived" value="@((!element.IsArchived).ToString().ToLowerInvariant())" />
+                                            <button type="submit" class="btn @(element.IsArchived ? "btn-outline-success" : "btn-outline-danger") btn-sm">@(element.IsArchived ? "Восстановить" : "В архив")</button>
+                                        </form>
                                     </div>
                                 </td>
                             </tr>
@@ -113,6 +186,7 @@
                             <div class="modal-header"><h5 class="modal-title">Изменить элемент</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                             <div class="modal-body">
                                 <input type="hidden" name="elementId" value="@element.Id" />
+                                <input type="hidden" name="version" value="@element.Version" />
                                 <div class="mb-3"><label class="form-label">Тип</label><select name="typeElement" class="form-select">@foreach (var option in typeOrder) { <option value="@option" selected="@(option == element.TypeElement)">@(typeNames.GetValueOrDefault(option, option))</option> }</select></div>
                                 <div class="mb-3"><label class="form-label">Наименование</label><input name="name" value="@element.Name" class="form-control" required maxlength="255" /></div>
                                 <div class="mb-3"><label class="form-label">Шифр / описание</label><input name="description" value="@element.Description" class="form-control" maxlength="1000" /></div>
@@ -153,4 +227,29 @@
             </div>
         </div>
     }
+
+    @if (totalPages > 1)
+    {
+        <div class="d-flex justify-content-between mb-4"><a asp-action="ProgramDetails" asp-all-route-data="@ElementRouteData(page - 1, currentSort, currentDirection)" class="btn btn-outline-secondary @(page<=1?"disabled":"")">Назад</a><span>@(page) из @totalPages</span><a asp-action="ProgramDetails" asp-all-route-data="@ElementRouteData(page + 1, currentSort, currentDirection)" class="btn btn-outline-secondary @(page>=totalPages?"disabled":"")">Далее</a></div>
+    }
+
+    <div class="modal fade" id="editProgramModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="post" asp-action="EditProgram">
+                    <div class="modal-header"><h5 class="modal-title">Изменить ОПОП</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                    <div class="modal-body">
+                        <input type="hidden" name="programId" value="@Model.Id" />
+                        <input type="hidden" name="version" value="@Model.Version" />
+                        <div class="mb-3"><label class="form-label">Шифр</label><input name="codeReferral" value="@Model.CodeReferral" class="form-control" required /></div>
+                        <div class="mb-3"><label class="form-label">Наименование</label><input name="name" value="@Model.Name" class="form-control" required /></div>
+                        <div class="mb-3"><label class="form-label">Уровень образования</label><input name="educationalLevel" value="@Model.EducationalLevel" class="form-control" required /></div>
+                        <div class="mb-3"><label class="form-label">Год утверждения</label><input type="number" name="yearApprovals" value="@Model.YearApprovals" class="form-control" required /></div>
+                    </div>
+                    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button><button type="submit" class="btn btn-primary">Сохранить</button></div>
+                </form>
+            </div>
+        </div>
+    </div>
+
 </div>
