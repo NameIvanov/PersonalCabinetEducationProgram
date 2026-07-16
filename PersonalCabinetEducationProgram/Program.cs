@@ -62,6 +62,9 @@ builder.Services.AddScoped<ElementAccessService>();
 builder.Services.AddScoped<ElementListQueryService>();
 builder.Services.AddScoped<ElementFilterService>();
 builder.Services.AddScoped<AuditService>();
+builder.Services.AddScoped<PlxParserService>();
+builder.Services.AddScoped<PlxImportStorageService>();
+builder.Services.AddScoped<CurriculumImportService>();
 
 var app = builder.Build();
 

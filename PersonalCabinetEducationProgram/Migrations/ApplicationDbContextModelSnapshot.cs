@@ -240,6 +240,29 @@ namespace PersonalCabinetEducationProgram.Migrations
                     b.ToTable("approver_assignments", "personal_cabinet");
                 });
 
+            modelBuilder.Entity("PersonalCabinetEducationProgram.Models.CurriculumImport", b =>
+                {
+                    b.Property<int>("Id").ValueGeneratedOnAdd().HasColumnType("int");
+                    b.Property<int>("ArchivedCount").HasColumnType("int").HasColumnName("archived_count");
+                    b.Property<int>("CreatedCount").HasColumnType("int").HasColumnName("created_count");
+                    b.Property<int>("EducationalProgramId").HasColumnType("int").HasColumnName("educational_program_id");
+                    b.Property<int>("ImportedByUserId").HasColumnType("int").HasColumnName("imported_by_user_id");
+                    b.Property<DateTime>("ImportedAt").HasColumnType("datetime(6)").HasColumnName("imported_at");
+                    b.Property<string>("OriginalFileName").IsRequired().HasMaxLength(255).HasColumnType("varchar(255)").HasColumnName("original_file_name");
+                    b.Property<string>("PlanCode").IsRequired().HasMaxLength(100).HasColumnType("varchar(100)").HasColumnName("plan_code");
+                    b.Property<string>("PlanName").IsRequired().HasMaxLength(1000).HasColumnType("varchar(1000)").HasColumnName("plan_name");
+                    b.Property<int>("SkippedCount").HasColumnType("int").HasColumnName("skipped_count");
+                    b.Property<string>("SourceAppVersion").IsRequired().HasMaxLength(50).HasColumnType("varchar(50)").HasColumnName("source_app_version");
+                    b.Property<string>("StoredFilePath").IsRequired().HasMaxLength(500).HasColumnType("varchar(500)").HasColumnName("stored_file_path");
+                    b.Property<int>("UpdatedCount").HasColumnType("int").HasColumnName("updated_count");
+                    b.Property<string>("WarningsJson").IsRequired().HasColumnType("longtext").HasColumnName("warnings_json");
+                    b.HasKey("Id");
+                    b.HasIndex("EducationalProgramId").HasDatabaseName("ix_curriculum_import_program");
+                    b.HasIndex("ImportedAt").HasDatabaseName("ix_curriculum_import_date");
+                    b.HasIndex("ImportedByUserId").HasDatabaseName("ix_curriculum_import_user");
+                    b.ToTable("curriculum_imports", "personal_cabinet");
+                });
+
             modelBuilder.Entity("PersonalCabinetEducationProgram.Models.Departments", b =>
                 {
                     b.Property<int>("Id")
@@ -452,6 +475,16 @@ namespace PersonalCabinetEducationProgram.Migrations
                         .HasColumnType("int")
                         .HasColumnName("educational_program_id");
 
+                    b.Property<string>("ExternalKey")
+                        .HasMaxLength(300)
+                        .HasColumnType("varchar(300)")
+                        .HasColumnName("external_key");
+
+                    b.Property<string>("ExternalSource")
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("external_source");
+
                     b.Property<string>("FileName")
                         .HasColumnType("longtext")
                         .HasColumnName("file_name");
@@ -467,6 +500,15 @@ namespace PersonalCabinetEducationProgram.Migrations
                     b.Property<bool>("IsArchived")
                         .HasColumnType("tinyint(1)")
                         .HasColumnName("is_archived");
+
+                    b.Property<DateTime?>("LastImportedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("last_imported_at");
+
+                    b.Property<string>("ParentExternalKey")
+                        .HasMaxLength(300)
+                        .HasColumnType("varchar(300)")
+                        .HasColumnName("parent_external_key");
 
                     b.Property<string>("StatusApprovals")
                         .IsRequired()
@@ -496,6 +538,10 @@ namespace PersonalCabinetEducationProgram.Migrations
 
                     b.HasIndex("IsArchived")
                         .HasDatabaseName("ix_elem_archived");
+
+                    b.HasIndex("EducationalProgramId", "ExternalSource", "ExternalKey")
+                        .IsUnique()
+                        .HasDatabaseName("ux_elem_external_key");
 
                     b.ToTable("educational_program_elements", "personal_cabinet");
 
@@ -1254,6 +1300,27 @@ namespace PersonalCabinetEducationProgram.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("PersonalCabinetEducationProgram.Models.CurriculumImport", b =>
+                {
+                    b.HasOne("PersonalCabinetEducationProgram.Models.EducationalProgram", "EducationalProgram")
+                        .WithMany("CurriculumImports")
+                        .HasForeignKey("EducationalProgramId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_curriculum_import_program");
+
+                    b.HasOne("PersonalCabinetEducationProgram.Models.User", "ImportedByUser")
+                        .WithMany("CurriculumImports")
+                        .HasForeignKey("ImportedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_curriculum_import_user");
+
+                    b.Navigation("EducationalProgram");
+
+                    b.Navigation("ImportedByUser");
+                });
+
             modelBuilder.Entity("PersonalCabinetEducationProgram.Models.EducationalProgramAssignment", b =>
                 {
                     b.HasOne("PersonalCabinetEducationProgram.Models.Departments", "Department")
@@ -1392,6 +1459,8 @@ namespace PersonalCabinetEducationProgram.Migrations
                 {
                     b.Navigation("Assignments");
 
+                    b.Navigation("CurriculumImports");
+
                     b.Navigation("Elements");
 
                     b.Navigation("Managers");
@@ -1413,6 +1482,8 @@ namespace PersonalCabinetEducationProgram.Migrations
                     b.Navigation("AuditLogs");
 
                     b.Navigation("Comments");
+
+                    b.Navigation("CurriculumImports");
 
                     b.Navigation("EducationalProgramManagers");
 

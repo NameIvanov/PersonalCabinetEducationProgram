@@ -34,7 +34,9 @@ namespace PersonalCabinetEducationProgram.Services
             page = Math.Max(1, page);
             var tabType = tab switch
             {
+                "modules" => EducationalProgramElementTypes.Module,
                 "practices" => EducationalProgramElementTypes.Practice,
+                "coursework" => EducationalProgramElementTypes.Coursework,
                 "gia" => EducationalProgramElementTypes.Gia,
                 _ => EducationalProgramElementTypes.Discipline
             };

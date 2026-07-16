@@ -41,7 +41,9 @@
 
     var mainElements = Model.Where(e => e.TypeElement == "Main").ToList();
     var disciplines = Model.Where(e => e.TypeElement == "Discipline").ToList();
+    var modules = Model.Where(e => e.TypeElement == "Module").ToList();
     var practices = Model.Where(e => e.TypeElement == "Practice").ToList();
+    var coursework = Model.Where(e => e.TypeElement == "Coursework").ToList();
     var gia = Model.Where(e => e.TypeElement == "GIA").ToList();
 
     int countNew = statusValues.Count(s => string.IsNullOrEmpty(PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(s)));
@@ -249,8 +251,16 @@
                                        asp-action="Index" asp-all-route-data="@ElementRouteData("disciplines", 1, elementSort, elementDirection, includeTab: false)">Дисциплины</a>
                                 </li>
                                 <li class="nav-item">
+                                    <a class="nav-link tab-custom @(activeTab == "modules" ? "active" : "")"
+                                       asp-action="Index" asp-all-route-data="@ElementRouteData("modules", 1, elementSort, elementDirection, includeTab: false)">Модули</a>
+                                </li>
+                                <li class="nav-item">
                                     <a class="nav-link tab-custom @(activeTab == "practices" ? "active" : "")"
                                        asp-action="Index" asp-all-route-data="@ElementRouteData("practices", 1, elementSort, elementDirection, includeTab: false)">Практика</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link tab-custom @(activeTab == "coursework" ? "active" : "")"
+                                       asp-action="Index" asp-all-route-data="@ElementRouteData("coursework", 1, elementSort, elementDirection, includeTab: false)">Курсовые</a>
                                 </li>
                                 <li class="nav-item">
                                     <a class="nav-link tab-custom @(activeTab == "gia" ? "active" : "")"
@@ -277,7 +287,9 @@
                                 @{
                                     var tabElements = activeTab switch
                                     {
+                                        "modules" => modules,
                                         "practices" => practices,
+                                        "coursework" => coursework,
                                         "gia" => gia,
                                         _ => disciplines
                                     };

@@ -43,6 +43,21 @@ namespace PersonalCabinetEducationProgram.Models
         [Column("version")]
         public int Version { get; set; } = 1;
 
+        [Column("external_source")]
+        [MaxLength(20)]
+        public string? ExternalSource { get; set; }
+
+        [Column("external_key")]
+        [MaxLength(300)]
+        public string? ExternalKey { get; set; }
+
+        [Column("parent_external_key")]
+        [MaxLength(300)]
+        public string? ParentExternalKey { get; set; }
+
+        [Column("last_imported_at")]
+        public DateTime? LastImportedAt { get; set; }
+
         // Навигации
         public EducationalProgram EducationalProgram { get; set; } = null!;
         public ICollection<EducationalProgramElementComment> Comments { get; set; } = [];

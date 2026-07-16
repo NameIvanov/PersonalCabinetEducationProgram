@@ -1,0 +1,79 @@
+@model PersonalCabinetEducationProgram.ViewModels.CurriculumImportPreviewViewModel
+@{
+    ViewData["Title"] = "Предварительный просмотр PLX";
+    var groupedElements = Model.Preview.Elements
+        .GroupBy(element => element.TypeElement)
+        .OrderBy(group => Array.IndexOf(EducationalProgramElementTypes.All, group.Key))
+        .ToList();
+}
+
+<div class="container py-4">
+    <a asp-action="Index" asp-route-programId="@Model.Program.Id" class="text-decoration-none">← Отменить импорт</a>
+    <div class="mt-2 mb-4">
+        <h3 class="fw-bold mb-1">Предварительный просмотр</h3>
+        <div class="text-muted">@Model.OriginalFileName</div>
+    </div>
+
+    @if (Model.Preview.Warnings.Count > 0)
+    {
+        <div class="alert alert-warning">
+            <ul class="mb-0 ps-3">
+                @foreach (var warning in Model.Preview.Warnings)
+                {
+                    <li>@warning</li>
+                }
+            </ul>
+        </div>
+    }
+
+    <section class="border rounded-2 p-3 mb-4">
+        <div class="row g-3">
+            <div class="col-12 col-md-4"><div class="text-muted small">Шифр</div><div class="fw-semibold">@(Model.Preview.PlanCode.Length > 0 ? Model.Preview.PlanCode : "—")</div></div>
+            <div class="col-12 col-md-8"><div class="text-muted small">Учебный план</div><div class="fw-semibold">@(Model.Preview.PlanName.Length > 0 ? Model.Preview.PlanName : "—")</div></div>
+            <div class="col-6 col-md-3"><div class="text-muted small">Уровень</div><div>@(Model.Preview.EducationalLevel.Length > 0 ? Model.Preview.EducationalLevel : "—")</div></div>
+            <div class="col-6 col-md-3"><div class="text-muted small">Форма</div><div>@(Model.Preview.EducationForm.Length > 0 ? Model.Preview.EducationForm : "—")</div></div>
+            <div class="col-6 col-md-3"><div class="text-muted small">Год начала</div><div>@(Model.Preview.AdmissionYear?.ToString() ?? "—")</div></div>
+            <div class="col-6 col-md-3"><div class="text-muted small">Версия АС</div><div>@(Model.Preview.SourceAppVersion.Length > 0 ? Model.Preview.SourceAppVersion : "—")</div></div>
+        </div>
+    </section>
+
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        @foreach (var group in groupedElements)
+        {
+            <span class="badge text-bg-light border">@EducationalProgramElementTypes.GetDisplayName(group.Key): @group.Count()</span>
+        }
+    </div>
+
+    <div class="table-responsive border rounded-2 mb-4" style="max-height: 55vh;">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light sticky-top">
+                <tr>
+                    <th>Тип</th>
+                    <th>Шифр</th>
+                    <th>Наименование</th>
+                    <th>Нагрузка</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var element in Model.Preview.Elements)
+                {
+                    <tr>
+                        <td>@EducationalProgramElementTypes.GetDisplayName(element.TypeElement)</td>
+                        <td class="text-muted small">@(element.Code.Length > 0 ? element.Code : "—")</td>
+                        <td>@element.Name</td>
+                        <td class="text-muted small">@(element.Details.Length > 0 ? element.Details : "—")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <div class="d-flex justify-content-end gap-2">
+        <a asp-action="Index" asp-route-programId="@Model.Program.Id" class="btn btn-outline-secondary">Отмена</a>
+        <form asp-action="Apply" method="post">
+            <input type="hidden" name="programId" value="@Model.Program.Id" />
+            <input type="hidden" name="token" value="@Model.Token" />
+            <button type="submit" class="btn btn-primary">Импортировать структуру</button>
+        </form>
+    </div>
+</div>

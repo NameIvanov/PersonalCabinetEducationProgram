@@ -41,5 +41,6 @@ namespace PersonalCabinetEducationProgram.Models
         public ICollection<EducationalProgramElement> Elements { get; set; } = [];
         public ICollection<EducationalProgramManager> Managers { get; set; } = [];
         public ICollection<EducationalProgramAssignment> Assignments { get; set; } = [];
+        public ICollection<CurriculumImport> CurriculumImports { get; set; } = [];
     }
 }

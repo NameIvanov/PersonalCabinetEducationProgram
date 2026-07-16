@@ -18,5 +18,7 @@ public class MigrationRegistrationTests
 
         Assert.Contains("20260711000100_AddElementFileGroups", context.Database.GetMigrations());
         Assert.Contains("20260716000100_AddProgramRevisionRequiredStatus", context.Database.GetMigrations());
+        Assert.Contains("20260717000100_AddPlxCurriculumImports", context.Database.GetMigrations());
+        Assert.False(context.Database.HasPendingModelChanges());
     }
 }

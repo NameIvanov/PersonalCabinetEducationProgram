@@ -1,0 +1,106 @@
+@model PersonalCabinetEducationProgram.ViewModels.CurriculumImportIndexViewModel
+@{
+    ViewData["Title"] = "Импорт учебного плана";
+    var backController = User.IsInRole(AppRoles.Admin) ? "Admin" : "ManagerHome";
+    var backAction = User.IsInRole(AppRoles.Admin) ? "ProgramDetails" : "Index";
+    var backRouteName = User.IsInRole(AppRoles.Admin) ? "id" : "programId";
+    var backRoute = new Dictionary<string, string> { [backRouteName] = Model.Program.Id.ToString() };
+}
+
+<div class="container py-4">
+    <a asp-controller="@backController" asp-action="@backAction" asp-all-route-data="@backRoute" class="text-decoration-none">← Назад к ОПОП</a>
+    <div class="d-flex justify-content-between align-items-start gap-3 mt-2 mb-4">
+        <div>
+            <h3 class="fw-bold mb-1">Импорт учебного плана</h3>
+            <div class="text-muted">@Model.Program.CodeReferral @Model.Program.Name</div>
+        </div>
+    </div>
+
+    @if (TempData["ErrorMessage"] is string errorMessage)
+    {
+        <div class="alert alert-danger">@errorMessage</div>
+    }
+    @if (TempData["SuccessMessage"] is string successMessage)
+    {
+        <div class="alert alert-success">@successMessage</div>
+    }
+    @if (TempData["WarningMessage"] is string warningMessage)
+    {
+        <div class="alert alert-warning">@warningMessage</div>
+    }
+
+    <section class="border rounded-2 p-3 mb-4">
+        <form asp-action="Preview" method="post" enctype="multipart/form-data" class="row g-3 align-items-end">
+            <input type="hidden" name="programId" value="@Model.Program.Id" />
+            <div class="col-12 col-lg-9">
+                <label for="plxFile" class="form-label fw-semibold">Файл учебного плана</label>
+                <input id="plxFile" name="file" type="file" accept=".plx" class="form-control" required />
+                <div class="form-text">PLX, не более 20 МБ</div>
+            </div>
+            <div class="col-12 col-lg-3">
+                <button type="submit" class="btn btn-primary w-100">Предварительный просмотр</button>
+            </div>
+        </form>
+    </section>
+
+    <section>
+        <h4 class="fw-bold mb-3">История импортов</h4>
+        <div class="table-responsive border rounded-2">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Дата</th>
+                        <th>Файл</th>
+                        <th>Автор</th>
+                        <th>Результат</th>
+                        <th>Предупреждения</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var import in Model.Imports)
+                    {
+                        <tr>
+                            <td class="text-nowrap">@import.ImportedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                            <td>
+                                <a asp-action="Download" asp-route-id="@import.Id">@import.OriginalFileName</a>
+                                @if (!string.IsNullOrWhiteSpace(import.PlanCode))
+                                {
+                                    <div class="text-muted small">@import.PlanCode</div>
+                                }
+                            </td>
+                            <td>@import.ImportedByUser?.FullName</td>
+                            <td class="small">
+                                Создано: @import.CreatedCount<br />
+                                Обновлено: @import.UpdatedCount<br />
+                                В архив: @import.ArchivedCount<br />
+                                Пропущено: @import.SkippedCount
+                            </td>
+                            <td>
+                                @if (import.Warnings.Count > 0)
+                                {
+                                    <details>
+                                        <summary>@import.Warnings.Count</summary>
+                                        <ul class="mb-0 mt-2 ps-3 small">
+                                            @foreach (var warning in import.Warnings)
+                                            {
+                                                <li>@warning</li>
+                                            }
+                                        </ul>
+                                    </details>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    @if (Model.Imports.Count == 0)
+                    {
+                        <tr><td colspan="5" class="text-center text-muted py-4">Импортов пока не было</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>

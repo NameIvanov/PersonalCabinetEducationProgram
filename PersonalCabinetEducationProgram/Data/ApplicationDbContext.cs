@@ -19,6 +19,7 @@ namespace PersonalCabinetEducationProgram.Data
         public DbSet<Notification> Notifications { get; set; }
         public DbSet<EducationalProgramElementFile> EducationalProgramElementFiles { get; set; }
         public DbSet<AuditLog> AuditLogs { get; set; }
+        public DbSet<CurriculumImport> CurriculumImports { get; set; }
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) { }
 
@@ -128,6 +129,9 @@ namespace PersonalCabinetEducationProgram.Data
             modelBuilder.Entity<EducationalProgramElement>(entity =>
             {
                 entity.Property(e => e.Version).IsConcurrencyToken().HasDefaultValue(1);
+                entity.Property(e => e.ExternalSource).HasMaxLength(20);
+                entity.Property(e => e.ExternalKey).HasMaxLength(300);
+                entity.Property(e => e.ParentExternalKey).HasMaxLength(300);
                 entity.HasIndex(e => e.IsArchived).HasDatabaseName("ix_elem_archived");
                 entity.HasOne(e => e.EducationalProgram)
                     .WithMany(p => p.Elements)
@@ -136,6 +140,28 @@ namespace PersonalCabinetEducationProgram.Data
                     .HasConstraintName("fk_elem_prog");
 
                 entity.HasIndex(e => e.EducationalProgramId).HasDatabaseName("ix_elem_prog");
+                entity.HasIndex(e => new { e.EducationalProgramId, e.ExternalSource, e.ExternalKey })
+                    .IsUnique()
+                    .HasDatabaseName("ux_elem_external_key");
+            });
+
+            modelBuilder.Entity<CurriculumImport>(entity =>
+            {
+                entity.HasOne(import => import.EducationalProgram)
+                    .WithMany(program => program.CurriculumImports)
+                    .HasForeignKey(import => import.EducationalProgramId)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("fk_curriculum_import_program");
+
+                entity.HasOne(import => import.ImportedByUser)
+                    .WithMany(user => user.CurriculumImports)
+                    .HasForeignKey(import => import.ImportedByUserId)
+                    .OnDelete(DeleteBehavior.Restrict)
+                    .HasConstraintName("fk_curriculum_import_user");
+
+                entity.HasIndex(import => import.EducationalProgramId).HasDatabaseName("ix_curriculum_import_program");
+                entity.HasIndex(import => import.ImportedByUserId).HasDatabaseName("ix_curriculum_import_user");
+                entity.HasIndex(import => import.ImportedAt).HasDatabaseName("ix_curriculum_import_date");
             });
 
             modelBuilder.Entity<EducationalProgramElementComment>(entity =>

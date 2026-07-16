@@ -41,7 +41,9 @@
 
     var mainElements = Model.Where(e => e.TypeElement == "Main").ToList();
     var disciplines = Model.Where(e => e.TypeElement == "Discipline").ToList();
+    var modules = Model.Where(e => e.TypeElement == "Module").ToList();
     var practices = Model.Where(e => e.TypeElement == "Practice").ToList();
+    var coursework = Model.Where(e => e.TypeElement == "Coursework").ToList();
     var gia = Model.Where(e => e.TypeElement == "GIA").ToList();
 
     int countNew = statusValues.Count(s => string.IsNullOrEmpty(PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(s)));
@@ -110,7 +112,11 @@
                         <div class="col-12 col-xl-5">
                             <div class="card shadow-sm rounded-4 h-100">
                                 <div class="card-body p-4">
-                                    <h4 class="fw-bold mb-2">@selectedProgram.CodeReferral «@selectedProgram.Name»</h4>
+                                    <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                                        <h4 class="fw-bold mb-0">@selectedProgram.CodeReferral «@selectedProgram.Name»</h4>
+                                        <a asp-controller="CurriculumImport" asp-action="Index" asp-route-programId="@selectedProgram.Id"
+                                           class="btn btn-outline-primary btn-sm text-nowrap">Импорт PLX</a>
+                                    </div>
                                     @{ var assignment = selectedProgram.Assignments?.FirstOrDefault(); }
                                     @if (assignment != null)
                                     {
@@ -254,8 +260,16 @@
                                        asp-action="Index" asp-all-route-data="@ElementRouteData("disciplines", 1, elementSort, elementDirection, includeTab: false)">Дисциплины</a>
                                 </li>
                                 <li class="nav-item">
+                                    <a class="nav-link tab-custom @(activeTab == "modules" ? "active" : "")"
+                                       asp-action="Index" asp-all-route-data="@ElementRouteData("modules", 1, elementSort, elementDirection, includeTab: false)">Модули</a>
+                                </li>
+                                <li class="nav-item">
                                     <a class="nav-link tab-custom @(activeTab == "practices" ? "active" : "")"
                                        asp-action="Index" asp-all-route-data="@ElementRouteData("practices", 1, elementSort, elementDirection, includeTab: false)">Практика</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link tab-custom @(activeTab == "coursework" ? "active" : "")"
+                                       asp-action="Index" asp-all-route-data="@ElementRouteData("coursework", 1, elementSort, elementDirection, includeTab: false)">Курсовые</a>
                                 </li>
                                 <li class="nav-item">
                                     <a class="nav-link tab-custom @(activeTab == "gia" ? "active" : "")"
@@ -282,7 +296,9 @@
                                 @{
                                     var tabElements = activeTab switch
                                     {
+                                        "modules" => modules,
                                         "practices" => practices,
+                                        "coursework" => coursework,
                                         "gia" => gia,
                                         _ => disciplines
                                     };

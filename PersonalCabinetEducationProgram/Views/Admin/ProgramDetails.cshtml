@@ -20,10 +20,12 @@
     {
         { "Main", "Основные документы" },
         { "Discipline", "Дисциплины" },
+        { "Module", "Модули" },
         { "Practice", "Практики" },
+        { "Coursework", "Курсовые работы" },
         { "GIA", "ГИА" }
     };
-    var typeOrder = new[] { "Main", "Discipline", "Practice", "GIA" };
+    var typeOrder = new[] { "Main", "Module", "Discipline", "Practice", "Coursework", "GIA" };
     var programStatusClass = Model.Status switch
     {
         "Согласована" => "bg-success-subtle text-success",
@@ -63,6 +65,7 @@
         <div class="d-flex gap-2 flex-wrap justify-content-end">
             @if (!Model.IsArchived)
             {
+                <a asp-controller="CurriculumImport" asp-action="Index" asp-route-programId="@Model.Id" class="btn btn-outline-primary btn-sm">Импорт PLX</a>
                 <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#editProgramModal">Изменить ОПОП</button>
             }
             <a asp-action="ProgramDetails" asp-route-id="@Model.Id" asp-route-showArchivedElements="@(!showArchivedElements)" class="btn btn-outline-secondary btn-sm">
