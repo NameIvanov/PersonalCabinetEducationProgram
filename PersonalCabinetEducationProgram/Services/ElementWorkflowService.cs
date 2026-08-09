@@ -161,6 +161,78 @@ namespace PersonalCabinetEducationProgram.Services
                 allowedFrom: [ElementApprovalStatus.Uploaded]);
         }
 
+        public async Task<EducationalProgramElement?> RemoveCurrentFileAsync(
+            int fileId,
+            int userId,
+            string reason = "Удалён из текущего комплекта")
+        {
+            var file = await _context.EducationalProgramElementFiles
+                .Include(f => f.Element).ThenInclude(e => e.EducationalProgram)
+                .Include(f => f.Element).ThenInclude(e => e.Files)
+                .FirstOrDefaultAsync(f => f.Id == fileId);
+            if (file == null)
+                return null;
+
+            EnsureCurrentGroupIsEditable(file);
+            var element = file.Element;
+            var oldStatus = ElementApprovalStatus.Normalize(element.StatusApprovals);
+            MarkRemoved(file, userId, reason);
+            UpdateCurrentFileSummary(element);
+            element.StatusApprovals = element.Files.Any(f => f.IsCurrent)
+                ? ElementApprovalStatus.Uploaded
+                : ElementApprovalStatus.NotUploaded;
+            element.Version++;
+
+            AddHistory(element.Id, userId, oldStatus, element.StatusApprovals,
+                $"Файл «{file.OriginalFileName}» удалён из текущего комплекта.");
+            _auditService.Record(userId, "EducationalProgramElement", element.Id, "CurrentFileRemoved",
+                $"Файл {file.OriginalFileName}; итерация {file.RevisionNumber}.");
+            await RecalculateProgramStatusAsync(element.EducationalProgramId);
+            await _context.SaveChangesAsync();
+            return element;
+        }
+
+        public async Task<EducationalProgramElement?> ReplaceCurrentFileAsync(
+            int fileId,
+            int userId,
+            string storedFileName,
+            string originalFileName)
+        {
+            var file = await _context.EducationalProgramElementFiles
+                .Include(f => f.Element).ThenInclude(e => e.EducationalProgram)
+                .Include(f => f.Element).ThenInclude(e => e.Files)
+                .FirstOrDefaultAsync(f => f.Id == fileId);
+            if (file == null)
+                return null;
+
+            EnsureCurrentGroupIsEditable(file);
+            var element = file.Element;
+            var oldName = file.OriginalFileName;
+            MarkRemoved(file, userId, "Заменён новым файлом");
+            element.Files.Add(new EducationalProgramElementFile
+            {
+                StoredFileName = storedFileName,
+                OriginalFileName = originalFileName,
+                RevisionNumber = file.RevisionNumber,
+                IsCurrent = true,
+                UploadedAt = DateTime.UtcNow,
+                UploadedByUserId = userId
+            });
+            UpdateCurrentFileSummary(element);
+            element.StatusApprovals = ElementApprovalStatus.Uploaded;
+            element.Version++;
+
+            AddHistory(element.Id, userId, ElementApprovalStatus.Uploaded, ElementApprovalStatus.Uploaded,
+                $"Файл «{oldName}» заменён файлом «{originalFileName}».");
+            _auditService.Record(userId, "EducationalProgramElement", element.Id, "CurrentFileReplaced",
+                $"{oldName} -> {originalFileName}; итерация {file.RevisionNumber}.");
+            await _notificationService.CreateForElementAsync(
+                element.Id, userId, NotificationType.FileUploaded, "Файл заменён",
+                $"В элементе «{element.Name}» файл «{oldName}» заменён файлом «{originalFileName}».");
+            await _context.SaveChangesAsync();
+            return element;
+        }
+
         public async Task<EducationalProgramElement?> ChangeStatusAsync(
             int elementId,
             int userId,
@@ -277,11 +349,42 @@ namespace PersonalCabinetEducationProgram.Services
                 UserId = userId,
                 OldStatus = oldStatus,
                 NewStatus = newStatus,
-                ChangeDate = DateTime.Now,
+                ChangeDate = DateTime.UtcNow,
                 Comment = comment,
                 FilePath = filePath,
                 FileName = fileName
             });
+        }
+
+        private static void EnsureCurrentGroupIsEditable(EducationalProgramElementFile file)
+        {
+            var status = ElementApprovalStatus.Normalize(file.Element.StatusApprovals);
+            if (!file.IsCurrent || file.IsRemoved)
+                throw new InvalidOperationException("Файл уже не входит в текущий комплект.");
+            if (file.IsSubmitted || status == ElementApprovalStatus.OnApproval)
+                throw new InvalidOperationException("Зафиксированный комплект нельзя изменять.");
+            if (ElementApprovalStatus.IsLockedForNonAdmin(status))
+                throw new InvalidOperationException("Согласованный или опубликованный элемент нельзя изменять.");
+        }
+
+        private static void MarkRemoved(EducationalProgramElementFile file, int userId, string reason)
+        {
+            file.IsCurrent = false;
+            file.IsRemoved = true;
+            file.RemovedAt = DateTime.UtcNow;
+            file.RemovedByUserId = userId;
+            file.RemovalReason = reason;
+        }
+
+        private static void UpdateCurrentFileSummary(EducationalProgramElement element)
+        {
+            var current = element.Files
+                .Where(f => f.IsCurrent && !f.IsRemoved)
+                .OrderByDescending(f => f.UploadedAt)
+                .FirstOrDefault();
+            element.FilePath = current?.StoredFileName;
+            element.FileName = current?.OriginalFileName;
+            element.UploadDate = current == null ? null : DateOnly.FromDateTime(current.UploadedAt);
         }
     }
 }

@@ -221,6 +221,7 @@ namespace PersonalCabinetEducationProgram.Data
 
             modelBuilder.Entity<EducationalProgramElementFile>(entity =>
             {
+                entity.Property(f => f.RemovalReason).HasMaxLength(100);
                 entity.HasOne(f => f.Element)
                     .WithMany(e => e.Files)
                     .HasForeignKey(f => f.EducationalProgramElementId)
@@ -470,6 +471,10 @@ namespace PersonalCabinetEducationProgram.Data
             modelBuilder.Entity<User>(entity =>
             {
                 entity.ToTable("users");
+                entity.Property(u => u.PreferredTheme)
+                    .HasColumnName("preferred_theme")
+                    .HasMaxLength(16)
+                    .HasDefaultValue(UserTheme.Light);
                 entity.Property(u => u.Id).HasColumnName("Id");
                 entity.Property(u => u.UserName).HasColumnName("username").HasMaxLength(100);
                 entity.Property(u => u.NormalizedUserName).HasColumnName("normalized_username").HasMaxLength(100);

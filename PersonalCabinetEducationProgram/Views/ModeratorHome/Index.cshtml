@@ -296,6 +296,7 @@
                                 }
                                 @foreach (var element in tabElements)
                                 {
+                                    var tabCommentCount = allComments?.Count(c => c.EducationalProgramElementId == element.Id) ?? 0;
                                     <tr>
                                         <td class="text-muted small">@element.Description</td>
                                         <td>@element.Name</td>
@@ -314,8 +315,14 @@
                                                     <button type="button" class="btn btn-outline-warning btn-sm" title="Снять с публикации"
                                                             onclick="showUnpublishModal(@element.Id)">🚫</button>
                                                 }
-                                                <a asp-action="Comments" asp-route-elementId="@element.Id"
-                                                   class="btn btn-outline-secondary btn-sm" title="Комментарии">💬</a>
+                                                <span class="@(tabCommentCount > 0 ? "action-with-count" : "")">
+                                                    <a asp-action="Comments" asp-route-elementId="@element.Id"
+                                                       class="btn btn-outline-secondary btn-sm" title="Комментарии">💬</a>
+                                                    @if (tabCommentCount > 0)
+                                                    {
+                                                        <span class="action-count badge rounded-pill bg-secondary">@tabCommentCount</span>
+                                                    }
+                                                </span>
                                                 <a asp-action="History" asp-route-elementId="@element.Id"
                                                    class="btn btn-outline-secondary btn-sm" title="История">🕐</a>
                                             </div>
@@ -412,8 +419,14 @@
                         <button type="button" class="btn btn-outline-warning btn-sm" title="Снять с публикации"
                                 onclick="showUnpublishModal(@element.Id)">🚫</button>
                     }
-                    <a asp-action="Comments" asp-route-elementId="@element.Id"
-                       class="btn btn-outline-secondary btn-sm" title="Комментарии (@commentCount)">💬 @if(commentCount > 0){<span>@commentCount</span>}</a>
+                    <span class="@(commentCount > 0 ? "action-with-count" : "")">
+                        <a asp-action="Comments" asp-route-elementId="@element.Id"
+                           class="btn btn-outline-secondary btn-sm" title="Комментарии (@commentCount)">💬</a>
+                        @if (commentCount > 0)
+                        {
+                            <span class="action-count badge rounded-pill bg-secondary">@commentCount</span>
+                        }
+                    </span>
                     <a asp-action="History" asp-route-elementId="@element.Id"
                        class="btn btn-outline-secondary btn-sm" title="История">🕐</a>
                 </div>

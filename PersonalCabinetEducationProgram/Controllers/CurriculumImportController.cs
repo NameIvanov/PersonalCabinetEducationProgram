@@ -34,7 +34,13 @@ namespace PersonalCabinetEducationProgram.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> Index(int programId, CancellationToken cancellationToken)
+        public async Task<IActionResult> Index(
+            int programId,
+            int page = 1,
+            string sort = "date",
+            string direction = "desc",
+            [FromQuery] CurriculumImportListFiltersViewModel? filters = null,
+            CancellationToken cancellationToken = default)
         {
             if (!await _accessService.CanManageProgramAsync(User, programId))
                 return Forbid();
@@ -45,17 +51,46 @@ namespace PersonalCabinetEducationProgram.Controllers
             if (program == null)
                 return NotFound();
 
-            var imports = await _context.CurriculumImports
+            filters ??= new CurriculumImportListFiltersViewModel();
+            const int pageSize = 25;
+            page = Math.Max(1, page);
+            var allImports = await _context.CurriculumImports
                 .Where(item => item.EducationalProgramId == programId)
                 .Include(item => item.ImportedByUser)
-                .OrderByDescending(item => item.ImportedAt)
                 .AsNoTracking()
                 .ToListAsync(cancellationToken);
+            IEnumerable<CurriculumImport> query = allImports.Where(item =>
+                ListFilterMatcher.Text(item.OriginalFileName, filters.FileName) &&
+                ListFilterMatcher.Text(item.PlanCode, filters.PlanCode) &&
+                ListFilterMatcher.Text(item.ImportedByUser?.FullName, filters.Author) &&
+                ListFilterMatcher.Date(item.ImportedAt, filters.DateFrom, filters.DateTo));
+            var descending = direction.Equals("desc", StringComparison.OrdinalIgnoreCase);
+            query = sort switch
+            {
+                "file" => descending ? query.OrderByDescending(i => i.OriginalFileName) : query.OrderBy(i => i.OriginalFileName),
+                "author" => descending ? query.OrderByDescending(i => i.ImportedByUser.FullName) : query.OrderBy(i => i.ImportedByUser.FullName),
+                "code" => descending ? query.OrderByDescending(i => i.PlanCode) : query.OrderBy(i => i.PlanCode),
+                "created" => descending ? query.OrderByDescending(i => i.CreatedCount) : query.OrderBy(i => i.CreatedCount),
+                "updated" => descending ? query.OrderByDescending(i => i.UpdatedCount) : query.OrderBy(i => i.UpdatedCount),
+                "archived" => descending ? query.OrderByDescending(i => i.ArchivedCount) : query.OrderBy(i => i.ArchivedCount),
+                "skipped" => descending ? query.OrderByDescending(i => i.SkippedCount) : query.OrderBy(i => i.SkippedCount),
+                "warnings" => descending ? query.OrderByDescending(i => i.Warnings.Count) : query.OrderBy(i => i.Warnings.Count),
+                _ => descending ? query.OrderByDescending(i => i.ImportedAt) : query.OrderBy(i => i.ImportedAt)
+            };
+            var totalCount = query.Count();
+            var totalPages = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
+            page = Math.Min(page, totalPages);
+            var imports = query.Skip((page - 1) * pageSize).Take(pageSize).ToList();
 
             return View(new CurriculumImportIndexViewModel
             {
                 Program = program,
-                Imports = imports
+                Imports = imports,
+                Filters = filters,
+                Page = page,
+                TotalPages = totalPages,
+                Sort = sort,
+                Direction = descending ? "desc" : "asc"
             });
         }
 
@@ -88,14 +123,15 @@ namespace PersonalCabinetEducationProgram.Controllers
                 await using (var stream = file.OpenReadStream())
                     preview = await _parser.ParseAsync(stream, cancellationToken);
 
-                AddCompatibilityWarnings(program, preview);
+                var requiresConfirmation = AddCompatibilityWarnings(program, preview);
                 var staged = await _storage.StageAsync(file, GetCurrentUserId(), programId, cancellationToken);
                 return View(new CurriculumImportPreviewViewModel
                 {
                     Program = program,
                     Preview = preview,
                     Token = staged.Token,
-                    OriginalFileName = staged.OriginalFileName
+                    OriginalFileName = staged.OriginalFileName,
+                    RequiresMismatchConfirmation = requiresConfirmation
                 });
             }
             catch (Exception ex) when (ex is InvalidOperationException or InvalidDataException or IOException or XmlException)
@@ -109,6 +145,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         public async Task<IActionResult> Apply(
             int programId,
             string token,
+            bool confirmMismatch,
             CancellationToken cancellationToken)
         {
             if (!await _accessService.CanManageProgramAsync(User, programId))
@@ -127,7 +164,9 @@ namespace PersonalCabinetEducationProgram.Controllers
                     .AsNoTracking()
                     .FirstOrDefaultAsync(item => item.Id == programId && !item.IsArchived, cancellationToken)
                     ?? throw new InvalidOperationException("ОПОП не найдена или находится в архиве.");
-                AddCompatibilityWarnings(program, preview);
+                var requiresConfirmation = AddCompatibilityWarnings(program, preview);
+                if (requiresConfirmation && !confirmMismatch)
+                    throw new InvalidOperationException("Импорт отменён: подтвердите отдельно несовпадение данных PLX и выбранной ОПОП.");
 
                 storedPath = await _storage.CopyToArchiveAsync(staged, cancellationToken);
                 var result = await _importService.ApplyAsync(
@@ -177,11 +216,13 @@ namespace PersonalCabinetEducationProgram.Controllers
             return PhysicalFile(filePath, "application/xml", import.OriginalFileName);
         }
 
-        private void AddCompatibilityWarnings(EducationalProgram program, PlxImportPreview preview)
+        private bool AddCompatibilityWarnings(EducationalProgram program, PlxImportPreview preview)
         {
+            var mismatch = false;
             if (!string.IsNullOrWhiteSpace(preview.PlanCode) &&
                 !program.CodeReferral.Equals(preview.PlanCode, StringComparison.CurrentCultureIgnoreCase))
             {
+                mismatch = true;
                 preview.Warnings.Add($"Шифр в PLX ({preview.PlanCode}) отличается от шифра выбранной ОПОП ({program.CodeReferral}).");
             }
 
@@ -189,8 +230,10 @@ namespace PersonalCabinetEducationProgram.Controllers
                 !program.EducationalLevel.Contains(preview.EducationalLevel, StringComparison.CurrentCultureIgnoreCase) &&
                 !preview.EducationalLevel.Contains(program.EducationalLevel, StringComparison.CurrentCultureIgnoreCase))
             {
+                mismatch = true;
                 preview.Warnings.Add($"Уровень образования в PLX ({preview.EducationalLevel}) отличается от выбранной ОПОП ({program.EducationalLevel}).");
             }
+            return mismatch;
         }
 
         private int GetCurrentUserId() =>

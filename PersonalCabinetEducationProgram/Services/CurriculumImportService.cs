@@ -52,7 +52,9 @@ namespace PersonalCabinetEducationProgram.Services
                 .GroupBy(element => element.ExternalKey!, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
 
-            await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            await using var transaction = _context.Database.IsRelational()
+                ? await _context.Database.BeginTransactionAsync(cancellationToken)
+                : null;
             try
             {
                 foreach (var candidate in preview.Elements)
@@ -175,7 +177,8 @@ namespace PersonalCabinetEducationProgram.Services
                     $"Файл: {import.OriginalFileName}; создано: {createdCount}; обновлено: {updatedCount}; архивировано: {archivedCount}; пропущено: {skippedCount}.");
 
                 await _context.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
+                if (transaction != null)
+                    await transaction.CommitAsync(cancellationToken);
 
                 return new CurriculumImportResult
                 {
@@ -189,7 +192,8 @@ namespace PersonalCabinetEducationProgram.Services
             }
             catch
             {
-                await transaction.RollbackAsync(cancellationToken);
+                if (transaction != null)
+                    await transaction.RollbackAsync(cancellationToken);
                 throw;
             }
         }

@@ -74,7 +74,7 @@ namespace PersonalCabinetEducationProgram.Services
                 .Select(u => u.Id)
                 .ToListAsync();
 
-            var createdAt = DateTime.Now;
+            var createdAt = DateTime.UtcNow;
             foreach (var recipientId in approvedRecipientIds)
             {
                 _context.Notifications.Add(new Notification
@@ -101,7 +101,7 @@ namespace PersonalCabinetEducationProgram.Services
             if (unread.Count == 0)
                 return;
 
-            var readAt = DateTime.Now;
+            var readAt = DateTime.UtcNow;
             foreach (var notification in unread)
             {
                 notification.IsRead = true;
@@ -117,7 +117,7 @@ namespace PersonalCabinetEducationProgram.Services
                 .Where(n => n.UserId == userId && !n.IsRead)
                 .ToListAsync();
 
-            var readAt = DateTime.Now;
+            var readAt = DateTime.UtcNow;
             foreach (var notification in unread)
             {
                 notification.IsRead = true;

@@ -27,6 +27,19 @@ namespace PersonalCabinetEducationProgram.Models
         [Column("is_submitted")]
         public bool IsSubmitted { get; set; }
 
+        [Column("is_removed")]
+        public bool IsRemoved { get; set; }
+
+        [Column("removed_at")]
+        public DateTime? RemovedAt { get; set; }
+
+        [Column("removed_by_user_id")]
+        public int? RemovedByUserId { get; set; }
+
+        [Column("removal_reason")]
+        [MaxLength(100)]
+        public string? RemovalReason { get; set; }
+
         [Column("uploaded_at")]
         public DateTime UploadedAt { get; set; }
 

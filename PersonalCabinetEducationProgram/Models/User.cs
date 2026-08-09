@@ -18,6 +18,9 @@ namespace PersonalCabinetEducationProgram.Models
         [Column("rejection_reason")]
         public string? RejectionReason { get; set; }
 
+        [Column("preferred_theme")]
+        public string PreferredTheme { get; set; } = UserTheme.Light;
+
         [NotMapped]
         public string Username
         {

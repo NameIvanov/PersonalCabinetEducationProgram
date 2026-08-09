@@ -17,19 +17,22 @@ namespace PersonalCabinetEducationProgram.Controllers
         private readonly ElementWorkflowService _workflowService;
         private readonly NotificationService _notificationService;
         private readonly ElementListQueryService _elementListQueryService;
+        private readonly ElementAccessService _accessService;
 
         public ModeratorHomeController(
             IOptions<FileStorageSettings> storageSettings,
             ApplicationDbContext context,
             ElementWorkflowService workflowService,
             NotificationService notificationService,
-            ElementListQueryService elementListQueryService)
+            ElementListQueryService elementListQueryService,
+            ElementAccessService accessService)
         {
             _storageSettings = storageSettings.Value;
             _context = context;
             _workflowService = workflowService;
             _notificationService = notificationService;
             _elementListQueryService = elementListQueryService;
+            _accessService = accessService;
         }
 
         private int GetCurrentUserId()
@@ -49,16 +52,20 @@ namespace PersonalCabinetEducationProgram.Controllers
                 .Include(p => p.Assignments).ThenInclude(a => a.Faculty)
                 .ToListAsync();
 
-            int? selectedProgramId = programId.HasValue && programs.Any(p => p.Id == programId.Value)
-                ? programId
-                : programs.FirstOrDefault()?.Id;
+            if (programId.HasValue && programs.All(p => p.Id != programId.Value))
+                return Forbid();
+
+            int? selectedProgramId = programId ?? programs.FirstOrDefault()?.Id;
 
             var elementPage = await _elementListQueryService.GetAsync(selectedProgramId, tab, page, sort, direction, filters);
 
             ViewBag.Programs = programs;
             ViewBag.SelectedProgramId = selectedProgramId;
             ViewBag.ActiveTab = tab;
-            ViewBag.Comments = await _context.EducationalProgramElementComment.Include(c => c.User).ToListAsync();
+            ViewBag.Comments = await _context.EducationalProgramElementComment
+                .Where(c => c.Element.EducationalProgramId == selectedProgramId)
+                .Include(c => c.User)
+                .ToListAsync();
             FillElementPagination(elementPage);
 
             return View(elementPage.Elements);
@@ -76,40 +83,44 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         public async Task<IActionResult> Download(int elementId)
         {
+            if (!await _accessService.CanModerateElementAsync(User, elementId))
+                return Forbid();
             await _notificationService.MarkElementReadAsync(GetCurrentUserId(), elementId);
             var element = await _context.EducationalProgramElements
                 .FirstOrDefaultAsync(e => e.Id == elementId && !e.IsArchived && !e.EducationalProgram.IsArchived);
             if (element == null || string.IsNullOrEmpty(element.FilePath))
                 return NotFound();
 
-            var filePath = Path.Combine(_storageSettings.StoragePath, element.FilePath);
-            if (!System.IO.File.Exists(filePath))
+            var filePath = StoredFilePath.Resolve(_storageSettings.StoragePath, element.FilePath);
+            if (filePath == null)
                 return NotFound();
 
-            var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
-            return File(fileBytes, GetContentType(element.FileName), element.FileName ?? "download");
+            return PhysicalFile(filePath, GetContentType(element.FileName), element.FileName ?? "download");
         }
 
         public async Task<IActionResult> Preview(int elementId)
         {
+            if (!await _accessService.CanModerateElementAsync(User, elementId))
+                return Forbid();
             await _notificationService.MarkElementReadAsync(GetCurrentUserId(), elementId);
             var element = await _context.EducationalProgramElements
                 .FirstOrDefaultAsync(e => e.Id == elementId && !e.IsArchived && !e.EducationalProgram.IsArchived);
             if (element == null || string.IsNullOrEmpty(element.FilePath))
                 return NotFound();
 
-            var filePath = Path.Combine(_storageSettings.StoragePath, element.FilePath);
-            if (!System.IO.File.Exists(filePath))
+            var filePath = StoredFilePath.Resolve(_storageSettings.StoragePath, element.FilePath);
+            if (filePath == null)
                 return NotFound();
 
-            var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
             Response.Headers.Append("Content-Disposition", $"inline; filename=\"{element.FileName ?? "preview"}\"");
-            return File(fileBytes, GetContentType(element.FileName));
+            return PhysicalFile(filePath, GetContentType(element.FileName));
         }
 
         [HttpPost]
         public async Task<IActionResult> Publish(int elementId, string? comment)
         {
+            if (!await _accessService.CanModerateElementAsync(User, elementId))
+                return Forbid();
             EducationalProgramElement? element;
             try
             {
@@ -123,6 +134,11 @@ namespace PersonalCabinetEducationProgram.Controllers
                 TempData["ErrorMessage"] = "Элемент уже изменён другим пользователем. Обновите страницу и повторите действие.";
                 return RedirectToAction(nameof(Index));
             }
+            catch (InvalidOperationException ex)
+            {
+                TempData["ErrorMessage"] = ex.Message;
+                return RedirectToAction(nameof(Index));
+            }
 
             if (element == null)
                 return NotFound();
@@ -133,6 +149,8 @@ namespace PersonalCabinetEducationProgram.Controllers
         [HttpPost]
         public async Task<IActionResult> Unpublish(int elementId, string? comment)
         {
+            if (!await _accessService.CanModerateElementAsync(User, elementId))
+                return Forbid();
             EducationalProgramElement? element;
             try
             {
@@ -146,6 +164,11 @@ namespace PersonalCabinetEducationProgram.Controllers
                 TempData["ErrorMessage"] = "Элемент уже изменён другим пользователем. Обновите страницу и повторите действие.";
                 return RedirectToAction(nameof(Index));
             }
+            catch (InvalidOperationException ex)
+            {
+                TempData["ErrorMessage"] = ex.Message;
+                return RedirectToAction(nameof(Index));
+            }
 
             if (element == null)
                 return NotFound();
@@ -156,6 +179,8 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         public async Task<IActionResult> History(int elementId)
         {
+            if (!await _accessService.CanModerateElementAsync(User, elementId))
+                return Forbid();
             await _notificationService.MarkElementReadAsync(GetCurrentUserId(), elementId);
             await FillElementDetailsViewBag(elementId, nameof(ModeratorHomeController).Replace("Controller", ""));
             return View("~/Views/ManagerHome/History.cshtml");
@@ -163,6 +188,8 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         public async Task<IActionResult> Comments(int elementId)
         {
+            if (!await _accessService.CanModerateElementAsync(User, elementId))
+                return Forbid();
             await _notificationService.MarkElementReadAsync(GetCurrentUserId(), elementId);
             await FillElementDetailsViewBag(elementId, nameof(ModeratorHomeController).Replace("Controller", ""));
             var comments = await GetElementComments(elementId);

@@ -56,12 +56,8 @@ namespace PersonalCabinetEducationProgram.Controllers
             if (!await _accessService.CanViewElementAsync(User, history.EducationalProgramElementId))
                 return null;
 
-            var storageRoot = Path.GetFullPath(_storageSettings.StoragePath);
-            var fullPath = Path.GetFullPath(Path.Combine(storageRoot, history.FilePath));
-            var rootPrefix = storageRoot.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-
-            if (!fullPath.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase) ||
-                !System.IO.File.Exists(fullPath))
+            var fullPath = StoredFilePath.Resolve(_storageSettings.StoragePath, history.FilePath);
+            if (fullPath == null)
                 return null;
 
             return (fullPath, history.FileName ?? Path.GetFileName(history.FilePath));

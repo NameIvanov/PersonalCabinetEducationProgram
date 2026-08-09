@@ -228,6 +228,28 @@ namespace PersonalCabinetEducationProgram.ViewModels
         }
     }
 
+    public sealed class CurriculumImportListFiltersViewModel : ListFiltersViewModel
+    {
+        public string? FileName { get; set; }
+        public string? PlanCode { get; set; }
+        public string? Author { get; set; }
+        public DateOnly? DateFrom { get; set; }
+        public DateOnly? DateTo { get; set; }
+
+        public override bool HasAnyFilter => !string.IsNullOrWhiteSpace(FileName) ||
+            !string.IsNullOrWhiteSpace(PlanCode) || !string.IsNullOrWhiteSpace(Author) ||
+            DateFrom.HasValue || DateTo.HasValue;
+
+        protected override void AddRouteValues(Dictionary<string, string> values)
+        {
+            Add(values, nameof(FileName), FileName);
+            Add(values, nameof(PlanCode), PlanCode);
+            Add(values, nameof(Author), Author);
+            Add(values, nameof(DateFrom), DateFrom);
+            Add(values, nameof(DateTo), DateTo);
+        }
+    }
+
     public sealed class LiveFilterFormViewModel
     {
         public required string FormId { get; set; }

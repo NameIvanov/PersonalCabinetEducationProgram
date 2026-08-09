@@ -47,21 +47,6 @@ namespace PersonalCabinetEducationProgram.Controllers
                 return View(model);
             }
 
-            if (user.ApprovalStatus == UserApprovalStatus.Pending)
-            {
-                ModelState.AddModelError(string.Empty, "Ваш аккаунт ожидает подтверждения администратором.");
-                return View(model);
-            }
-
-            if (user.ApprovalStatus == UserApprovalStatus.Rejected)
-            {
-                var reason = string.IsNullOrWhiteSpace(user.RejectionReason)
-                    ? string.Empty
-                    : $" Причина: {user.RejectionReason}";
-                ModelState.AddModelError(string.Empty, $"Ваш аккаунт отклонён администратором.{reason}");
-                return View(model);
-            }
-
             var check = await _signInManager.CheckPasswordSignInAsync(user, model.Password, lockoutOnFailure: true);
             if (!check.Succeeded && IsLegacyPasswordValid(user, model.Password))
             {
@@ -78,6 +63,21 @@ namespace PersonalCabinetEducationProgram.Controllers
             if (!check.Succeeded)
             {
                 AddInvalidCredentialsError();
+                return View(model);
+            }
+
+            if (user.ApprovalStatus == UserApprovalStatus.Pending)
+            {
+                ModelState.AddModelError(string.Empty, "Ваш аккаунт ожидает подтверждения администратором.");
+                return View(model);
+            }
+
+            if (user.ApprovalStatus == UserApprovalStatus.Rejected)
+            {
+                var reason = string.IsNullOrWhiteSpace(user.RejectionReason)
+                    ? string.Empty
+                    : $" Причина: {user.RejectionReason}";
+                ModelState.AddModelError(string.Empty, $"Ваш аккаунт отклонён администратором.{reason}");
                 return View(model);
             }
 

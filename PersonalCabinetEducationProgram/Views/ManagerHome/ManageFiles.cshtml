@@ -1,0 +1,84 @@
+@model PersonalCabinetEducationProgram.Models.EducationalProgramElement
+@using PersonalCabinetEducationProgram.Models
+@using PersonalCabinetEducationProgram.Services
+@{
+    ViewData["Title"] = "Файлы элемента ОПОП";
+    var currentFiles = Model.Files.Where(f => f.IsCurrent && !f.IsRemoved).OrderBy(f => f.OriginalFileName).ToList();
+    var status = ElementApprovalStatus.Normalize(Model.StatusApprovals);
+    var editable = status is ElementApprovalStatus.NotUploaded or ElementApprovalStatus.Uploaded or ElementApprovalStatus.RevisionRequired
+        && !currentFiles.Any(f => f.IsSubmitted);
+}
+
+<div class="container py-4" style="max-width: 920px;">
+    <a asp-action="Index" asp-route-programId="@Model.EducationalProgramId" class="text-decoration-none">← Назад к программе</a>
+    <div class="d-flex justify-content-between align-items-start gap-3 mt-2 mb-4">
+        <div>
+            <h3 class="fw-bold mb-1">Текущий комплект файлов</h3>
+            <div class="text-muted">@Model.Name</div>
+        </div>
+        @await Html.PartialAsync("_StatusBadge", Model.StatusApprovals)
+    </div>
+    @if (TempData["ErrorMessage"] is string errorMessage)
+    {
+        <div class="alert alert-danger">@errorMessage</div>
+    }
+    @if (!editable)
+    {
+        <div class="alert alert-info">Комплект зафиксирован и доступен только для просмотра.</div>
+    }
+
+    @if (editable)
+    {
+        <form method="post" enctype="multipart/form-data" asp-action="Upload" class="border rounded-2 p-3 mb-3">
+            <input type="hidden" name="elementId" value="@Model.Id" />
+            <input type="hidden" name="returnToFiles" value="true" />
+            <div>
+                <label class="form-label fw-semibold" for="currentFilesUpload">Добавить файлы в текущий комплект</label>
+                <div class="input-group">
+                    <input id="currentFilesUpload" type="file" name="files" multiple accept=".pdf,.doc,.docx"
+                           data-max-size="52428800" class="form-control" required />
+                    <button type="submit" class="btn btn-primary" onclick="return window.validateUploadFile(document.getElementById('currentFilesUpload'))">Добавить</button>
+                </div>
+                <div class="form-text">PDF, DOC или DOCX. Сейчас файлов: @currentFiles.Count из @FileUploadLimits.MaxFilesPerGroup.</div>
+            </div>
+        </form>
+    }
+
+    <div class="table-responsive border rounded-2">
+        <table class="table align-middle mb-0">
+            <thead class="table-light"><tr><th>Файл</th><th>Загружен</th><th>Действия</th></tr></thead>
+            <tbody>
+            @foreach (var file in currentFiles)
+            {
+                <tr>
+                    <td>@file.OriginalFileName</td>
+                    <td class="text-nowrap">@file.UploadedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                    <td>
+                        <div class="d-flex flex-wrap gap-2">
+                            <a asp-controller="ElementFiles" asp-action="Preview" asp-route-id="@file.Id" target="_blank" class="btn btn-outline-secondary btn-sm">Открыть</a>
+                            <a asp-controller="ElementFiles" asp-action="Download" asp-route-id="@file.Id" class="btn btn-outline-secondary btn-sm">Скачать</a>
+                            @if (editable)
+                            {
+                                <form method="post" enctype="multipart/form-data" asp-action="ReplaceCurrentFile" class="d-inline">
+                                    <input type="hidden" name="fileId" value="@file.Id" />
+                                    <label class="btn btn-outline-primary btn-sm mb-0">Заменить
+                                        <input type="file" name="file" accept=".pdf,.doc,.docx" data-max-size="52428800" hidden onchange="if (window.validateUploadFile(this)) this.form.submit()" />
+                                    </label>
+                                </form>
+                                <form method="post" asp-action="RemoveCurrentFile" class="d-inline" onsubmit="return confirm('Удалить файл из текущего комплекта? Он останется в истории.');">
+                                    <input type="hidden" name="fileId" value="@file.Id" />
+                                    <button type="submit" class="btn btn-outline-danger btn-sm">Удалить</button>
+                                </form>
+                            }
+                        </div>
+                    </td>
+                </tr>
+            }
+            @if (currentFiles.Count == 0)
+            {
+                <tr><td colspan="3" class="text-center text-muted py-4">Текущий комплект пуст</td></tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>

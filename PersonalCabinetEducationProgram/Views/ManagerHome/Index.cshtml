@@ -305,6 +305,8 @@
                                 }
                                 @foreach (var element in tabElements)
                                 {
+                                    var tabCommentCount = allComments?.Count(c => c.EducationalProgramElementId == element.Id) ?? 0;
+                                    var currentFileCount = element.Files.Count(f => f.IsCurrent && !f.IsRemoved);
                                     <tr>
                                         <td class="text-muted small">@element.Description</td>
                                         <td>@element.Name</td>
@@ -312,16 +314,13 @@
                                         <td class="small">@(element.UploadDate?.ToString("dd.MM.yyyy") ?? "—")</td>
                                         <td>
                                             <div class="d-flex gap-1 flex-wrap">
-                                                @await Html.PartialAsync("_ElementFileButtons", element)
-                                                @if (PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(element.StatusApprovals) is PersonalCabinetEducationProgram.Models.ElementApprovalStatus.NotUploaded or PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Uploaded or PersonalCabinetEducationProgram.Models.ElementApprovalStatus.RevisionRequired)
-                                                {
-                                                    <form method="post" enctype="multipart/form-data" asp-controller="ManagerHome" asp-action="Upload" class="d-inline">
-                                                        <input type="hidden" name="elementId" value="@element.Id" />
-                                                        <label class="btn btn-outline-primary btn-sm mb-0" title="Прикрепить файлы">
-                                                            📎 <input type="file" name="files" multiple accept=".pdf,.doc,.docx" data-max-size="52428800" title="До 20 файлов, каждый до 50 МБ" style="display:none;" onchange="if (window.validateUploadFile(this)) this.form.submit()" />
-                                                        </label>
-                                                    </form>
-                                                }
+                                                <span class="@(currentFileCount > 0 ? "action-with-count" : "")">
+                                                    <a asp-action="ManageFiles" asp-route-elementId="@element.Id" class="btn btn-outline-primary btn-sm" title="Управление текущими файлами">Файлы</a>
+                                                    @if (currentFileCount > 0)
+                                                    {
+                                                        <span class="action-count badge rounded-pill bg-primary">@currentFileCount</span>
+                                                    }
+                                                </span>
                                                 @if (PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(element.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Uploaded && element.Files.Any(f => f.IsCurrent))
                                                 {
                                                     <form method="post" asp-action="SendForApproval" class="d-inline">
@@ -329,8 +328,20 @@
                                                         <button class="btn btn-outline-info btn-sm" type="submit" title="Зафиксировать группу и отправить на согласование">➤</button>
                                                     </form>
                                                 }
-                                                <a asp-action="Comments" asp-route-elementId="@element.Id" class="btn btn-outline-secondary btn-sm" title="Комментарии">💬</a>
-                                                <a asp-action="History" asp-route-elementId="@element.Id" class="btn btn-outline-secondary btn-sm" title="История">🕐</a>
+                                                <span class="@(tabCommentCount > 0 ? "action-with-count" : "")">
+                                                    <a asp-action="Comments" asp-route-elementId="@element.Id" class="btn btn-outline-secondary btn-sm" title="Комментарии">Комментарии</a>
+                                                    @if (tabCommentCount > 0)
+                                                    {
+                                                        <span class="action-count badge rounded-pill bg-secondary">@tabCommentCount</span>
+                                                    }
+                                                </span>
+                                                <div class="dropend d-inline-block">
+                                                    <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="dropdown" data-bs-boundary="viewport" aria-expanded="false" title="Другие действия">⋮</button>
+                                                    <ul class="dropdown-menu p-2 shadow-sm">
+                                                        <li class="mb-1"><a asp-action="EditElement" asp-route-elementId="@element.Id" class="btn btn-outline-secondary btn-sm w-100 text-start">✎ Редактировать карточку</a></li>
+                                                        <li><a asp-action="History" asp-route-elementId="@element.Id" class="btn btn-outline-secondary btn-sm w-100 text-start">🕐 История изменений</a></li>
+                                                    </ul>
+                                                </div>
                                             </div>
                                         </td>
                                     </tr>
@@ -358,6 +369,7 @@
     {
         var elementComments = allComments?.Where(c => c.EducationalProgramElementId == element.Id).ToList();
         var commentCount = elementComments?.Count ?? 0;
+        var currentFileCount = element.Files.Count(f => f.IsCurrent && !f.IsRemoved);
 
         <tr>
             <td>
@@ -371,16 +383,13 @@
             <td class="small">@(element.UploadDate?.ToString("dd.MM.yyyy") ?? "—")</td>
             <td>
                 <div class="d-flex gap-1 flex-wrap">
-                    @await Html.PartialAsync("_ElementFileButtons", element)
-                    @if (PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(element.StatusApprovals) is PersonalCabinetEducationProgram.Models.ElementApprovalStatus.NotUploaded or PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Uploaded or PersonalCabinetEducationProgram.Models.ElementApprovalStatus.RevisionRequired)
-                    {
-                        <form method="post" enctype="multipart/form-data" asp-controller="ManagerHome" asp-action="Upload" class="d-inline">
-                            <input type="hidden" name="elementId" value="@element.Id" />
-                            <label class="btn btn-outline-primary btn-sm mb-0" title="Прикрепить файлы">
-                                📎 <input type="file" name="files" multiple accept=".pdf,.doc,.docx" data-max-size="52428800" title="До 20 файлов, каждый до 50 МБ" style="display:none;" onchange="if (window.validateUploadFile(this)) this.form.submit()" />
-                            </label>
-                        </form>
-                    }
+                    <span class="@(currentFileCount > 0 ? "action-with-count" : "")">
+                        <a asp-action="ManageFiles" asp-route-elementId="@element.Id" class="btn btn-outline-primary btn-sm" title="Управление текущими файлами">Файлы</a>
+                        @if (currentFileCount > 0)
+                        {
+                            <span class="action-count badge rounded-pill bg-primary">@currentFileCount</span>
+                        }
+                    </span>
                     @if (PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(element.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Uploaded && element.Files.Any(f => f.IsCurrent))
                     {
                         <form method="post" asp-action="SendForApproval" class="d-inline">
@@ -388,8 +397,20 @@
                             <button class="btn btn-outline-info btn-sm" type="submit" title="Зафиксировать группу и отправить на согласование">➤</button>
                         </form>
                     }
-                    <a asp-action="Comments" asp-route-elementId="@element.Id" class="btn btn-outline-secondary btn-sm" title="Комментарии (@commentCount)">💬 @if (commentCount > 0) {<span>@commentCount</span>}</a>
-                    <a asp-action="History" asp-route-elementId="@element.Id" class="btn btn-outline-secondary btn-sm" title="История">🕐</a>
+                    <span class="@(commentCount > 0 ? "action-with-count" : "")">
+                        <a asp-action="Comments" asp-route-elementId="@element.Id" class="btn btn-outline-secondary btn-sm" title="Комментарии">Комментарии</a>
+                        @if (commentCount > 0)
+                        {
+                            <span class="action-count badge rounded-pill bg-secondary">@commentCount</span>
+                        }
+                    </span>
+                    <div class="dropend d-inline-block">
+                        <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="dropdown" data-bs-boundary="viewport" aria-expanded="false" title="Другие действия">⋮</button>
+                        <ul class="dropdown-menu p-2 shadow-sm">
+                            <li class="mb-1"><a asp-action="EditElement" asp-route-elementId="@element.Id" class="btn btn-outline-secondary btn-sm w-100 text-start">✎ Редактировать карточку</a></li>
+                            <li><a asp-action="History" asp-route-elementId="@element.Id" class="btn btn-outline-secondary btn-sm w-100 text-start">🕐 История изменений</a></li>
+                        </ul>
+                    </div>
                 </div>
             </td>
         </tr>

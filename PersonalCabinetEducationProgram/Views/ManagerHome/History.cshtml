@@ -45,7 +45,7 @@
                                                 <span class="text-muted small"> установил статус «@h.NewStatus»</span>
                                             }
                                         </div>
-                                        <div class="text-muted small" style="font-size:0.72rem;">@h.ChangeDate.ToString("dd.MM.yyyy HH:mm")</div>
+                                        <div class="text-muted small" style="font-size:0.72rem;">@h.ChangeDate.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</div>
                                     </div>
                                     <div class="mt-1">
                                         <span class="badge bg-secondary-subtle text-secondary">@h.NewStatus</span>
@@ -81,7 +81,7 @@
                         <h6 class="fw-bold mb-3">Комплекты файлов</h6>
                         @foreach (var group in fileGroups.GroupBy(f => f.RevisionNumber).OrderByDescending(g => g.Key))
                         {
-                            var isCurrent = group.Any(f => f.IsCurrent);
+                            var isCurrent = group.Any(f => f.IsCurrent && !f.IsRemoved);
                             var submitted = group.Any(f => f.IsSubmitted);
                             <div class="border rounded-3 p-3 mb-3">
                                 <div class="d-flex justify-content-between align-items-center mb-2">
@@ -90,10 +90,17 @@
                                         @(isCurrent ? (submitted ? "Текущая, зафиксирована" : "Текущая") : "Архив")
                                     </span>
                                 </div>
-                                @foreach (var file in group)
+                                @foreach (var file in group.OrderBy(f => f.IsRemoved).ThenBy(f => f.OriginalFileName))
                                 {
                                     <div class="d-flex align-items-center justify-content-between gap-2 py-1">
-                                        <span class="small text-truncate" title="@file.OriginalFileName">@file.OriginalFileName</span>
+                                        <span class="small text-truncate" title="@file.OriginalFileName">
+                                            @file.OriginalFileName
+                                            @if (file.IsRemoved)
+                                            {
+                                                <span class="badge bg-danger-subtle text-danger ms-1">Удалён из комплекта</span>
+                                                <span class="text-muted">@file.RemovalReason</span>
+                                            }
+                                        </span>
                                         <span class="d-flex gap-1 flex-shrink-0">
                                             <a asp-controller="ElementFiles" asp-action="Preview" asp-route-id="@file.Id" class="btn btn-outline-secondary btn-sm" target="_blank">Открыть</a>
                                             <a asp-controller="ElementFiles" asp-action="Download" asp-route-id="@file.Id" class="btn btn-outline-secondary btn-sm">Скачать</a>
@@ -123,7 +130,7 @@
                             <div class="comment-bubble mb-2">
                                 <div class="d-flex justify-content-between mb-1">
                                     <span class="small fw-semibold">@c.User?.FullName</span>
-                                    <span class="text-muted" style="font-size:0.7rem;">@c.DateTimeComment.ToString("dd.MM.yyyy HH:mm")</span>
+                                    <span class="text-muted" style="font-size:0.7rem;">@c.DateTimeComment.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</span>
                                 </div>
                                 <div class="small">@c.CommentContent</div>
                             </div>

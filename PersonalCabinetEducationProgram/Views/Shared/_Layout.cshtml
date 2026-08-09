@@ -1,9 +1,27 @@
+@using System.Security.Claims
+@using Microsoft.EntityFrameworkCore
+@using PersonalCabinetEducationProgram.Data
+@using PersonalCabinetEducationProgram.Models
+@inject ApplicationDbContext DbContext
 @{
     var controller = ViewContext.RouteData.Values["controller"]?.ToString() ?? string.Empty;
     var action = ViewContext.RouteData.Values["action"]?.ToString() ?? string.Empty;
     var isAuthenticated = User.Identity?.IsAuthenticated == true;
     var isWorkflowPage = controller is "ManagerHome" or "ApproverHome" or "ModeratorHome";
     var showAppSidebar = isAuthenticated && !User.IsInRole("Admin") && !isWorkflowPage && controller != "Account";
+    var preferredTheme = UserTheme.Light;
+
+    if (isAuthenticated && int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var currentUserId))
+    {
+        preferredTheme = await DbContext.Users
+            .AsNoTracking()
+            .Where(user => user.Id == currentUserId)
+            .Select(user => user.PreferredTheme)
+            .SingleOrDefaultAsync() ?? UserTheme.Light;
+
+        if (!UserTheme.IsValid(preferredTheme))
+            preferredTheme = UserTheme.Light;
+    }
 
     string ActiveLink(string targetController, string? targetAction = null)
     {
@@ -13,7 +31,7 @@
     }
 }
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" data-theme="@preferredTheme">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -47,6 +65,17 @@
         @if (isAuthenticated)
         {
             <div class="app-user">
+                <form class="theme-preference-form" asp-controller="UserPreferences" asp-action="SetTheme" method="post" data-theme-form>
+                    <input type="hidden" name="theme" value="@preferredTheme" data-theme-value />
+                    <button type="button"
+                            class="theme-toggle"
+                            data-theme-toggle
+                            aria-label="Переключить цветовую тему"
+                            title="Переключить цветовую тему">
+                        <span class="theme-toggle-option @(preferredTheme == UserTheme.Light ? "selected" : "")" data-theme-option="light" aria-hidden="true">☀</span>
+                        <span class="theme-toggle-option @(preferredTheme == UserTheme.Dark ? "selected" : "")" data-theme-option="dark" aria-hidden="true">◐</span>
+                    </button>
+                </form>
                 @await Component.InvokeAsync("NotificationBell")
                 <span class="app-avatar" aria-hidden="true"></span>
                 <div class="app-user-copy">

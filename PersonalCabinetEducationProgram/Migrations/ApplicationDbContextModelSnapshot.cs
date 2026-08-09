@@ -679,8 +679,12 @@ namespace PersonalCabinetEducationProgram.Migrations
                     b.Property<int>("Id").ValueGeneratedOnAdd().HasColumnType("int");
                     b.Property<int>("EducationalProgramElementId").HasColumnType("int").HasColumnName("educational_program_element_id");
                     b.Property<bool>("IsCurrent").HasColumnType("tinyint(1)").HasColumnName("is_current");
+                    b.Property<bool>("IsRemoved").HasColumnType("tinyint(1)").HasColumnName("is_removed");
                     b.Property<bool>("IsSubmitted").HasColumnType("tinyint(1)").HasColumnName("is_submitted");
                     b.Property<string>("OriginalFileName").IsRequired().HasColumnType("longtext").HasColumnName("original_file_name");
+                    b.Property<DateTime?>("RemovedAt").HasColumnType("datetime(6)").HasColumnName("removed_at");
+                    b.Property<int?>("RemovedByUserId").HasColumnType("int").HasColumnName("removed_by_user_id");
+                    b.Property<string>("RemovalReason").HasMaxLength(100).HasColumnType("varchar(100)").HasColumnName("removal_reason");
                     b.Property<int>("RevisionNumber").HasColumnType("int").HasColumnName("revision_number");
                     b.Property<string>("StoredFileName").IsRequired().HasColumnType("longtext").HasColumnName("stored_file_name");
                     b.Property<DateTime>("UploadedAt").HasColumnType("datetime(6)").HasColumnName("uploaded_at");
@@ -1096,6 +1100,14 @@ namespace PersonalCabinetEducationProgram.Migrations
                         .HasColumnType("longtext")
                         .HasColumnName("post");
 
+                    b.Property<string>("PreferredTheme")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("varchar(16)")
+                        .HasDefaultValue("light")
+                        .HasColumnName("preferred_theme");
+
                     b.Property<string>("RejectionReason")
                         .HasColumnType("longtext")
                         .HasColumnName("rejection_reason");
@@ -1138,6 +1150,7 @@ namespace PersonalCabinetEducationProgram.Migrations
                             PasswordHash = "866485796cfa8d7c0cf7111640205b83076433547577511d81f8030ae99ecea5",
                             PhoneNumberConfirmed = false,
                             Post = "Заведующий кафедрой",
+                            PreferredTheme = "light",
                             SecurityStamp = "security-1",
                             TwoFactorEnabled = false,
                             UserName = "manager"
@@ -1155,6 +1168,7 @@ namespace PersonalCabinetEducationProgram.Migrations
                             PasswordHash = "1c391319644c0c6e9f5955e44e55862a8fd27b3b9d9863456500096ccf512db3",
                             PhoneNumberConfirmed = false,
                             Post = "Декан факультета",
+                            PreferredTheme = "light",
                             SecurityStamp = "security-2",
                             TwoFactorEnabled = false,
                             UserName = "approver"
@@ -1172,6 +1186,7 @@ namespace PersonalCabinetEducationProgram.Migrations
                             PasswordHash = "4c8425b174053ea6935b29c2b0e0aa4e2eab1a01b784e6ac91b8bdce9c26235a",
                             PhoneNumberConfirmed = false,
                             Post = "Модератор",
+                            PreferredTheme = "light",
                             SecurityStamp = "security-3",
                             TwoFactorEnabled = false,
                             UserName = "moderator"
@@ -1189,6 +1204,7 @@ namespace PersonalCabinetEducationProgram.Migrations
                             PasswordHash = "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
                             PhoneNumberConfirmed = false,
                             Post = "Администратор",
+                            PreferredTheme = "light",
                             SecurityStamp = "security-4",
                             TwoFactorEnabled = false,
                             UserName = "admin"

@@ -36,7 +36,7 @@
                                     <div class="text-muted" style="font-size:0.7rem;">@comment.User?.Post</div>
                                 </div>
                             </div>
-                            <div class="text-muted small" style="font-size:0.72rem;">@comment.DateTimeComment.ToString("dd.MM.yyyy HH:mm")</div>
+                            <div class="text-muted small" style="font-size:0.72rem;">@comment.DateTimeComment.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</div>
                         </div>
                         <div class="small">@comment.CommentContent</div>
                         @if (readOnly)

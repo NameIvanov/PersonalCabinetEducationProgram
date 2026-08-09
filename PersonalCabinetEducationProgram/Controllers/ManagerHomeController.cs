@@ -61,9 +61,10 @@ namespace PersonalCabinetEducationProgram.Controllers
                 .Include(p => p.Managers)
                 .ToListAsync();
 
-            int? selectedProgramId = programId.HasValue && programs.Any(p => p.Id == programId.Value)
-                ? programId
-                : programs.FirstOrDefault()?.Id;
+            if (programId.HasValue && programs.All(p => p.Id != programId.Value))
+                return Forbid();
+
+            int? selectedProgramId = programId ?? programs.FirstOrDefault()?.Id;
 
             var elementPage = await _elementListQueryService.GetAsync(selectedProgramId, tab, page, sort, direction, filters);
 
@@ -92,7 +93,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> Upload(int elementId, List<IFormFile> files)
+        public async Task<IActionResult> Upload(int elementId, List<IFormFile> files, bool returnToFiles = false)
         {
             var targetElement = await _context.EducationalProgramElements.FindAsync(elementId);
             int programId = targetElement?.EducationalProgramId ?? 1;
@@ -104,13 +105,13 @@ namespace PersonalCabinetEducationProgram.Controllers
             if (files.Count == 0)
             {
                 TempData["ErrorMessage"] = "Выберите файл для загрузки.";
-                return RedirectToAction(nameof(Index), new { programId });
+                return RedirectAfterUpload(elementId, programId, returnToFiles);
             }
 
             if (files.Count > FileUploadLimits.MaxFilesPerGroup)
             {
                 TempData["ErrorMessage"] = $"За один раз можно загрузить не более {FileUploadLimits.MaxFilesPerGroup} файлов.";
-                return RedirectToAction(nameof(Index), new { programId });
+                return RedirectAfterUpload(elementId, programId, returnToFiles);
             }
 
             var currentFileCount = await _context.EducationalProgramElementFiles
@@ -118,7 +119,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             if (currentFileCount + files.Count > FileUploadLimits.MaxFilesPerGroup)
             {
                 TempData["ErrorMessage"] = $"В одной группе может быть не более {FileUploadLimits.MaxFilesPerGroup} файлов.";
-                return RedirectToAction(nameof(Index), new { programId });
+                return RedirectAfterUpload(elementId, programId, returnToFiles);
             }
 
             try
@@ -132,7 +133,9 @@ namespace PersonalCabinetEducationProgram.Controllers
                     foreach (var file in files)
                         storedFiles.Add((await _fileStorageService.SaveFileAsync(file), Path.GetFileName(file.FileName)));
 
-                    await _workflowService.MarkFilesUploadedAsync(elementId, GetCurrentUserId(), storedFiles);
+                    var updatedElement = await _workflowService.MarkFilesUploadedAsync(elementId, GetCurrentUserId(), storedFiles);
+                    if (updatedElement == null)
+                        throw new InvalidOperationException("Элемент не найден или находится в архиве.");
                 }
                 catch
                 {
@@ -148,7 +151,7 @@ namespace PersonalCabinetEducationProgram.Controllers
                     : ex.Message;
             }
 
-            return RedirectToAction(nameof(Index), new { programId });
+            return RedirectAfterUpload(elementId, programId, returnToFiles);
         }
 
         public async Task<IActionResult> Download(int elementId)
@@ -160,12 +163,10 @@ namespace PersonalCabinetEducationProgram.Controllers
             if (element == null || string.IsNullOrEmpty(element.FilePath))
                 return NotFound();
 
-            string filePath = Path.Combine(_storageSettings.StoragePath, element.FilePath);
-            if (!System.IO.File.Exists(filePath))
+            var safePath = StoredFilePath.Resolve(_storageSettings.StoragePath, element.FilePath);
+            if (safePath == null)
                 return NotFound();
-
-            byte[] fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
-            return File(fileBytes, GetContentType(element.FileName), element.FileName ?? "download");
+            return PhysicalFile(safePath, GetContentType(element.FileName), element.FileName ?? "download");
         }
 
         public async Task<IActionResult> Preview(int elementId)
@@ -180,13 +181,11 @@ namespace PersonalCabinetEducationProgram.Controllers
             if (element == null || string.IsNullOrEmpty(element.FilePath))
                 return NotFound();
 
-            string filePath = Path.Combine(_storageSettings.StoragePath, element.FilePath);
-            if (!System.IO.File.Exists(filePath))
+            var safePath = StoredFilePath.Resolve(_storageSettings.StoragePath, element.FilePath);
+            if (safePath == null)
                 return NotFound();
-
-            byte[] fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
             Response.Headers.Append("Content-Disposition", $"inline; filename=\"{element.FileName ?? "preview.pdf"}\"");
-            return File(fileBytes, GetContentType(element.FileName));
+            return PhysicalFile(safePath, GetContentType(element.FileName));
         }
 
         [HttpPost]
@@ -205,6 +204,11 @@ namespace PersonalCabinetEducationProgram.Controllers
                 TempData["ErrorMessage"] = "Элемент уже изменён другим пользователем. Обновите страницу и повторите действие.";
                 return RedirectToAction(nameof(Index));
             }
+            catch (InvalidOperationException ex)
+            {
+                TempData["ErrorMessage"] = ex.Message;
+                return RedirectToAction(nameof(Index));
+            }
             if (element == null) return NotFound();
 
             return RedirectToAction(nameof(Index), new { programId = element.EducationalProgramId });
@@ -215,15 +219,19 @@ namespace PersonalCabinetEducationProgram.Controllers
         {
             if (!await _accessService.CanManageElementAsync(User, elementId))
                 return Forbid();
-            if (string.IsNullOrWhiteSpace(commentText))
+            var validationError = EntityInputValidator.Comment(commentText);
+            if (validationError != null)
+            {
+                TempData["ErrorMessage"] = validationError;
                 return RedirectToAction(nameof(Index));
+            }
 
             var comment = new EducationalProgramElementComment
             {
                 EducationalProgramElementId = elementId,
                 UserId = GetCurrentUserId(),
-                DateTimeComment = DateTime.Now,
-                CommentContent = commentText,
+                DateTimeComment = DateTime.UtcNow,
+                CommentContent = commentText.Trim(),
                 Status = CommentStatus.New
             };
 
@@ -320,6 +328,145 @@ namespace PersonalCabinetEducationProgram.Controllers
             return View(comments);
         }
 
+        [HttpGet]
+        public async Task<IActionResult> EditElement(int elementId)
+        {
+            if (!await _accessService.CanManageElementAsync(User, elementId))
+                return Forbid();
+            var element = await _context.EducationalProgramElements
+                .AsNoTracking()
+                .FirstOrDefaultAsync(e => e.Id == elementId && !e.IsArchived);
+            if (element == null)
+                return NotFound();
+            return View(element);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> EditElement(int elementId, int version, string name, string? description)
+        {
+            if (!await _accessService.CanManageElementAsync(User, elementId))
+                return Forbid();
+            var element = await _context.EducationalProgramElements.FindAsync(elementId);
+            if (element == null || element.IsArchived)
+                return NotFound();
+            var status = ElementApprovalStatus.Normalize(element.StatusApprovals);
+            if (status is ElementApprovalStatus.OnApproval or ElementApprovalStatus.Approved or ElementApprovalStatus.Published)
+            {
+                TempData["ErrorMessage"] = "Карточку зафиксированного элемента нельзя изменять.";
+                return RedirectToAction(nameof(Index), new { programId = element.EducationalProgramId });
+            }
+            if (element.Version != version)
+            {
+                TempData["ErrorMessage"] = "Элемент уже изменён. Обновите страницу и повторите действие.";
+                return RedirectToAction(nameof(EditElement), new { elementId });
+            }
+            var validationError = EntityInputValidator.Element(name, description);
+            if (validationError != null)
+            {
+                TempData["ErrorMessage"] = validationError;
+                return RedirectToAction(nameof(EditElement), new { elementId });
+            }
+
+            var oldValue = $"{element.Name} ({element.Description})";
+            element.Name = name.Trim();
+            element.Description = description?.Trim() ?? string.Empty;
+            element.Version++;
+            _context.ElementStatusHistory.Add(new ElementStatusHistory
+            {
+                EducationalProgramElementId = element.Id,
+                UserId = GetCurrentUserId(),
+                OldStatus = status,
+                NewStatus = status,
+                ChangeDate = DateTime.UtcNow,
+                Comment = $"Изменена карточка элемента. Было: {oldValue}"
+            });
+            _auditService.Record(GetCurrentUserId(), "EducationalProgramElement", element.Id,
+                "ElementEdited", $"{oldValue} -> {element.Name} ({element.Description})");
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                TempData["ErrorMessage"] = "Элемент уже изменён другим пользователем. Обновите страницу и повторите действие.";
+                return RedirectToAction(nameof(EditElement), new { elementId });
+            }
+            return RedirectToAction(nameof(Index), new { programId = element.EducationalProgramId });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> ManageFiles(int elementId)
+        {
+            if (!await _accessService.CanManageElementAsync(User, elementId))
+                return Forbid();
+            var element = await _context.EducationalProgramElements
+                .Include(e => e.Files)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(e => e.Id == elementId && !e.IsArchived);
+            if (element == null)
+                return NotFound();
+            return View(element);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> RemoveCurrentFile(int fileId)
+        {
+            var elementId = await _context.EducationalProgramElementFiles
+                .Where(f => f.Id == fileId)
+                .Select(f => f.EducationalProgramElementId)
+                .FirstOrDefaultAsync();
+            if (elementId == 0)
+                return NotFound();
+            if (!await _accessService.CanManageElementAsync(User, elementId))
+                return Forbid();
+            try
+            {
+                var element = await _workflowService.RemoveCurrentFileAsync(fileId, GetCurrentUserId());
+                return RedirectToAction(nameof(ManageFiles), new { elementId = element?.Id ?? elementId });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or DbUpdateConcurrencyException)
+            {
+                TempData["ErrorMessage"] = ex is DbUpdateConcurrencyException
+                    ? "Файл или элемент уже изменён другим пользователем. Обновите страницу и повторите действие."
+                    : ex.Message;
+                return RedirectToAction(nameof(ManageFiles), new { elementId });
+            }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> ReplaceCurrentFile(int fileId, IFormFile? file)
+        {
+            var elementId = await _context.EducationalProgramElementFiles
+                .Where(f => f.Id == fileId)
+                .Select(f => f.EducationalProgramElementId)
+                .FirstOrDefaultAsync();
+            if (elementId == 0)
+                return NotFound();
+            if (!await _accessService.CanManageElementAsync(User, elementId))
+                return Forbid();
+            if (file == null)
+            {
+                TempData["ErrorMessage"] = "Выберите новый файл.";
+                return RedirectToAction(nameof(ManageFiles), new { elementId });
+            }
+
+            string? storedFileName = null;
+            try
+            {
+                await _fileStorageService.ValidateFileAsync(file);
+                storedFileName = await _fileStorageService.SaveFileAsync(file);
+                await _workflowService.ReplaceCurrentFileAsync(
+                    fileId, GetCurrentUserId(), storedFileName, Path.GetFileName(file.FileName));
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or IOException or DbUpdateException)
+            {
+                if (storedFileName != null)
+                    await _fileStorageService.DeleteFileAsync(storedFileName);
+                TempData["ErrorMessage"] = ex.Message;
+            }
+            return RedirectToAction(nameof(ManageFiles), new { elementId });
+        }
+
         private static string GetContentType(string? fileName)
         {
             return Path.GetExtension(fileName ?? string.Empty).ToLowerInvariant() switch
@@ -329,5 +476,11 @@ namespace PersonalCabinetEducationProgram.Controllers
                 _ => "application/pdf"
             };
         }
+
+        private IActionResult RedirectAfterUpload(int elementId, int programId, bool returnToFiles) =>
+            returnToFiles
+                ? RedirectToAction(nameof(ManageFiles), new { elementId })
+                : RedirectToAction(nameof(Index), new { programId });
+
     }
 }

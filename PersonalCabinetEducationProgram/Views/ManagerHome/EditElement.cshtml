@@ -1,0 +1,29 @@
+@model PersonalCabinetEducationProgram.Models.EducationalProgramElement
+@{
+    ViewData["Title"] = "Редактирование элемента ОПОП";
+}
+
+<div class="container py-4" style="max-width: 760px;">
+    <a asp-action="Index" asp-route-programId="@Model.EducationalProgramId" class="text-decoration-none">← Назад к программе</a>
+    <h3 class="fw-bold mt-2 mb-4">Редактирование элемента</h3>
+    @if (TempData["ErrorMessage"] is string errorMessage)
+    {
+        <div class="alert alert-danger">@errorMessage</div>
+    }
+    <form method="post" asp-action="EditElement" class="border rounded-2 p-4">
+        <input type="hidden" name="elementId" value="@Model.Id" />
+        <input type="hidden" name="version" value="@Model.Version" />
+        <div class="mb-3">
+            <label class="form-label" for="elementName">Наименование</label>
+            <input id="elementName" name="name" value="@Model.Name" maxlength="500" required class="form-control" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label" for="elementDescription">Описание или шифр</label>
+            <textarea id="elementDescription" name="description" maxlength="2000" rows="4" class="form-control">@Model.Description</textarea>
+        </div>
+        <div class="d-flex justify-content-end gap-2">
+            <a asp-action="Index" asp-route-programId="@Model.EducationalProgramId" class="btn btn-outline-secondary">Отмена</a>
+            <button type="submit" class="btn btn-primary">Сохранить</button>
+        </div>
+    </form>
+</div>

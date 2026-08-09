@@ -25,6 +25,12 @@
             </ul>
         </div>
     }
+    @if (Model.RequiresMismatchConfirmation)
+    {
+        <div class="alert alert-danger">
+            Данные учебного плана не совпадают с карточкой выбранной ОПОП. Импорт будет разрешён только после отдельного подтверждения ниже.
+        </div>
+    }
 
     <section class="border rounded-2 p-3 mb-4">
         <div class="row g-3">
@@ -73,6 +79,13 @@
         <form asp-action="Apply" method="post">
             <input type="hidden" name="programId" value="@Model.Program.Id" />
             <input type="hidden" name="token" value="@Model.Token" />
+            @if (Model.RequiresMismatchConfirmation)
+            {
+                <div class="form-check mb-3">
+                    <input id="confirmMismatch" class="form-check-input" type="checkbox" name="confirmMismatch" value="true" required />
+                    <label class="form-check-label" for="confirmMismatch">Подтверждаю импорт PLX с несовпадающим шифром или уровнем образования</label>
+                </div>
+            }
             <button type="submit" class="btn btn-primary">Импортировать структуру</button>
         </form>
     </div>

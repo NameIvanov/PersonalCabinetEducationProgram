@@ -31,6 +31,8 @@ document.addEventListener("DOMContentLoaded", function () {
         sensitivity: "base"
     });
 
+    initializeThemeToggle();
+
     document.querySelectorAll("[data-toggle-element-filters], [data-toggle-live-filters]").forEach(button => {
         button.addEventListener("click", function () {
             const rows = document.querySelectorAll(".live-filter-row");
@@ -43,6 +45,51 @@ document.addEventListener("DOMContentLoaded", function () {
     initializeLiveFilters();
 
     document.querySelectorAll("table").forEach(initializeSortableTable);
+
+    function initializeThemeToggle() {
+        const form = document.querySelector("[data-theme-form]");
+        const toggle = form?.querySelector("[data-theme-toggle]");
+        const valueInput = form?.querySelector("[data-theme-value]");
+        if (!form || !toggle || !valueInput) {
+            return;
+        }
+
+        toggle.addEventListener("click", async function () {
+            const previousTheme = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+            const nextTheme = previousTheme === "dark" ? "light" : "dark";
+
+            applyTheme(nextTheme);
+            valueInput.value = nextTheme;
+            toggle.disabled = true;
+
+            try {
+                const response = await fetch(form.action, {
+                    method: "POST",
+                    body: new FormData(form),
+                    credentials: "same-origin",
+                    headers: { "X-Requested-With": "XMLHttpRequest" }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Theme preference request failed: ${response.status}`);
+                }
+            } catch (error) {
+                applyTheme(previousTheme);
+                valueInput.value = previousTheme;
+                console.error(error);
+                window.alert("Не удалось сохранить выбранную тему. Попробуйте ещё раз.");
+            } finally {
+                toggle.disabled = false;
+            }
+        });
+
+        function applyTheme(theme) {
+            document.documentElement.dataset.theme = theme;
+            toggle.querySelectorAll("[data-theme-option]").forEach(option => {
+                option.classList.toggle("selected", option.dataset.themeOption === theme);
+            });
+        }
+    }
 
     function initializeLiveFilters() {
         const focusStorageKey = "liveFilterFocus";

@@ -10,7 +10,7 @@ using PersonalCabinetEducationProgram.ViewModels;
 
 namespace PersonalCabinetEducationProgram.Controllers
 {
-    [Authorize(Roles = "Admin,Moderator")]
+    [Authorize(Roles = "Admin")]
     public class AdminController : Controller
     {
         private readonly ApplicationDbContext _context;
@@ -134,6 +134,11 @@ namespace PersonalCabinetEducationProgram.Controllers
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> ChangeApprovalStatus(int id, string approvalStatus, string? rejectionReason)
         {
+            if (approvalStatus is not (UserApprovalStatus.Pending or UserApprovalStatus.Approved or UserApprovalStatus.Rejected))
+                return BadRequest("Неизвестный статус учётной записи.");
+            if (rejectionReason?.Length > 1000)
+                return BadRequest("Причина отклонения не должна превышать 1000 символов.");
+
             var user = await _userManager.FindByIdAsync(id.ToString());
             if (user == null)
                 return NotFound();
@@ -149,6 +154,9 @@ namespace PersonalCabinetEducationProgram.Controllers
 
             await _userManager.UpdateAsync(user);
             await _userManager.UpdateSecurityStampAsync(user);
+            _auditService.Record(GetCurrentUserId(), "User", user.Id, "ApprovalStatusChanged",
+                $"Статус учётной записи изменён на «{approvalStatus}».");
+            await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Users));
         }
 
@@ -165,6 +173,13 @@ namespace PersonalCabinetEducationProgram.Controllers
         {
             if (!AppRoles.AssignableIds.Contains(roleId))
                 return BadRequest();
+
+            var validationError = EntityInputValidator.User(fullName, post, username);
+            if (validationError != null)
+            {
+                TempData["UsersError"] = validationError;
+                return RedirectToAction(nameof(Users));
+            }
 
             if (string.IsNullOrWhiteSpace(fullName) ||
                 string.IsNullOrWhiteSpace(post) ||
@@ -205,6 +220,8 @@ namespace PersonalCabinetEducationProgram.Controllers
             }
 
             TempData["UsersSuccess"] = $"Аккаунт «{user.UserName}» создан.";
+            _auditService.Record(GetCurrentUserId(), "User", user.Id, "Created", $"Создан пользователь {user.UserName}.");
+            await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Users));
         }
 
@@ -238,6 +255,8 @@ namespace PersonalCabinetEducationProgram.Controllers
             }
 
             await _userManager.UpdateSecurityStampAsync(user);
+            _auditService.Record(GetCurrentUserId(), "User", user.Id, "PasswordReset", "Пароль сброшен администратором.");
+            await _context.SaveChangesAsync();
             TempData["UsersSuccess"] = $"Пароль пользователя «{user.UserName}» сброшен.";
             return RedirectToAction(nameof(Users));
         }
@@ -247,9 +266,10 @@ namespace PersonalCabinetEducationProgram.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> EditUser(int id, string fullName, int? roleId, string post)
         {
-            if (string.IsNullOrWhiteSpace(fullName) || string.IsNullOrWhiteSpace(post))
+            var validationError = EntityInputValidator.User(fullName, post);
+            if (validationError != null)
             {
-                TempData["UsersError"] = "ФИО и должность обязательны.";
+                TempData["UsersError"] = validationError;
                 return RedirectToAction(nameof(Users));
             }
 
@@ -301,6 +321,8 @@ namespace PersonalCabinetEducationProgram.Controllers
             }
 
             await _userManager.UpdateSecurityStampAsync(user);
+            _auditService.Record(GetCurrentUserId(), "User", user.Id, "Edited", "Данные пользователя или его роль изменены.");
+            await _context.SaveChangesAsync();
             TempData["UsersSuccess"] = $"Данные пользователя «{user.UserName}» обновлены.";
             return RedirectToAction(nameof(Users));
         }
@@ -333,6 +355,8 @@ namespace PersonalCabinetEducationProgram.Controllers
                 return RedirectToAction(nameof(Users));
             }
 
+            _auditService.Record(GetCurrentUserId(), "User", id, "Deleted", $"Удалён пользователь {user.UserName}.");
+            await _context.SaveChangesAsync();
             TempData["UsersSuccess"] = $"Аккаунт «{user.UserName}» удалён.";
             return RedirectToAction(nameof(Users));
         }
@@ -522,6 +546,26 @@ namespace PersonalCabinetEducationProgram.Controllers
         public async Task<IActionResult> CreateProgram(string codeReferral, string name, string educationalLevel,
             int yearApprovals, int departmentId, int facultyId, int? managerUserId)
         {
+            var validationError = EntityInputValidator.Program(codeReferral, name, educationalLevel, yearApprovals);
+            if (validationError != null)
+            {
+                TempData["ErrorMessage"] = validationError;
+                return RedirectToAction(nameof(Programs));
+            }
+            codeReferral = codeReferral.Trim();
+            name = name.Trim();
+            educationalLevel = educationalLevel.Trim();
+            if (!await _context.Departments.AnyAsync(d => d.Id == departmentId) ||
+                !await _context.Facultys.AnyAsync(f => f.Id == facultyId))
+                return BadRequest("Выбранная кафедра или факультет не найдены.");
+            if (await _context.EducationalPrograms.AnyAsync(p =>
+                    p.CodeReferral == codeReferral && p.Name == name &&
+                    p.EducationalLevel == educationalLevel && p.YearApprovals == yearApprovals))
+            {
+                TempData["ErrorMessage"] = "Такая ОПОП уже существует.";
+                return RedirectToAction(nameof(Programs));
+            }
+
             if (managerUserId.HasValue)
             {
                 var manager = await _userManager.FindByIdAsync(managerUserId.Value.ToString());
@@ -541,28 +585,43 @@ namespace PersonalCabinetEducationProgram.Controllers
                 UserId = managerUserId
             };
 
-            _context.EducationalPrograms.Add(program);
-            await _context.SaveChangesAsync();
-
-            _context.EducationalProgramAssignments.Add(new EducationalProgramAssignment
+            await using var transaction = _context.Database.IsRelational()
+                ? await _context.Database.BeginTransactionAsync()
+                : null;
+            try
             {
-                EducationalProgramId = program.Id,
-                DepartmentId = departmentId,
-                FacultyId = facultyId
-            });
-
-            if (managerUserId.HasValue)
-            {
-                _context.EducationalProgramManagers.Add(new EducationalProgramManager
+                _context.EducationalPrograms.Add(program);
+                await _context.SaveChangesAsync();
+                _context.EducationalProgramAssignments.Add(new EducationalProgramAssignment
                 {
                     EducationalProgramId = program.Id,
-                    UserId = managerUserId.Value,
-                    AssignedByUserId = GetCurrentUserId(),
-                    AssignedAt = DateTime.Now
+                    DepartmentId = departmentId,
+                    FacultyId = facultyId
                 });
-            }
 
-            await _context.SaveChangesAsync();
+                if (managerUserId.HasValue)
+                {
+                    _context.EducationalProgramManagers.Add(new EducationalProgramManager
+                    {
+                        EducationalProgramId = program.Id,
+                        UserId = managerUserId.Value,
+                        AssignedByUserId = GetCurrentUserId(),
+                        AssignedAt = DateTime.UtcNow
+                    });
+                }
+
+                _auditService.Record(GetCurrentUserId(), "EducationalProgram", program.Id, "Created",
+                    $"Создана ОПОП {program.CodeReferral} «{program.Name}».");
+                await _context.SaveChangesAsync();
+                if (transaction != null)
+                    await transaction.CommitAsync();
+            }
+            catch
+            {
+                if (transaction != null)
+                    await transaction.RollbackAsync();
+                throw;
+            }
             return RedirectToAction(nameof(Programs));
         }
 
@@ -579,12 +638,20 @@ namespace PersonalCabinetEducationProgram.Controllers
                 return ArchivedProgram(programId);
             if (program.Version != version)
                 return ProgramConflict(programId);
-            if (string.IsNullOrWhiteSpace(codeReferral) || string.IsNullOrWhiteSpace(name))
-                return BadRequest("Шифр и наименование обязательны.");
+            var validationError = EntityInputValidator.Program(codeReferral, name, educationalLevel, yearApprovals);
+            if (validationError != null)
+                return BadRequest(validationError);
+            var normalizedCode = codeReferral.Trim();
+            var normalizedName = name.Trim();
+            var normalizedLevel = educationalLevel.Trim();
+            if (await _context.EducationalPrograms.AnyAsync(p => p.Id != programId &&
+                    p.CodeReferral == normalizedCode && p.Name == normalizedName &&
+                    p.EducationalLevel == normalizedLevel && p.YearApprovals == yearApprovals))
+                return BadRequest("Такая ОПОП уже существует.");
 
-            program.CodeReferral = codeReferral.Trim();
-            program.Name = name.Trim();
-            program.EducationalLevel = educationalLevel.Trim();
+            program.CodeReferral = normalizedCode;
+            program.Name = normalizedName;
+            program.EducationalLevel = normalizedLevel;
             program.YearApprovals = yearApprovals;
             program.Version++;
             _auditService.Record(GetCurrentUserId(), "EducationalProgram", program.Id, "Edited", "Изменена карточка ОПОП.");
@@ -723,9 +790,12 @@ namespace PersonalCabinetEducationProgram.Controllers
                     EducationalProgramId = programId,
                     UserId = managerUserId.Value,
                     AssignedByUserId = GetCurrentUserId(),
-                    AssignedAt = DateTime.Now
+                    AssignedAt = DateTime.UtcNow
                 });
             }
+
+            _auditService.Record(GetCurrentUserId(), "EducationalProgram", program.Id, "ManagerAssigned",
+                managerUserId.HasValue ? $"Назначен руководитель, ID {managerUserId.Value}." : "Руководитель снят.");
 
             try
             {
@@ -748,15 +818,38 @@ namespace PersonalCabinetEducationProgram.Controllers
             if (!EducationalProgramElementTypes.All.Contains(typeElement))
                 return BadRequest("Неизвестный тип элемента ОПОП");
 
-            _context.EducationalProgramElements.Add(new EducationalProgramElement
+            var validationError = EntityInputValidator.Element(name, description);
+            if (validationError != null)
+                return BadRequest(validationError);
+            name = name.Trim();
+            description = description?.Trim() ?? string.Empty;
+            if (await _context.EducationalProgramElements.AnyAsync(e =>
+                    e.EducationalProgramId == programId && !e.IsArchived &&
+                    e.TypeElement == typeElement && e.Name == name))
+                return BadRequest("Элемент с таким типом и наименованием уже существует в ОПОП.");
+
+            var element = new EducationalProgramElement
             {
                 EducationalProgramId = programId,
                 TypeElement = typeElement,
                 Name = name,
-                Description = description ?? string.Empty,
+                Description = description,
                 StatusApprovals = ElementApprovalStatus.NotUploaded
-            });
+            };
+            _context.EducationalProgramElements.Add(element);
 
+            await _context.SaveChangesAsync();
+            _context.ElementStatusHistory.Add(new ElementStatusHistory
+            {
+                EducationalProgramElementId = element.Id,
+                UserId = GetCurrentUserId(),
+                OldStatus = string.Empty,
+                NewStatus = ElementApprovalStatus.NotUploaded,
+                ChangeDate = DateTime.UtcNow,
+                Comment = "Элемент ОПОП создан."
+            });
+            _auditService.Record(GetCurrentUserId(), "EducationalProgramElement", element.Id, "Created",
+                $"Создан элемент «{element.Name}».");
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(ProgramDetails), new { id = programId });
         }
@@ -772,12 +865,18 @@ namespace PersonalCabinetEducationProgram.Controllers
             if (element.Version != version)
                 return ElementConflict(element.EducationalProgramId);
 
-            if (!EducationalProgramElementTypes.All.Contains(typeElement) || string.IsNullOrWhiteSpace(name))
-                return BadRequest("Проверьте тип и наименование элемента ОПОП.");
+            var validationError = EntityInputValidator.Element(name, description);
+            if (!EducationalProgramElementTypes.All.Contains(typeElement) || validationError != null)
+                return BadRequest(validationError ?? "Проверьте тип элемента ОПОП.");
+            var normalizedName = name.Trim();
+            if (await _context.EducationalProgramElements.AnyAsync(e => e.Id != elementId &&
+                    e.EducationalProgramId == element.EducationalProgramId && !e.IsArchived &&
+                    e.TypeElement == typeElement && e.Name == normalizedName))
+                return BadRequest("Элемент с таким типом и наименованием уже существует в ОПОП.");
 
             var oldDescription = $"{element.TypeElement}: {element.Name} ({element.Description})";
             element.TypeElement = typeElement;
-            element.Name = name.Trim();
+            element.Name = normalizedName;
             element.Description = description?.Trim() ?? string.Empty;
             element.Version++;
             _context.ElementStatusHistory.Add(new ElementStatusHistory
@@ -789,6 +888,8 @@ namespace PersonalCabinetEducationProgram.Controllers
                 ChangeDate = DateTime.UtcNow,
                 Comment = $"Изменена карточка элемента. Было: {oldDescription}"
             });
+            _auditService.Record(GetCurrentUserId(), "EducationalProgramElement", element.Id, "Edited",
+                $"Изменена карточка. Было: {oldDescription}");
             try
             {
                 await _context.SaveChangesAsync();
@@ -816,6 +917,15 @@ namespace PersonalCabinetEducationProgram.Controllers
             element.Version++;
             _auditService.Record(GetCurrentUserId(), "EducationalProgramElement", element.Id,
                 archived ? "Archived" : "Restored", archived ? "Элемент перенесён в архив." : "Элемент восстановлен из архива.");
+            _context.ElementStatusHistory.Add(new ElementStatusHistory
+            {
+                EducationalProgramElementId = element.Id,
+                UserId = GetCurrentUserId(),
+                OldStatus = element.StatusApprovals,
+                NewStatus = element.StatusApprovals,
+                ChangeDate = DateTime.UtcNow,
+                Comment = archived ? "Элемент перенесён в архив." : "Элемент восстановлен из архива."
+            });
             await _workflowService.RecalculateProgramStatusAsync(element.EducationalProgramId);
             try
             {
@@ -857,7 +967,10 @@ namespace PersonalCabinetEducationProgram.Controllers
                         foreach (var file in files)
                             storedFiles.Add((await _fileStorageService.SaveFileAsync(file), Path.GetFileName(file.FileName)));
 
-                        await _workflowService.MarkFilesUploadedAsync(elementId, GetCurrentUserId(), storedFiles, adminOverride: true);
+                        var updatedElement = await _workflowService.MarkFilesUploadedAsync(
+                            elementId, GetCurrentUserId(), storedFiles, adminOverride: true);
+                        if (updatedElement == null)
+                            throw new InvalidOperationException("Элемент не найден или находится в архиве.");
                     }
                     catch
                     {
@@ -866,7 +979,7 @@ namespace PersonalCabinetEducationProgram.Controllers
                         throw;
                     }
                 }
-                catch (Exception ex) when (ex is InvalidOperationException or IOException or DbUpdateException)
+                catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or IOException or DbUpdateException)
                 {
                     TempData["ErrorMessage"] = ex is DbUpdateConcurrencyException
                         ? "Данные были изменены другим пользователем. Обновите страницу и повторите действие."
@@ -913,12 +1026,11 @@ namespace PersonalCabinetEducationProgram.Controllers
             if (element == null || string.IsNullOrEmpty(element.FilePath))
                 return NotFound();
 
-            var filePath = Path.Combine(_storageSettings.StoragePath, element.FilePath);
-            if (!System.IO.File.Exists(filePath))
+            var filePath = StoredFilePath.Resolve(_storageSettings.StoragePath, element.FilePath);
+            if (filePath == null)
                 return NotFound();
 
-            var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
-            return File(fileBytes, GetContentType(element.FileName), element.FileName ?? "download");
+            return PhysicalFile(filePath, GetContentType(element.FileName), element.FileName ?? "download");
         }
 
         [Authorize(Roles = "Admin")]
@@ -929,13 +1041,12 @@ namespace PersonalCabinetEducationProgram.Controllers
             if (element == null || string.IsNullOrEmpty(element.FilePath))
                 return NotFound();
 
-            var filePath = Path.Combine(_storageSettings.StoragePath, element.FilePath);
-            if (!System.IO.File.Exists(filePath))
+            var filePath = StoredFilePath.Resolve(_storageSettings.StoragePath, element.FilePath);
+            if (filePath == null)
                 return NotFound();
 
-            var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
             Response.Headers.Append("Content-Disposition", $"inline; filename=\"{element.FileName ?? "preview"}\"");
-            return File(fileBytes, GetContentType(element.FileName));
+            return PhysicalFile(filePath, GetContentType(element.FileName));
         }
 
         private async Task<IActionResult> ChangeElementStatus(int elementId, string newStatus, string comment)
@@ -1001,10 +1112,13 @@ namespace PersonalCabinetEducationProgram.Controllers
                     FacultyId = facultyId,
                     DepartmentId = departmentId,
                     AssignedByUserId = GetCurrentUserId(),
-                    AssignedAt = DateTime.Now
+                    AssignedAt = DateTime.UtcNow
                 });
             }
 
+            _auditService.Record(GetCurrentUserId(), facultyId.HasValue ? "Faculty" : "Department",
+                facultyId ?? departmentId!.Value, "ApproverAssigned",
+                approverUserId.HasValue ? $"Назначен согласующий, ID {approverUserId.Value}." : "Согласующий снят.");
             await _context.SaveChangesAsync();
             return RedirectToAction(redirectAction);
         }
@@ -1078,7 +1192,23 @@ namespace PersonalCabinetEducationProgram.Controllers
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> CreateDepartment(string codeDepartment, string name)
         {
-            _context.Departments.Add(new Departments { CodeDepartment = codeDepartment, Name = name });
+            var validationError = EntityInputValidator.Department(codeDepartment, name);
+            if (validationError != null)
+            {
+                TempData["ErrorMessage"] = validationError;
+                return RedirectToAction(nameof(Departments));
+            }
+            codeDepartment = codeDepartment.Trim();
+            name = name.Trim();
+            if (await _context.Departments.AnyAsync(d => d.CodeDepartment == codeDepartment || d.Name == name))
+            {
+                TempData["ErrorMessage"] = "Кафедра с таким кодом или наименованием уже существует.";
+                return RedirectToAction(nameof(Departments));
+            }
+            var department = new Departments { CodeDepartment = codeDepartment, Name = name };
+            _context.Departments.Add(department);
+            await _context.SaveChangesAsync();
+            _auditService.Record(GetCurrentUserId(), "Department", department.Id, "Created", $"Создана кафедра {department.Name}.");
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Departments));
         }
@@ -1089,8 +1219,16 @@ namespace PersonalCabinetEducationProgram.Controllers
         {
             var department = await _context.Departments.FindAsync(id);
             if (department == null) return NotFound();
-            department.CodeDepartment = codeDepartment.Trim();
-            department.Name = name.Trim();
+            var validationError = EntityInputValidator.Department(codeDepartment, name);
+            if (validationError != null) return BadRequest(validationError);
+            var normalizedCode = codeDepartment.Trim();
+            var normalizedName = name.Trim();
+            if (await _context.Departments.AnyAsync(d => d.Id != id &&
+                    (d.CodeDepartment == normalizedCode || d.Name == normalizedName)))
+                return BadRequest("Кафедра с таким кодом или наименованием уже существует.");
+            department.CodeDepartment = normalizedCode;
+            department.Name = normalizedName;
+            _auditService.Record(GetCurrentUserId(), "Department", department.Id, "Edited", "Данные кафедры изменены.");
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Departments));
         }
@@ -1107,6 +1245,7 @@ namespace PersonalCabinetEducationProgram.Controllers
                 TempData["ErrorMessage"] = "Кафедра используется в привязках ОПОП или согласующих и не может быть удалена.";
                 return RedirectToAction(nameof(Departments));
             }
+            _auditService.Record(GetCurrentUserId(), "Department", department.Id, "Deleted", $"Удалена кафедра {department.Name}.");
             _context.Departments.Remove(department);
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Departments));
@@ -1177,7 +1316,22 @@ namespace PersonalCabinetEducationProgram.Controllers
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> CreateFaculty(string name)
         {
-            _context.Facultys.Add(new Facultys { Name = name });
+            var validationError = EntityInputValidator.Faculty(name);
+            if (validationError != null)
+            {
+                TempData["ErrorMessage"] = validationError;
+                return RedirectToAction(nameof(Faculties));
+            }
+            name = name.Trim();
+            if (await _context.Facultys.AnyAsync(f => f.Name == name))
+            {
+                TempData["ErrorMessage"] = "Факультет с таким наименованием уже существует.";
+                return RedirectToAction(nameof(Faculties));
+            }
+            var faculty = new Facultys { Name = name };
+            _context.Facultys.Add(faculty);
+            await _context.SaveChangesAsync();
+            _auditService.Record(GetCurrentUserId(), "Faculty", faculty.Id, "Created", $"Создан факультет {faculty.Name}.");
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Faculties));
         }
@@ -1188,7 +1342,13 @@ namespace PersonalCabinetEducationProgram.Controllers
         {
             var faculty = await _context.Facultys.FindAsync(id);
             if (faculty == null) return NotFound();
-            faculty.Name = name.Trim();
+            var validationError = EntityInputValidator.Faculty(name);
+            if (validationError != null) return BadRequest(validationError);
+            var normalizedName = name.Trim();
+            if (await _context.Facultys.AnyAsync(f => f.Id != id && f.Name == normalizedName))
+                return BadRequest("Факультет с таким наименованием уже существует.");
+            faculty.Name = normalizedName;
+            _auditService.Record(GetCurrentUserId(), "Faculty", faculty.Id, "Edited", "Данные факультета изменены.");
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Faculties));
         }
@@ -1205,6 +1365,7 @@ namespace PersonalCabinetEducationProgram.Controllers
                 TempData["ErrorMessage"] = "Факультет используется в привязках ОПОП или согласующих и не может быть удалён.";
                 return RedirectToAction(nameof(Faculties));
             }
+            _auditService.Record(GetCurrentUserId(), "Faculty", faculty.Id, "Deleted", $"Удалён факультет {faculty.Name}.");
             _context.Facultys.Remove(faculty);
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Faculties));

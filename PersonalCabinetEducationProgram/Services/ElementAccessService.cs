@@ -16,13 +16,14 @@ namespace PersonalCabinetEducationProgram.Services
 
         public Task<bool> CanManageProgramAsync(ClaimsPrincipal user, int programId)
         {
-            if (user.IsInRole(AppRoles.Admin))
-                return Task.FromResult(true);
+            var isAdmin = user.IsInRole(AppRoles.Admin);
+            if (!isAdmin && !user.IsInRole(AppRoles.Manager))
+                return Task.FromResult(false);
 
             var userId = GetUserId(user);
             return _context.EducationalPrograms.AnyAsync(p =>
                 p.Id == programId && !p.IsArchived &&
-                (p.UserId == userId || p.Managers.Any(m => m.UserId == userId)));
+                (isAdmin || p.UserId == userId || p.Managers.Any(m => m.UserId == userId)));
         }
 
         public async Task<bool> CanManageElementAsync(ClaimsPrincipal user, int elementId)
@@ -33,16 +34,17 @@ namespace PersonalCabinetEducationProgram.Services
 
         public Task<bool> CanApproveProgramAsync(ClaimsPrincipal user, int programId)
         {
-            if (user.IsInRole(AppRoles.Admin))
-                return Task.FromResult(true);
+            var isAdmin = user.IsInRole(AppRoles.Admin);
+            if (!isAdmin && !user.IsInRole(AppRoles.Approver))
+                return Task.FromResult(false);
 
             var userId = GetUserId(user);
             return _context.EducationalPrograms.AnyAsync(p =>
                 p.Id == programId && !p.IsArchived &&
-                p.Assignments.Any(pa => _context.ApproverAssignments.Any(a =>
+                (isAdmin || p.Assignments.Any(pa => _context.ApproverAssignments.Any(a =>
                     a.ApproverUserId == userId &&
                     ((a.FacultyId != null && a.FacultyId == pa.FacultyId) ||
-                     (a.DepartmentId != null && a.DepartmentId == pa.DepartmentId)))));
+                     (a.DepartmentId != null && a.DepartmentId == pa.DepartmentId))))));
         }
 
         public async Task<bool> CanApproveElementAsync(ClaimsPrincipal user, int elementId)
@@ -64,6 +66,15 @@ namespace PersonalCabinetEducationProgram.Services
                 return true;
 
             return user.IsInRole(AppRoles.Approver) && await CanApproveElementAsync(user, elementId);
+        }
+
+        public Task<bool> CanModerateElementAsync(ClaimsPrincipal user, int elementId)
+        {
+            if (!user.IsInRole(AppRoles.Moderator) && !user.IsInRole(AppRoles.Admin))
+                return Task.FromResult(false);
+
+            return _context.EducationalProgramElements.AnyAsync(e =>
+                e.Id == elementId && !e.IsArchived && !e.EducationalProgram.IsArchived);
         }
 
         private Task<int?> GetProgramIdAsync(int elementId)
