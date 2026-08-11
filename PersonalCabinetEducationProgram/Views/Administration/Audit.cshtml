@@ -1,0 +1,104 @@
+@model PersonalCabinetEducationProgram.ViewModels.AdministrationAuditViewModel
+@{
+    ViewData["Title"] = "Журнал аудита";
+    var filters = Model.Filters;
+    var pagination = Model.Pagination;
+    string NextDirection(string column) => Model.Sort == column && Model.Direction == "asc" ? "desc" : "asc";
+    Dictionary<string, string> RouteData(int page, string? sort = null, string? direction = null)
+    {
+        var values = new Dictionary<string, string>
+        {
+            ["page"] = page.ToString(), ["sort"] = sort ?? Model.Sort, ["direction"] = direction ?? Model.Direction
+        };
+        if (!string.IsNullOrWhiteSpace(filters.User)) values["User"] = filters.User;
+        if (!string.IsNullOrWhiteSpace(filters.Entity)) values["Entity"] = filters.Entity;
+        if (!string.IsNullOrWhiteSpace(filters.Action)) values["Action"] = filters.Action;
+        if (!string.IsNullOrWhiteSpace(filters.IpOrTrace)) values["IpOrTrace"] = filters.IpOrTrace;
+        if (filters.DateFrom.HasValue) values["DateFrom"] = filters.DateFrom.Value.ToString("yyyy-MM-dd");
+        if (filters.DateTo.HasValue) values["DateTo"] = filters.DateTo.Value.ToString("yyyy-MM-dd");
+        return values;
+    }
+    Dictionary<string, string> SortRoute(string column) => RouteData(1, column, NextDirection(column));
+}
+
+<div class="administration-shell">
+    @await Html.PartialAsync("_AdministrationSidebar", Model)
+    <section class="administration-content">
+        <header class="administration-page-header">
+            <div>
+                <div class="administration-eyebrow">Неизменяемая история</div>
+                <h1>Журнал аудита</h1>
+                <p>Значимые изменения данных, статусов, назначений и прав пользователей</p>
+            </div>
+            <div class="administration-header-actions">
+                <a class="btn btn-outline-secondary" asp-action="ExportAudit" asp-all-route-data="@RouteData(1)">Экспорт CSV</a>
+                <a class="btn btn-primary" asp-action="Audit" asp-all-route-data="@RouteData(pagination.Page)">Обновить</a>
+            </div>
+        </header>
+
+        <div class="administration-callout">
+            <strong>Записи аудита не удаляются автоматической очисткой.</strong>
+            <span>IP и Trace ID позволяют связать бизнес-изменение с соответствующим техническим запросом.</span>
+        </div>
+
+        <form method="get" class="administration-filter-bar administration-filter-audit">
+            <input type="hidden" name="sort" value="@Model.Sort" />
+            <input type="hidden" name="direction" value="@Model.Direction" />
+            <label><span>Пользователь</span><input class="form-control" type="search" name="User" value="@filters.User" placeholder="ФИО или ID" /></label>
+            <label><span>Объект</span><input class="form-control" type="search" name="Entity" value="@filters.Entity" placeholder="Тип или ID" /></label>
+            <label><span>Действие</span><input class="form-control" type="search" name="Action" value="@filters.Action" placeholder="Действие или описание" /></label>
+            <label><span>IP или Trace ID</span><input class="form-control" type="search" name="IpOrTrace" value="@filters.IpOrTrace" /></label>
+            <label><span>Дата от</span><input class="form-control" type="date" name="DateFrom" value="@filters.DateFrom?.ToString("yyyy-MM-dd")" /></label>
+            <label><span>Дата до</span><input class="form-control" type="date" name="DateTo" value="@filters.DateTo?.ToString("yyyy-MM-dd")" /></label>
+            <div class="administration-filter-actions"><button class="btn btn-primary" type="submit">Найти</button><a class="btn btn-outline-secondary" asp-action="Audit">Сбросить</a></div>
+        </form>
+
+        <div class="administration-table-frame">
+            <div class="table-responsive">
+                <table class="table administration-table mb-0">
+                    <thead><tr>
+                        <th><a asp-action="Audit" asp-all-route-data="@SortRoute("date")">Время</a></th>
+                        <th><a asp-action="Audit" asp-all-route-data="@SortRoute("user")">Пользователь</a></th>
+                        <th><a asp-action="Audit" asp-all-route-data="@SortRoute("ip")">IP-адрес</a></th>
+                        <th><a asp-action="Audit" asp-all-route-data="@SortRoute("entity")">Объект</a></th>
+                        <th><a asp-action="Audit" asp-all-route-data="@SortRoute("action")">Действие</a></th>
+                        <th>Описание и изменения</th>
+                        <th>Trace ID</th>
+                    </tr></thead>
+                    <tbody>
+                    @foreach (var entry in Model.Entries)
+                    {
+                        <tr>
+                            <td class="text-nowrap">@entry.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss.fff")</td>
+                            <td><strong class="administration-user-name">@(entry.UserFullName ?? entry.UserLogin ?? $"Пользователь #{entry.UserId}")</strong><span class="administration-cell-note">ID @entry.UserId · @(entry.UserRole ?? "роль не записана")</span></td>
+                            <td class="text-nowrap">@(entry.IpAddress ?? "—")</td>
+                            <td><strong>@entry.EntityType</strong><span class="administration-cell-note">ID @entry.EntityId</span></td>
+                            <td><span class="administration-status info">@entry.Action</span></td>
+                            <td>
+                                <span>@entry.Details</span>
+                                @if (entry.PreviousValues != null || entry.NewValues != null)
+                                {
+                                    <details class="audit-values"><summary>Показать до/после</summary><div><strong>До</strong><code>@(entry.PreviousValues ?? "—")</code><strong>После</strong><code>@(entry.NewValues ?? "—")</code></div></details>
+                                }
+                            </td>
+                            <td>@if (entry.TraceId != null) { <a asp-action="Logs" asp-route-UserOrIp="@entry.TraceId" class="trace-link">@entry.TraceId</a> } else { <span>—</span> }</td>
+                        </tr>
+                    }
+                    @if (Model.Entries.Count == 0)
+                    {
+                        <tr><td colspan="7" class="administration-empty">Записей аудита по выбранным условиям нет</td></tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="administration-pagination">
+            <span>Показано @pagination.FirstItem–@pagination.LastItem из @pagination.TotalCount.ToString("N0") записей</span>
+            <div>
+                <a class="btn btn-outline-secondary @(pagination.Page <= 1 ? "disabled" : "")" asp-action="Audit" asp-all-route-data="@RouteData(pagination.Page - 1)">Назад</a>
+                <span>@pagination.Page из @pagination.TotalPages</span>
+                <a class="btn btn-outline-secondary @(pagination.Page >= pagination.TotalPages ? "disabled" : "")" asp-action="Audit" asp-all-route-data="@RouteData(pagination.Page + 1)">Далее</a>
+            </div>
+        </div>
+    </section>
+</div>

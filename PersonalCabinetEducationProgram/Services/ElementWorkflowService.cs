@@ -102,7 +102,14 @@ namespace PersonalCabinetEducationProgram.Services
                     ? $"Загружен файл: {files.First().OriginalFileName}"
                     : $"Загружена группа из {files.Count} файлов");
             _auditService.Record(userId, "EducationalProgramElement", element.Id, "FilesUploaded",
-                $"Итерация {revisionNumber}: добавлено файлов {files.Count}.");
+                $"Итерация {revisionNumber}: добавлено файлов {files.Count}.",
+                new { Status = oldStatus, CurrentFileCount = currentFiles.Count },
+                new
+                {
+                    Status = ElementApprovalStatus.Uploaded,
+                    RevisionNumber = revisionNumber,
+                    Files = files.Select(file => file.OriginalFileName).ToArray()
+                });
             await _notificationService.CreateForElementAsync(
                 element.Id,
                 userId,
@@ -186,7 +193,9 @@ namespace PersonalCabinetEducationProgram.Services
             AddHistory(element.Id, userId, oldStatus, element.StatusApprovals,
                 $"Файл «{file.OriginalFileName}» удалён из текущего комплекта.");
             _auditService.Record(userId, "EducationalProgramElement", element.Id, "CurrentFileRemoved",
-                $"Файл {file.OriginalFileName}; итерация {file.RevisionNumber}.");
+                $"Файл {file.OriginalFileName}; итерация {file.RevisionNumber}.",
+                new { File = file.OriginalFileName, Status = oldStatus, file.RevisionNumber },
+                new { Status = element.StatusApprovals, CurrentFileCount = element.Files.Count(candidate => candidate.IsCurrent) });
             await RecalculateProgramStatusAsync(element.EducationalProgramId);
             await _context.SaveChangesAsync();
             return element;
@@ -225,7 +234,9 @@ namespace PersonalCabinetEducationProgram.Services
             AddHistory(element.Id, userId, ElementApprovalStatus.Uploaded, ElementApprovalStatus.Uploaded,
                 $"Файл «{oldName}» заменён файлом «{originalFileName}».");
             _auditService.Record(userId, "EducationalProgramElement", element.Id, "CurrentFileReplaced",
-                $"{oldName} -> {originalFileName}; итерация {file.RevisionNumber}.");
+                $"{oldName} -> {originalFileName}; итерация {file.RevisionNumber}.",
+                new { File = oldName, file.RevisionNumber },
+                new { File = originalFileName, file.RevisionNumber });
             await _notificationService.CreateForElementAsync(
                 element.Id, userId, NotificationType.FileUploaded, "Файл заменён",
                 $"В элементе «{element.Name}» файл «{oldName}» заменён файлом «{originalFileName}».");
@@ -282,7 +293,9 @@ namespace PersonalCabinetEducationProgram.Services
             }
             AddHistory(element.Id, userId, oldStatus, normalizedNewStatus, comment ?? normalizedNewStatus);
             _auditService.Record(userId, "EducationalProgramElement", element.Id, "StatusChanged",
-                $"{oldStatus} -> {normalizedNewStatus}. {comment}".Trim());
+                $"{oldStatus} -> {normalizedNewStatus}. {comment}".Trim(),
+                new { Status = oldStatus },
+                new { Status = normalizedNewStatus, Comment = comment });
             await _notificationService.CreateForElementAsync(
                 element.Id,
                 userId,

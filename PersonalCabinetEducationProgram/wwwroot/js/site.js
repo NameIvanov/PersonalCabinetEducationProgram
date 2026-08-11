@@ -8,18 +8,27 @@ window.validateUploadFile = function (input) {
     }
 
     const maxSize = Number(input.dataset.maxSize || 0);
+    const maxTotalSize = Number(input.dataset.maxTotalSize || 0);
     if (input.files.length > 20) {
         input.value = "";
         window.alert("За один раз можно выбрать не более 20 файлов.");
         return false;
     }
 
+    let totalSize = 0;
     for (const file of input.files) {
+        totalSize += file.size;
         if (maxSize > 0 && file.size > maxSize) {
             input.value = "";
             window.alert(`Файл «${file.name}» превышает допустимый размер 50 МБ.`);
             return false;
         }
+    }
+
+    if (maxTotalSize > 0 && totalSize > maxTotalSize) {
+        input.value = "";
+        window.alert("Общий размер выбранных файлов превышает допустимые 200 МБ.");
+        return false;
     }
 
     return true;
@@ -32,6 +41,15 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     initializeThemeToggle();
+
+    document.querySelectorAll("form[data-confirm-form]").forEach(form => {
+        form.addEventListener("submit", event => {
+            const message = form.dataset.confirmForm || "Подтвердить действие?";
+            if (!window.confirm(message)) {
+                event.preventDefault();
+            }
+        });
+    });
 
     document.querySelectorAll("[data-toggle-element-filters], [data-toggle-live-filters]").forEach(button => {
         button.addEventListener("click", function () {

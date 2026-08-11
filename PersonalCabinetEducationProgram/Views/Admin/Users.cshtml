@@ -91,6 +91,7 @@
                                 <option value="Pending" selected="@(filters.ApprovalStatus == "Pending")">Ожидает решения</option>
                                 <option value="Approved" selected="@(filters.ApprovalStatus == "Approved")">Подтвержден</option>
                                 <option value="Rejected" selected="@(filters.ApprovalStatus == "Rejected")">Отклонен</option>
+                                <option value="SecurityBlocked" selected="@(filters.ApprovalStatus == "SecurityBlocked")">Заблокирован</option>
                             </select>
                         </th>
                         <th><a asp-action="Users" asp-route-sort="@currentSort" asp-route-direction="@currentDirection" asp-route-ShowFilters="true" class="btn btn-outline-secondary btn-sm">Сбросить</a></th>
@@ -112,6 +113,8 @@
                             "Rejected" => "Отклонен",
                             _ => "Ожидает решения"
                         };
+                        var isSecurityLocked = user.SecurityBlockedAtUtc.HasValue ||
+                                               user.LockoutEnd > DateTimeOffset.UtcNow;
 
                         <tr>
                             <td>@user.Id</td>
@@ -121,6 +124,15 @@
                             <td><span class="badge bg-primary-subtle text-primary">@(roleNames.GetValueOrDefault(user.RoleName, user.RoleName))</span></td>
                             <td>
                                 <span class="badge @approvalBadge">@approvalText</span>
+                                @if (isSecurityLocked)
+                                {
+                                    <span class="badge bg-danger-subtle text-danger ms-1">Заблокирован</span>
+                                    <div class="small text-danger mt-1">
+                                        @(string.IsNullOrWhiteSpace(user.SecurityBlockReason)
+                                            ? "Временная блокировка после неудачных попыток входа."
+                                            : user.SecurityBlockReason)
+                                    </div>
+                                }
                                 @if (user.ApprovalStatus == "Rejected" && !string.IsNullOrWhiteSpace(user.RejectionReason))
                                 {
                                     <div class="small text-muted mt-1">Причина: @user.RejectionReason</div>
@@ -157,6 +169,17 @@
                                             title="Сбросить пароль">
                                         Пароль
                                     </button>
+                                    @if (isSecurityLocked)
+                                    {
+                                        <button type="button"
+                                                class="btn btn-outline-success btn-sm unlock-user-button"
+                                                data-user-id="@user.Id"
+                                                data-user-name="@user.FullName"
+                                                data-user-reason="@user.SecurityBlockReason"
+                                                title="Разблокировать учётную запись">
+                                            Разблокировать
+                                        </button>
+                                    }
                                     @if (user.ApprovalStatus == PersonalCabinetEducationProgram.Models.UserApprovalStatus.Rejected)
                                     {
                                         <button type="button"
@@ -179,6 +202,37 @@
     {
         <div class="d-flex justify-content-between mt-3"><a asp-action="Users" asp-all-route-data="@PageRoute(page - 1)" class="btn btn-outline-secondary @(page <= 1 ? "disabled" : "")">Назад</a><span class="align-self-center">@(page) из @totalPages</span><a asp-action="Users" asp-all-route-data="@PageRoute(page + 1)" class="btn btn-outline-secondary @(page >= totalPages ? "disabled" : "")">Далее</a></div>
     }
+</div>
+
+<div class="modal fade" id="unlockUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content rounded-4">
+            <form method="post" asp-action="UnlockUser">
+                <div class="modal-header">
+                    <h5 class="modal-title">Разблокировка учётной записи</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="id" id="unlockUserId" />
+                    <p id="unlockUserText" class="mb-2"></p>
+                    <p id="unlockUserReason" class="small text-danger mb-3"></p>
+                    <label for="unlockReviewNote" class="form-label">Результат проверки</label>
+                    <textarea name="reviewNote"
+                              id="unlockReviewNote"
+                              class="form-control"
+                              rows="3"
+                              minlength="5"
+                              maxlength="500"
+                              required
+                              placeholder="Почему учётную запись можно разблокировать"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-success">Подтвердить разблокировку</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 
 <div class="modal fade" id="editUserModal" tabindex="-1">
@@ -408,6 +462,19 @@
                 document.getElementById('resetPasswordUserName').textContent =
                     'Пользователь: ' + button.dataset.userName;
                 new bootstrap.Modal(document.getElementById('resetPasswordModal')).show();
+            });
+        });
+
+        document.querySelectorAll('.unlock-user-button').forEach(function (button) {
+            button.addEventListener('click', function () {
+                document.getElementById('unlockUserId').value = button.dataset.userId;
+                document.getElementById('unlockUserText').textContent =
+                    'Разблокировать пользователя ' + button.dataset.userName + '?';
+                document.getElementById('unlockUserReason').textContent = button.dataset.userReason
+                    ? 'Причина блокировки: ' + button.dataset.userReason
+                    : 'Причина: превышено допустимое число неудачных попыток входа.';
+                document.getElementById('unlockReviewNote').value = '';
+                new bootstrap.Modal(document.getElementById('unlockUserModal')).show();
             });
         });
 

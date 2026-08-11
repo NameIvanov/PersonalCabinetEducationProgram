@@ -1,0 +1,99 @@
+@model PersonalCabinetEducationProgram.ViewModels.AdministrationStorageViewModel
+@{
+    ViewData["Title"] = "Состояние хранилища";
+    var storage = Model.Storage;
+    string Bytes(long? value)
+    {
+        if (!value.HasValue) return "—";
+        string[] units = ["Б", "КБ", "МБ", "ГБ", "ТБ"];
+        var size = (double)value.Value;
+        var unit = 0;
+        while (size >= 1024 && unit < units.Length - 1) { size /= 1024; unit++; }
+        return $"{size:0.##} {units[unit]}";
+    }
+}
+
+<div class="administration-shell">
+    @await Html.PartialAsync("_AdministrationSidebar", Model)
+    <section class="administration-content">
+        <header class="administration-page-header">
+            <div>
+                <div class="administration-eyebrow">Файловая инфраструктура</div>
+                <h1>Состояние хранилища</h1>
+                <p>Основные документы ОПОП, архивы PLX и временные файлы импорта</p>
+            </div>
+            <div class="administration-header-actions">
+                <a class="btn btn-primary" asp-action="Storage">Проверить снова</a>
+            </div>
+        </header>
+
+        @if (storage.Error != null)
+        {
+            <div class="alert alert-danger administration-alert">@storage.Error</div>
+        }
+
+        <div class="administration-metrics">
+            <article class="administration-metric">
+                <span class="metric-label"><i class="metric-dot @(storage.Exists ? "success" : "danger")"></i>Каталог</span>
+                <strong>@(storage.Exists ? "Доступен" : "Недоступен")</strong>
+                <small class="text-truncate" title="@storage.StoragePath">@storage.StoragePath</small>
+            </article>
+            <article class="administration-metric">
+                <span class="metric-label"><i class="metric-dot @(storage.WriteAvailable ? "success" : "danger")"></i>Запись</span>
+                <strong>@(storage.WriteAvailable ? "Разрешена" : "Недоступна")</strong>
+                <small>проверка созданием временного файла</small>
+            </article>
+            <article class="administration-metric">
+                <span class="metric-label"><i class="metric-dot info"></i>Занято на диске</span>
+                <strong>@(storage.UsedSpacePercent?.ToString() ?? "—")%</strong>
+                <small>@Bytes(storage.FreeSpaceBytes) свободно</small>
+            </article>
+            <article class="administration-metric">
+                <span class="metric-label"><i class="metric-dot @(storage.MissingFileCount > 0 ? "danger" : "success")"></i>Целостность</span>
+                <strong>@storage.MissingFileCount отсутствует</strong>
+                <small>@storage.OrphanFileCount файлов без записи в БД</small>
+            </article>
+        </div>
+
+        @if (storage.UsedSpacePercent.HasValue)
+        {
+            <section class="administration-info-section administration-wide-section">
+                <div class="administration-section-heading">
+                    <h2>Использование диска</h2>
+                    <span>@Bytes(storage.TotalSpaceBytes - storage.FreeSpaceBytes) из @Bytes(storage.TotalSpaceBytes)</span>
+                </div>
+                <div class="administration-progress" role="progressbar" aria-valuenow="@storage.UsedSpacePercent" aria-valuemin="0" aria-valuemax="100">
+                    <span style="width: @storage.UsedSpacePercent%"></span>
+                </div>
+            </section>
+        }
+
+        <div class="administration-section-grid">
+            <section class="administration-info-section">
+                <h2>Документы ОПОП</h2>
+                <dl class="administration-key-values">
+                    <div><dt>Файлов на диске</dt><dd>@storage.FileCount.ToString("N0")</dd></div>
+                    <div><dt>Объём данных приложения</dt><dd>@Bytes(storage.UsedByApplicationBytes)</dd></div>
+                    <div><dt>Ссылок в базе данных</dt><dd>@storage.DatabaseFileReferenceCount.ToString("N0")</dd></div>
+                    <div><dt>Отсутствующих файлов</dt><dd class="@(storage.MissingFileCount > 0 ? "text-danger" : "")">@storage.MissingFileCount</dd></div>
+                    <div><dt>Файлов без записи в БД</dt><dd class="@(storage.OrphanFileCount > 0 ? "text-warning" : "")">@storage.OrphanFileCount</dd></div>
+                </dl>
+            </section>
+            <section class="administration-info-section">
+                <h2>Импорт PLX</h2>
+                <dl class="administration-key-values">
+                    <div><dt>Файлов в архиве</dt><dd>@storage.PlxArchiveFileCount.ToString("N0")</dd></div>
+                    <div><dt>Объём архива</dt><dd>@Bytes(storage.PlxArchiveBytes)</dd></div>
+                    <div><dt>Временных файлов</dt><dd>@storage.PlxStagingFileCount.ToString("N0")</dd></div>
+                    <div><dt>Просроченных временных</dt><dd class="@(storage.ExpiredStagingFileCount > 0 ? "text-warning" : "")">@storage.ExpiredStagingFileCount</dd></div>
+                </dl>
+            </section>
+        </div>
+
+        <div class="administration-callout">
+            <strong>Проверка не изменяет пользовательские документы.</strong>
+            <span>Создаётся и сразу удаляется только служебный временный файл; отсутствующие и лишние файлы отображаются без автоматического удаления.</span>
+        </div>
+        <p class="administration-check-time">Проверено @storage.CheckedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")</p>
+    </section>
+</div>

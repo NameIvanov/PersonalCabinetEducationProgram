@@ -38,13 +38,12 @@
     <title>@ViewData["Title"] — Менеджер образовательных программ</title>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-    <link rel="stylesheet" href="~/PersonalCabinetEducationProgram.styles.css" asp-append-version="true" />
 </head>
 <body>
     <header class="app-header">
         <a class="app-brand" asp-controller="ManagerHome" asp-action="Index">
-            <span>Менеджер</span>
-            <span>образовательных программ</span>
+            <span class="app-brand-mark" aria-hidden="true">ОП</span>
+            <span>Личный кабинет ОПОП</span>
         </a>
 
         @if (isAuthenticated && User.IsInRole("Admin"))
@@ -58,7 +57,7 @@
                 <a class="@ActiveLink("Admin", "Departments")" asp-controller="Admin" asp-action="Departments">Кафедры</a>
                 <a class="@ActiveLink("Admin", "Users")" asp-controller="Admin" asp-action="Users">Пользователи</a>
                 <a class="@ActiveLink("Admin", "Assignments")" asp-controller="Admin" asp-action="Assignments">Назначения</a>
-                <a class="@ActiveLink("Admin", "Audit")" asp-controller="Admin" asp-action="Audit">Аудит</a>
+                <a class="@ActiveLink("Administration")" asp-controller="Administration" asp-action="Logs">Администрирование</a>
             </nav>
         }
 

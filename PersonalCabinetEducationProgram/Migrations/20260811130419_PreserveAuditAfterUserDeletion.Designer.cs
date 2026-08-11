@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PersonalCabinetEducationProgram.Data;
 
@@ -10,9 +11,11 @@ using PersonalCabinetEducationProgram.Data;
 namespace PersonalCabinetEducationProgram.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260811130419_PreserveAuditAfterUserDeletion")]
+    partial class PreserveAuditAfterUserDeletion
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1478,12 +1481,6 @@ namespace PersonalCabinetEducationProgram.Migrations
                         .HasColumnType("longtext")
                         .HasColumnName("concurrency_stamp");
 
-                    b.Property<int>("ConsecutiveInvalidUploadCount")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(0)
-                        .HasColumnName("consecutive_invalid_upload_count");
-
                     b.Property<string>("Email")
                         .HasMaxLength(256)
                         .HasColumnType("varchar(256)")
@@ -1545,16 +1542,6 @@ namespace PersonalCabinetEducationProgram.Migrations
                         .HasColumnType("longtext")
                         .HasColumnName("rejection_reason");
 
-                    b.Property<string>("SecurityBlockReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("varchar(500)")
-                        .HasColumnName("security_block_reason");
-
-                    b.Property<DateTime?>("SecurityBlockedAtUtc")
-                        .HasPrecision(6)
-                        .HasColumnType("datetime(6)")
-                        .HasColumnName("security_blocked_at_utc");
-
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("longtext")
                         .HasColumnName("security_stamp");
@@ -1586,7 +1573,6 @@ namespace PersonalCabinetEducationProgram.Migrations
                             AccessFailedCount = 0,
                             ApprovalStatus = "Approved",
                             ConcurrencyStamp = "user-1",
-                            ConsecutiveInvalidUploadCount = 0,
                             EmailConfirmed = false,
                             FullName = "Иванов Иван Иванович",
                             LockoutEnabled = true,
@@ -1605,7 +1591,6 @@ namespace PersonalCabinetEducationProgram.Migrations
                             AccessFailedCount = 0,
                             ApprovalStatus = "Approved",
                             ConcurrencyStamp = "user-2",
-                            ConsecutiveInvalidUploadCount = 0,
                             EmailConfirmed = false,
                             FullName = "Петрова Анна Сергеевна",
                             LockoutEnabled = true,
@@ -1624,7 +1609,6 @@ namespace PersonalCabinetEducationProgram.Migrations
                             AccessFailedCount = 0,
                             ApprovalStatus = "Approved",
                             ConcurrencyStamp = "user-3",
-                            ConsecutiveInvalidUploadCount = 0,
                             EmailConfirmed = false,
                             FullName = "Сидоров Петр Алексеевич",
                             LockoutEnabled = true,
@@ -1643,7 +1627,6 @@ namespace PersonalCabinetEducationProgram.Migrations
                             AccessFailedCount = 0,
                             ApprovalStatus = "Approved",
                             ConcurrencyStamp = "user-4",
-                            ConsecutiveInvalidUploadCount = 0,
                             EmailConfirmed = false,
                             FullName = "Козлова Мария Ивановна",
                             LockoutEnabled = true,

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations.Schema;
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Identity;
 
 namespace PersonalCabinetEducationProgram.Models
@@ -21,6 +22,16 @@ namespace PersonalCabinetEducationProgram.Models
         [Column("preferred_theme")]
         public string PreferredTheme { get; set; } = UserTheme.Light;
 
+        [Column("consecutive_invalid_upload_count")]
+        public int ConsecutiveInvalidUploadCount { get; set; }
+
+        [Column("security_blocked_at_utc")]
+        public DateTime? SecurityBlockedAtUtc { get; set; }
+
+        [Column("security_block_reason")]
+        [MaxLength(500)]
+        public string? SecurityBlockReason { get; set; }
+
         [NotMapped]
         public string Username
         {
@@ -37,7 +48,6 @@ namespace PersonalCabinetEducationProgram.Models
         public ICollection<ApproverAssignment> ApproverAssignments { get; set; } = [];
         public ICollection<Notification> Notifications { get; set; } = [];
         public ICollection<EducationalProgramElementFile> UploadedElementFiles { get; set; } = [];
-        public ICollection<AuditLog> AuditLogs { get; set; } = [];
         public ICollection<CurriculumImport> CurriculumImports { get; set; } = [];
     }
 }

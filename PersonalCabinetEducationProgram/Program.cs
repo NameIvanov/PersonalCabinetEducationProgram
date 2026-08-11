@@ -23,7 +23,7 @@ builder.Services.AddAuthorization(options =>
         .Build();
 });
 builder.Services.Configure<FormOptions>(options =>
-    options.MultipartBodyLengthLimit = FileUploadLimits.MaxFileSizeBytes);
+    options.MultipartBodyLengthLimit = FileUploadLimits.MaxRequestSizeBytes);
 builder.Services.Configure<IISServerOptions>(options =>
     options.MaxRequestBodySize = FileUploadLimits.MaxRequestSizeBytes);
 builder.WebHost.ConfigureKestrel(options =>
@@ -33,6 +33,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
 });
 builder.Services.AddRateLimiter(AppRateLimiterConfiguration.Configure);
+builder.Services.AddHttpContextAccessor();
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("Connection string 'DefaultConnection' is not configured.");
@@ -73,6 +74,9 @@ builder.Services.Configure<SecurityStampValidatorOptions>(options =>
 
 builder.Services.AddScoped<IUserClaimsPrincipalFactory<User>, ApplicationClaimsPrincipalFactory>();
 builder.Services.Configure<FileStorageSettings>(builder.Configuration.GetSection("FileStorageSettings"));
+builder.Services.Configure<SecurityMonitoringOptions>(builder.Configuration.GetSection(SecurityMonitoringOptions.SectionName));
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient<IIpGeolocationService, IpGeolocationService>();
 builder.Services.AddScoped<IFileStorageService, FileSystemStorageService>();
 builder.Services.AddScoped<ElementWorkflowService>();
 builder.Services.AddScoped<NotificationService>();
@@ -80,10 +84,20 @@ builder.Services.AddScoped<ElementAccessService>();
 builder.Services.AddScoped<ElementListQueryService>();
 builder.Services.AddScoped<ElementFilterService>();
 builder.Services.AddScoped<AuditService>();
+builder.Services.AddScoped<SecurityEventService>();
+builder.Services.AddScoped<AccountSecurityService>();
+builder.Services.AddScoped<SystemHealthService>();
+builder.Services.AddScoped<StorageHealthService>();
 builder.Services.AddScoped<PlxParserService>();
 builder.Services.AddScoped<PlxImportStorageService>();
 builder.Services.AddScoped<CurriculumImportService>();
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<SystemLogQueue>();
+builder.Services.AddSingleton<RequestActivityTracker>();
+builder.Services.AddSingleton<SuspiciousActivityMonitor>();
+builder.Services.AddSingleton<SecurityBlockedAccountRegistry>();
+builder.Services.AddHostedService<SystemLogWriterService>();
+builder.Services.AddHostedService<LogRetentionService>();
 builder.Services.Configure<DownloadQuotaOptions>(_ => { });
 builder.Services.AddSingleton<DownloadQuotaService>();
 
@@ -96,6 +110,14 @@ using (var scope = app.Services.CreateScope())
         await dbContext.Database.MigrateAsync();
     else
         await dbContext.Database.EnsureCreatedAsync();
+
+    var blockedAccounts = scope.ServiceProvider.GetRequiredService<SecurityBlockedAccountRegistry>();
+    var blockedUserIds = await dbContext.Users
+        .Where(user => user.SecurityBlockedAtUtc != null)
+        .Select(user => user.Id)
+        .ToListAsync();
+    foreach (var userId in blockedUserIds)
+        blockedAccounts.Block(userId);
 }
 
 app.UseForwardedHeaders();
@@ -120,6 +142,8 @@ app.Use(async (context, next) =>
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
+app.UseMiddleware<RequestLoggingMiddleware>();
+app.UseMiddleware<SecurityBlockedAccountMiddleware>();
 app.UseRateLimiter();
 app.UseAuthorization();
 

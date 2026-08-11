@@ -11,6 +11,7 @@ namespace PersonalCabinetEducationProgram.Services
     public sealed partial class PlxParserService
     {
         public const long MaxPlxFileSizeBytes = 20L * 1024 * 1024;
+        public const long MaxPlxRequestSizeBytes = MaxPlxFileSizeBytes + 1024 * 1024;
         private const long MaxXmlCharacters = 40L * 1024 * 1024;
 
         private static readonly (string Key, string Name)[] MainTemplates =

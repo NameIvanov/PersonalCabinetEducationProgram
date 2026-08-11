@@ -21,6 +21,9 @@ public class MigrationRegistrationTests
         Assert.Contains("20260717000100_AddPlxCurriculumImports", context.Database.GetMigrations());
         Assert.Contains("20260809000100_AddFileRemovalTracking", context.Database.GetMigrations());
         Assert.Contains("20260809000200_AddUserThemePreference", context.Database.GetMigrations());
+        Assert.Contains("20260811125514_AddAdministrationMonitoring", context.Database.GetMigrations());
+        Assert.Contains("20260811130419_PreserveAuditAfterUserDeletion", context.Database.GetMigrations());
+        Assert.Contains("20260811134443_AddAutomatedSecurityControls", context.Database.GetMigrations());
         Assert.False(context.Database.HasPendingModelChanges());
     }
 }

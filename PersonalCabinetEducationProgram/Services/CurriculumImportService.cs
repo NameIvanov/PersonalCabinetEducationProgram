@@ -174,7 +174,19 @@ namespace PersonalCabinetEducationProgram.Services
                     "EducationalProgram",
                     programId,
                     "PlxImported",
-                    $"Файл: {import.OriginalFileName}; создано: {createdCount}; обновлено: {updatedCount}; архивировано: {archivedCount}; пропущено: {skippedCount}.");
+                    $"Файл: {import.OriginalFileName}; создано: {createdCount}; обновлено: {updatedCount}; архивировано: {archivedCount}; пропущено: {skippedCount}.",
+                    newValues: new
+                    {
+                        import.OriginalFileName,
+                        import.PlanCode,
+                        import.PlanName,
+                        import.SourceAppVersion,
+                        Created = createdCount,
+                        Updated = updatedCount,
+                        Archived = archivedCount,
+                        Skipped = skippedCount,
+                        WarningCount = warnings.Distinct().Count()
+                    });
 
                 await _context.SaveChangesAsync(cancellationToken);
                 if (transaction != null)

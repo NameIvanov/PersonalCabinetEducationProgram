@@ -1,0 +1,95 @@
+@model PersonalCabinetEducationProgram.ViewModels.AdministrationServerViewModel
+@{
+    ViewData["Title"] = "Состояние сервера";
+    var health = Model.Health;
+    string Bytes(long value)
+    {
+        string[] units = ["Б", "КБ", "МБ", "ГБ", "ТБ"];
+        var size = (double)value;
+        var unit = 0;
+        while (size >= 1024 && unit < units.Length - 1) { size /= 1024; unit++; }
+        return $"{size:0.##} {units[unit]}";
+    }
+    string Uptime(TimeSpan value) => $"{(int)value.TotalDays} д {value.Hours:00} ч {value.Minutes:00} мин";
+}
+
+<div class="administration-shell">
+    @await Html.PartialAsync("_AdministrationSidebar", Model)
+    <section class="administration-content">
+        <header class="administration-page-header">
+            <div>
+                <div class="administration-eyebrow">Мониторинг системы</div>
+                <h1>Состояние сервера</h1>
+                <p>Приложение, процесс, база данных и обработка запросов</p>
+            </div>
+            <div class="administration-header-actions">
+                <a class="btn btn-primary" asp-action="Server">Обновить</a>
+            </div>
+        </header>
+
+        <div class="administration-metrics">
+            <article class="administration-metric">
+                <span class="metric-label"><i class="metric-dot @(health.DatabaseAvailable ? "success" : "danger")"></i>MySQL</span>
+                <strong>@(health.DatabaseAvailable ? "Доступна" : "Недоступна")</strong>
+                <small>@health.DatabaseResponseMs мс</small>
+            </article>
+            <article class="administration-metric">
+                <span class="metric-label"><i class="metric-dot success"></i>Время работы</span>
+                <strong>@Uptime(health.Uptime)</strong>
+                <small>с @health.StartedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</small>
+            </article>
+            <article class="administration-metric">
+                <span class="metric-label"><i class="metric-dot info"></i>Активные запросы</span>
+                <strong>@health.ActiveRequests</strong>
+                <small>@health.AverageDurationMs.ToString("N0") мс в среднем</small>
+            </article>
+            <article class="administration-metric">
+                <span class="metric-label"><i class="metric-dot @(health.ErrorsToday > 0 ? "danger" : "success")"></i>Ошибки сегодня</span>
+                <strong>@health.ErrorsToday</strong>
+                <small>@health.WarningsToday предупреждений</small>
+            </article>
+        </div>
+
+        @if (!health.DatabaseAvailable && health.DatabaseError != null)
+        {
+            <div class="alert alert-danger administration-alert">MySQL: @health.DatabaseError</div>
+        }
+
+        <div class="administration-section-grid">
+            <section class="administration-info-section">
+                <h2>Приложение</h2>
+                <dl class="administration-key-values">
+                    <div><dt>Версия</dt><dd>@health.ApplicationVersion</dd></div>
+                    <div><dt>Среда</dt><dd>@health.EnvironmentName</dd></div>
+                    <div><dt>Платформа</dt><dd>@health.Framework</dd></div>
+                    <div><dt>Сервер</dt><dd>@health.MachineName</dd></div>
+                    <div class="wide"><dt>Операционная система</dt><dd>@health.OperatingSystem</dd></div>
+                </dl>
+            </section>
+            <section class="administration-info-section">
+                <h2>Ресурсы процесса</h2>
+                <dl class="administration-key-values">
+                    <div><dt>Средняя загрузка CPU</dt><dd>@health.CpuPercent.ToString("0.0")%</dd></div>
+                    <div><dt>Логических процессоров</dt><dd>@health.ProcessorCount</dd></div>
+                    <div><dt>Рабочая память</dt><dd>@Bytes(health.WorkingSetBytes)</dd></div>
+                    <div><dt>Управляемая память</dt><dd>@Bytes(health.ManagedMemoryBytes)</dd></div>
+                    <div><dt>Потоки процесса</dt><dd>@health.ThreadCount</dd></div>
+                </dl>
+            </section>
+        </div>
+
+        <section class="administration-info-section administration-wide-section">
+            <h2>Обработка запросов</h2>
+            <div class="administration-stat-strip">
+                <div><span>Завершено после запуска</span><strong>@health.CompletedRequestsSinceStart.ToString("N0")</strong></div>
+                <div><span>Запросов сегодня</span><strong>@health.RequestsToday.ToString("N0")</strong></div>
+                <div><span>Ошибок 4xx после запуска</span><strong>@health.ClientErrorsSinceStart.ToString("N0")</strong></div>
+                <div><span>Ошибок 5xx после запуска</span><strong>@health.ServerErrorsSinceStart.ToString("N0")</strong></div>
+                <div><span>Потеряно тех. логов</span><strong class="@(health.DroppedRequestLogs > 0 ? "text-danger" : "")">@health.DroppedRequestLogs</strong></div>
+                <div><span>Потеряно событий безопасности</span><strong class="@(health.DroppedSecurityEvents > 0 ? "text-danger" : "")">@health.DroppedSecurityEvents</strong></div>
+            </div>
+        </section>
+
+        <p class="administration-check-time">Проверено @health.CheckedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")</p>
+    </section>
+</div>

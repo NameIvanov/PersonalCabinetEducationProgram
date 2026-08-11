@@ -20,6 +20,8 @@ namespace PersonalCabinetEducationProgram.Data
         public DbSet<EducationalProgramElementFile> EducationalProgramElementFiles { get; set; }
         public DbSet<AuditLog> AuditLogs { get; set; }
         public DbSet<CurriculumImport> CurriculumImports { get; set; }
+        public DbSet<SystemRequestLog> SystemRequestLogs { get; set; }
+        public DbSet<SecurityEventLog> SecurityEventLogs { get; set; }
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) { }
 
@@ -243,14 +245,32 @@ namespace PersonalCabinetEducationProgram.Data
             {
                 entity.Property(a => a.EntityType).HasMaxLength(100);
                 entity.Property(a => a.Action).HasMaxLength(100);
-                entity.HasOne(a => a.User)
-                    .WithMany(u => u.AuditLogs)
-                    .HasForeignKey(a => a.UserId)
-                    .OnDelete(DeleteBehavior.Restrict)
-                    .HasConstraintName("fk_audit_user");
+                entity.Property(a => a.CreatedAt).HasPrecision(6);
                 entity.HasIndex(a => a.UserId).HasDatabaseName("ix_audit_user");
                 entity.HasIndex(a => new { a.EntityType, a.EntityId }).HasDatabaseName("ix_audit_entity");
                 entity.HasIndex(a => a.CreatedAt).HasDatabaseName("ix_audit_created");
+            });
+
+            modelBuilder.Entity<SystemRequestLog>(entity =>
+            {
+                entity.Property(log => log.OccurredAtUtc).HasPrecision(6);
+                entity.HasIndex(log => log.OccurredAtUtc).HasDatabaseName("ix_request_created");
+                entity.HasIndex(log => new { log.UserId, log.OccurredAtUtc }).HasDatabaseName("ix_request_user_created");
+                entity.HasIndex(log => new { log.IpAddress, log.OccurredAtUtc }).HasDatabaseName("ix_request_ip_created");
+                entity.HasIndex(log => new { log.StatusCode, log.OccurredAtUtc }).HasDatabaseName("ix_request_status_created");
+                entity.HasIndex(log => log.TraceId).HasDatabaseName("ix_request_trace");
+            });
+
+            modelBuilder.Entity<SecurityEventLog>(entity =>
+            {
+                entity.Property(log => log.FirstOccurredAtUtc).HasPrecision(6);
+                entity.Property(log => log.LastOccurredAtUtc).HasPrecision(6);
+                entity.Property(log => log.ReviewedAtUtc).HasPrecision(6);
+                entity.HasIndex(log => new { log.Status, log.LastOccurredAtUtc }).HasDatabaseName("ix_security_status_date");
+                entity.HasIndex(log => new { log.Severity, log.LastOccurredAtUtc }).HasDatabaseName("ix_security_severity_date");
+                entity.HasIndex(log => new { log.UserId, log.LastOccurredAtUtc }).HasDatabaseName("ix_security_user_date");
+                entity.HasIndex(log => new { log.IpAddress, log.LastOccurredAtUtc }).HasDatabaseName("ix_security_ip_date");
+                entity.HasIndex(log => log.TraceId).HasDatabaseName("ix_security_trace");
             });
 
             // Seed Roles
@@ -475,6 +495,15 @@ namespace PersonalCabinetEducationProgram.Data
                     .HasColumnName("preferred_theme")
                     .HasMaxLength(16)
                     .HasDefaultValue(UserTheme.Light);
+                entity.Property(u => u.ConsecutiveInvalidUploadCount)
+                    .HasColumnName("consecutive_invalid_upload_count")
+                    .HasDefaultValue(0);
+                entity.Property(u => u.SecurityBlockedAtUtc)
+                    .HasColumnName("security_blocked_at_utc")
+                    .HasPrecision(6);
+                entity.Property(u => u.SecurityBlockReason)
+                    .HasColumnName("security_block_reason")
+                    .HasMaxLength(500);
                 entity.Property(u => u.Id).HasColumnName("Id");
                 entity.Property(u => u.UserName).HasColumnName("username").HasMaxLength(100);
                 entity.Property(u => u.NormalizedUserName).HasColumnName("normalized_username").HasMaxLength(100);

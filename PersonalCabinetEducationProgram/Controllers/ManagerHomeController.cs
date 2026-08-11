@@ -20,6 +20,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         private readonly ElementAccessService _accessService;
         private readonly AuditService _auditService;
         private readonly ElementListQueryService _elementListQueryService;
+        private readonly AccountSecurityService _accountSecurityService;
 
         public ManagerHomeController(
             IFileStorageService fileStorageService,
@@ -29,7 +30,8 @@ namespace PersonalCabinetEducationProgram.Controllers
             NotificationService notificationService,
             ElementAccessService accessService,
             AuditService auditService,
-            ElementListQueryService elementListQueryService)
+            ElementListQueryService elementListQueryService,
+            AccountSecurityService accountSecurityService)
         {
             _fileStorageService = fileStorageService;
             _storageSettings = storageSettings.Value;
@@ -39,6 +41,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             _accessService = accessService;
             _auditService = auditService;
             _elementListQueryService = elementListQueryService;
+            _accountSecurityService = accountSecurityService;
         }
 
         private int GetCurrentUserId()
@@ -116,6 +119,18 @@ namespace PersonalCabinetEducationProgram.Controllers
                 return RedirectAfterUpload(elementId, programId, returnToFiles);
             }
 
+            var totalUploadSize = files.Sum(file => file.Length);
+            if (totalUploadSize > FileUploadLimits.MaxGroupSizeBytes)
+            {
+                await _accountSecurityService.RecordInvalidUploadAsync(
+                    "группа файлов",
+                    totalUploadSize,
+                    $"Общий размер превышает {FileUploadLimits.MaxGroupSizeDisplay}.",
+                    countsTowardsBlock: false);
+                TempData["ErrorMessage"] = $"Общий размер группы файлов не должен превышать {FileUploadLimits.MaxGroupSizeDisplay}.";
+                return RedirectAfterUpload(elementId, programId, returnToFiles);
+            }
+
             var currentFileCount = await _context.EducationalProgramElementFiles
                 .CountAsync(f => f.EducationalProgramElementId == elementId && f.IsCurrent);
             if (currentFileCount + files.Count > FileUploadLimits.MaxFilesPerGroup)
@@ -128,6 +143,9 @@ namespace PersonalCabinetEducationProgram.Controllers
             {
                 foreach (var file in files)
                     await _fileStorageService.ValidateFileAsync(file);
+
+                _accountSecurityService.RecordDocumentUpload(files);
+                await _accountSecurityService.ResetInvalidUploadSequenceAsync();
 
                 var storedFiles = new List<(string StoredFileName, string OriginalFileName)>();
                 try
@@ -464,6 +482,8 @@ namespace PersonalCabinetEducationProgram.Controllers
             try
             {
                 await _fileStorageService.ValidateFileAsync(file);
+                _accountSecurityService.RecordDocumentUpload([file]);
+                await _accountSecurityService.ResetInvalidUploadSequenceAsync();
                 storedFileName = await _fileStorageService.SaveFileAsync(file);
                 await _workflowService.ReplaceCurrentFileAsync(
                     fileId, GetCurrentUserId(), storedFileName, Path.GetFileName(file.FileName));

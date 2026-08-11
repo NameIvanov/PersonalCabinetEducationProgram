@@ -15,10 +15,29 @@ namespace PersonalCabinetEducationProgram.Services
         };
 
         private readonly FileStorageSettings _settings;
+        private readonly SecurityEventService? _securityEventService;
+        private readonly AccountSecurityService? _accountSecurityService;
 
         public FileSystemStorageService(IOptions<FileStorageSettings> settings)
+            : this(settings, null, null)
+        {
+        }
+
+        public FileSystemStorageService(
+            IOptions<FileStorageSettings> settings,
+            SecurityEventService? securityEventService)
+            : this(settings, securityEventService, null)
+        {
+        }
+
+        public FileSystemStorageService(
+            IOptions<FileStorageSettings> settings,
+            SecurityEventService? securityEventService,
+            AccountSecurityService? accountSecurityService)
         {
             _settings = settings.Value;
+            _securityEventService = securityEventService;
+            _accountSecurityService = accountSecurityService;
         }
 
         public async Task<string> SaveFileAsync(IFormFile file)
@@ -70,17 +89,35 @@ namespace PersonalCabinetEducationProgram.Services
         public async Task ValidateFileAsync(IFormFile file)
         {
             if (file == null || file.Length == 0)
+            {
+                await RecordRejectedFileAsync(file, "Файл не выбран или пуст.", countsTowardsBlock: false);
                 throw new ArgumentException("Файл не выбран или пуст.");
+            }
 
             if (file.Length > FileUploadLimits.MaxFileSizeBytes)
+            {
+                await RecordRejectedFileAsync(
+                    file,
+                    $"Размер превышает {FileUploadLimits.MaxFileSizeDisplay}.",
+                    countsTowardsBlock: false);
                 throw new InvalidOperationException($"Размер каждого файла не должен превышать {FileUploadLimits.MaxFileSizeDisplay}.");
+            }
 
             if (file.FileName.Length > 255)
+            {
+                await RecordRejectedFileAsync(file, "Имя файла длиннее 255 символов.", countsTowardsBlock: false);
                 throw new InvalidOperationException("Имя файла не должно превышать 255 символов.");
+            }
 
             var extension = Path.GetExtension(file.FileName);
             if (!AllowedExtensions.Contains(extension))
+            {
+                await RecordRejectedFileAsync(
+                    file,
+                    $"Недопустимое расширение {extension}.",
+                    countsTowardsBlock: true);
                 throw new InvalidOperationException("Можно загружать только PDF, DOC и DOCX файлы.");
+            }
 
             await using var stream = file.OpenReadStream();
             var header = new byte[8];
@@ -96,7 +133,35 @@ namespace PersonalCabinetEducationProgram.Services
             };
 
             if (!isValid)
+            {
+                await RecordRejectedFileAsync(
+                    file,
+                    "Содержимое не соответствует расширению.",
+                    countsTowardsBlock: true);
                 throw new InvalidOperationException($"Содержимое файла «{Path.GetFileName(file.FileName)}» не соответствует его расширению.");
+            }
+        }
+
+        private async Task RecordRejectedFileAsync(
+            IFormFile? file,
+            string reason,
+            bool countsTowardsBlock)
+        {
+            if (_accountSecurityService != null)
+            {
+                await _accountSecurityService.RecordInvalidUploadAsync(
+                    file?.FileName,
+                    file?.Length ?? 0,
+                    reason,
+                    countsTowardsBlock);
+                return;
+            }
+
+            _securityEventService?.Record(
+                SecurityEventTypes.InvalidFileUpload,
+                SecurityEventSeverities.Warning,
+                "Отклонена загрузка файла",
+                $"Файл: {Path.GetFileName(file?.FileName ?? "не указан")}; размер: {file?.Length ?? 0} байт; причина: {reason}");
         }
 
         private static bool IsWordDocument(Stream stream)

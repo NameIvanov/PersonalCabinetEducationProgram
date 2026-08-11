@@ -1,0 +1,37 @@
+@model PersonalCabinetEducationProgram.ViewModels.AdministrationRequestDetailsViewModel
+@{
+    ViewData["Title"] = "Запись журнала";
+    var entry = Model.Entry;
+}
+
+<div class="administration-shell">
+    @await Html.PartialAsync("_AdministrationSidebar", Model)
+    <section class="administration-content">
+        <header class="administration-page-header">
+            <div>
+                <a class="administration-back-link" asp-action="Logs">← Назад к логам</a>
+                <div class="administration-eyebrow">Технический журнал</div>
+                <h1>Запрос #@entry.Id</h1>
+                <p>@entry.OccurredAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss.fff")</p>
+            </div>
+        </header>
+        <dl class="administration-details-grid">
+            <div><dt>Пользователь</dt><dd>@(entry.UserFullName ?? entry.UserLogin ?? "Не авторизован") @(entry.UserId.HasValue ? $"· ID {entry.UserId}" : "")</dd></div>
+            <div><dt>Роль</dt><dd>@(entry.UserRole ?? "—")</dd></div>
+            <div><dt>IP-адрес</dt><dd>@entry.IpAddress</dd></div>
+            <div><dt>Trace ID</dt><dd class="text-break">@entry.TraceId</dd></div>
+            <div><dt>Маршрут</dt><dd>@entry.HttpMethod @entry.Path</dd></div>
+            <div><dt>Контроллер</dt><dd>@(entry.Controller == null ? "—" : $"{entry.Controller}.{entry.Action}")</dd></div>
+            <div><dt>Результат</dt><dd>HTTP @entry.StatusCode · @entry.Result</dd></div>
+            <div><dt>Длительность</dt><dd>@entry.DurationMs мс</dd></div>
+            <div><dt>Размер запроса</dt><dd>@(entry.RequestSizeBytes?.ToString("N0") ?? "—") байт</dd></div>
+            <div><dt>Размер ответа</dt><dd>@(entry.ResponseSizeBytes?.ToString("N0") ?? "—") байт</dd></div>
+            <div class="wide"><dt>Безопасные параметры запроса</dt><dd class="text-break">@(entry.QueryString ?? "—")</dd></div>
+            <div class="wide"><dt>User-Agent</dt><dd class="text-break">@(entry.UserAgent ?? "—")</dd></div>
+            @if (entry.ErrorType != null)
+            {
+                <div class="wide danger"><dt>Ошибка</dt><dd>@entry.ErrorType: @entry.ErrorMessage</dd></div>
+            }
+        </dl>
+    </section>
+</div>

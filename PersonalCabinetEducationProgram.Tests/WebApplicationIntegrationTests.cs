@@ -45,6 +45,18 @@ public sealed class WebApplicationIntegrationTests : IClassFixture<CustomWebAppl
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData("/Administration/Logs")]
+    [InlineData("/Administration/Server")]
+    [InlineData("/Administration/Security")]
+    [InlineData("/Administration/Audit")]
+    public async Task Administrator_CanOpenAdministrationPages(string url)
+    {
+        using var client = CreateClient(4, AppRoles.Admin);
+        var response = await client.GetAsync(url);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
     private HttpClient CreateClient(int? userId = null, string? role = null)
     {
         var client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });

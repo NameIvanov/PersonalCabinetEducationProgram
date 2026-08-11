@@ -21,6 +21,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         private readonly NotificationService _notificationService;
         private readonly AuditService _auditService;
         private readonly ElementFilterService _elementFilterService;
+        private readonly AccountSecurityService _accountSecurityService;
 
         public AdminController(
             ApplicationDbContext context,
@@ -30,7 +31,8 @@ namespace PersonalCabinetEducationProgram.Controllers
             UserManager<User> userManager,
             NotificationService notificationService,
             AuditService auditService,
-            ElementFilterService elementFilterService)
+            ElementFilterService elementFilterService,
+            AccountSecurityService accountSecurityService)
         {
             _context = context;
             _fileStorageService = fileStorageService;
@@ -40,6 +42,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             _notificationService = notificationService;
             _auditService = auditService;
             _elementFilterService = elementFilterService;
+            _accountSecurityService = accountSecurityService;
         }
 
         private int GetCurrentUserId()
@@ -74,7 +77,9 @@ namespace PersonalCabinetEducationProgram.Controllers
                 ListFilterMatcher.Text(user.FullName, filters.FullName) &&
                 ListFilterMatcher.Text(user.Post, filters.Post) &&
                 ListFilterMatcher.Exact(user.RoleName, filters.Role) &&
-                ListFilterMatcher.Exact(user.ApprovalStatus, filters.ApprovalStatus));
+                (filters.ApprovalStatus == "SecurityBlocked"
+                    ? user.SecurityBlockedAtUtc.HasValue || user.LockoutEnd > DateTimeOffset.UtcNow
+                    : ListFilterMatcher.Exact(user.ApprovalStatus, filters.ApprovalStatus)));
             var descending = direction.Equals("desc", StringComparison.OrdinalIgnoreCase);
             query = sort switch
             {
@@ -107,18 +112,17 @@ namespace PersonalCabinetEducationProgram.Controllers
             page = Math.Max(page, 1);
             var entriesQuery = await _context.AuditLogs
                 .AsNoTracking()
-                .Include(a => a.User)
                 .ToListAsync();
             IEnumerable<AuditLog> query = entriesQuery.Where(entry =>
                 ListFilterMatcher.Date(entry.CreatedAt, filters.DateFrom, filters.DateTo) &&
-                ListFilterMatcher.Text(entry.User?.FullName, filters.User) &&
+                ListFilterMatcher.AnyText([entry.UserFullName, entry.UserLogin, entry.UserId.ToString()], filters.User) &&
                 ListFilterMatcher.Text($"{entry.EntityType} #{entry.EntityId}", filters.Entity) &&
                 ListFilterMatcher.Text(entry.Action, filters.Action) &&
                 ListFilterMatcher.Text(entry.Details, filters.Details));
             var descending = direction.Equals("desc", StringComparison.OrdinalIgnoreCase);
             query = sort switch
             {
-                "user" => descending ? query.OrderByDescending(a => a.User.FullName) : query.OrderBy(a => a.User.FullName),
+                "user" => descending ? query.OrderByDescending(a => a.UserFullName) : query.OrderBy(a => a.UserFullName),
                 "entity" => descending ? query.OrderByDescending(a => a.EntityType).ThenByDescending(a => a.EntityId) : query.OrderBy(a => a.EntityType).ThenBy(a => a.EntityId),
                 "action" => descending ? query.OrderByDescending(a => a.Action) : query.OrderBy(a => a.Action),
                 "details" => descending ? query.OrderByDescending(a => a.Details) : query.OrderBy(a => a.Details),
@@ -152,13 +156,16 @@ namespace PersonalCabinetEducationProgram.Controllers
                 return RedirectToAction(nameof(Users));
             }
 
+            var previousApproval = new { user.ApprovalStatus, user.RejectionReason };
             user.ApprovalStatus = approvalStatus;
             user.RejectionReason = approvalStatus == UserApprovalStatus.Rejected ? rejectionReason : null;
 
             await _userManager.UpdateAsync(user);
             await _userManager.UpdateSecurityStampAsync(user);
             _auditService.Record(GetCurrentUserId(), "User", user.Id, "ApprovalStatusChanged",
-                $"Статус учётной записи изменён на «{approvalStatus}».");
+                $"Статус учётной записи изменён на «{approvalStatus}».",
+                previousApproval,
+                new { user.ApprovalStatus, user.RejectionReason });
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Users));
         }
@@ -224,7 +231,15 @@ namespace PersonalCabinetEducationProgram.Controllers
             }
 
             TempData["UsersSuccess"] = $"Аккаунт «{user.UserName}» создан.";
-            _auditService.Record(GetCurrentUserId(), "User", user.Id, "Created", $"Создан пользователь {user.UserName}.");
+            _auditService.Record(GetCurrentUserId(), "User", user.Id, "Created", $"Создан пользователь {user.UserName}.",
+                newValues: new
+                {
+                    user.UserName,
+                    user.FullName,
+                    user.Post,
+                    user.ApprovalStatus,
+                    Role = GetRoleName(roleId)
+                });
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Users));
         }
@@ -260,9 +275,46 @@ namespace PersonalCabinetEducationProgram.Controllers
             }
 
             await _userManager.UpdateSecurityStampAsync(user);
-            _auditService.Record(GetCurrentUserId(), "User", user.Id, "PasswordReset", "Пароль сброшен администратором.");
+            _auditService.Record(GetCurrentUserId(), "User", user.Id, "PasswordReset", "Пароль сброшен администратором.",
+                newValues: new { PasswordChanged = true, SecurityStampUpdated = true });
             await _context.SaveChangesAsync();
             TempData["UsersSuccess"] = $"Пароль пользователя «{user.UserName}» сброшен.";
+            return RedirectToAction(nameof(Users));
+        }
+
+        [HttpPost]
+        [Authorize(Roles = "Admin")]
+        [ValidateAntiForgeryToken]
+        [AppRateLimit(AppRateLimitPolicies.AdminUserMutation)]
+        public async Task<IActionResult> UnlockUser(
+            int id,
+            string reviewNote,
+            CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(reviewNote) || reviewNote.Trim().Length < 5)
+            {
+                TempData["UsersError"] = "Для разблокировки укажите комментарий длиной не менее 5 символов.";
+                return RedirectToAction(nameof(Users));
+            }
+
+            if (reviewNote.Length > 500)
+            {
+                TempData["UsersError"] = "Комментарий к разблокировке не должен превышать 500 символов.";
+                return RedirectToAction(nameof(Users));
+            }
+
+            var result = await _accountSecurityService.UnlockAsync(
+                id,
+                GetCurrentUserId(),
+                reviewNote,
+                cancellationToken);
+            if (!result.Succeeded)
+            {
+                TempData["UsersError"] = result.Error ?? "Не удалось разблокировать учётную запись.";
+                return RedirectToAction(nameof(Users));
+            }
+
+            TempData["UsersSuccess"] = $"Учётная запись «{result.UserName}» разблокирована.";
             return RedirectToAction(nameof(Users));
         }
 
@@ -285,6 +337,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
             var currentRoles = await _userManager.GetRolesAsync(user);
             var isAdministrator = currentRoles.Contains(AppRoles.Admin, StringComparer.OrdinalIgnoreCase);
+            var previousUser = new { user.FullName, user.Post, Roles = currentRoles.ToArray() };
 
             if (!isAdministrator && (roleId == null || !AppRoles.AssignableIds.Contains(roleId.Value)))
                 return BadRequest();
@@ -327,7 +380,14 @@ namespace PersonalCabinetEducationProgram.Controllers
             }
 
             await _userManager.UpdateSecurityStampAsync(user);
-            _auditService.Record(GetCurrentUserId(), "User", user.Id, "Edited", "Данные пользователя или его роль изменены.");
+            _auditService.Record(GetCurrentUserId(), "User", user.Id, "Edited", "Данные пользователя или его роль изменены.",
+                previousUser,
+                new
+                {
+                    user.FullName,
+                    user.Post,
+                    Roles = isAdministrator ? currentRoles.ToArray() : new[] { GetRoleName(roleId!.Value) }
+                });
             await _context.SaveChangesAsync();
             TempData["UsersSuccess"] = $"Данные пользователя «{user.UserName}» обновлены.";
             return RedirectToAction(nameof(Users));
@@ -362,7 +422,8 @@ namespace PersonalCabinetEducationProgram.Controllers
                 return RedirectToAction(nameof(Users));
             }
 
-            _auditService.Record(GetCurrentUserId(), "User", id, "Deleted", $"Удалён пользователь {user.UserName}.");
+            _auditService.Record(GetCurrentUserId(), "User", id, "Deleted", $"Удалён пользователь {user.UserName}.",
+                previousValues: new { user.UserName, user.FullName, user.Post, user.ApprovalStatus });
             await _context.SaveChangesAsync();
             TempData["UsersSuccess"] = $"Аккаунт «{user.UserName}» удалён.";
             return RedirectToAction(nameof(Users));
@@ -622,7 +683,18 @@ namespace PersonalCabinetEducationProgram.Controllers
                 }
 
                 _auditService.Record(GetCurrentUserId(), "EducationalProgram", program.Id, "Created",
-                    $"Создана ОПОП {program.CodeReferral} «{program.Name}».");
+                    $"Создана ОПОП {program.CodeReferral} «{program.Name}».",
+                    newValues: new
+                    {
+                        program.CodeReferral,
+                        program.Name,
+                        program.EducationalLevel,
+                        program.YearApprovals,
+                        program.Status,
+                        ManagerUserId = managerUserId,
+                        DepartmentId = departmentId,
+                        FacultyId = facultyId
+                    });
                 await _context.SaveChangesAsync();
                 if (transaction != null)
                     await transaction.CommitAsync();
@@ -661,12 +733,22 @@ namespace PersonalCabinetEducationProgram.Controllers
                     p.EducationalLevel == normalizedLevel && p.YearApprovals == yearApprovals))
                 return BadRequest("Такая ОПОП уже существует.");
 
+            var previousProgram = new
+            {
+                program.CodeReferral,
+                program.Name,
+                program.EducationalLevel,
+                program.YearApprovals,
+                program.Version
+            };
             program.CodeReferral = normalizedCode;
             program.Name = normalizedName;
             program.EducationalLevel = normalizedLevel;
             program.YearApprovals = yearApprovals;
             program.Version++;
-            _auditService.Record(GetCurrentUserId(), "EducationalProgram", program.Id, "Edited", "Изменена карточка ОПОП.");
+            _auditService.Record(GetCurrentUserId(), "EducationalProgram", program.Id, "Edited", "Изменена карточка ОПОП.",
+                previousProgram,
+                new { program.CodeReferral, program.Name, program.EducationalLevel, program.YearApprovals, program.Version });
 
             try
             {
@@ -708,6 +790,9 @@ namespace PersonalCabinetEducationProgram.Controllers
             if (validDepartments != departmentIds.Distinct().Count() || validFaculties != facultyIds.Distinct().Count())
                 return BadRequest("Одна из кафедр или факультетов не найдена.");
 
+            var previousAssignments = program.Assignments
+                .Select(assignment => new { assignment.DepartmentId, assignment.FacultyId })
+                .ToArray();
             _context.EducationalProgramAssignments.RemoveRange(program.Assignments);
             foreach (var pair in pairs)
             {
@@ -721,7 +806,9 @@ namespace PersonalCabinetEducationProgram.Controllers
 
             program.Version++;
             _auditService.Record(GetCurrentUserId(), "EducationalProgram", program.Id, "AssignmentsChanged",
-                $"Установлено привязок: {pairs.Count}.");
+                $"Установлено привязок: {pairs.Count}.",
+                previousAssignments,
+                pairs.Select(pair => new { DepartmentId = pair.First, FacultyId = pair.Second }).ToArray());
             try
             {
                 await _context.SaveChangesAsync();
@@ -790,6 +877,7 @@ namespace PersonalCabinetEducationProgram.Controllers
                     return NotFound();
             }
 
+            var previousManagerUserId = program.UserId;
             program.UserId = managerUserId;
             program.Version++;
 
@@ -810,7 +898,9 @@ namespace PersonalCabinetEducationProgram.Controllers
             }
 
             _auditService.Record(GetCurrentUserId(), "EducationalProgram", program.Id, "ManagerAssigned",
-                managerUserId.HasValue ? $"Назначен руководитель, ID {managerUserId.Value}." : "Руководитель снят.");
+                managerUserId.HasValue ? $"Назначен руководитель, ID {managerUserId.Value}." : "Руководитель снят.",
+                new { ManagerUserId = previousManagerUserId },
+                new { ManagerUserId = managerUserId });
 
             try
             {
@@ -865,7 +955,8 @@ namespace PersonalCabinetEducationProgram.Controllers
                 Comment = "Элемент ОПОП создан."
             });
             _auditService.Record(GetCurrentUserId(), "EducationalProgramElement", element.Id, "Created",
-                $"Создан элемент «{element.Name}».");
+                $"Создан элемент «{element.Name}».",
+                newValues: new { element.EducationalProgramId, element.TypeElement, element.Name, element.Description, element.StatusApprovals });
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(ProgramDetails), new { id = programId });
         }
@@ -892,6 +983,7 @@ namespace PersonalCabinetEducationProgram.Controllers
                 return BadRequest("Элемент с таким типом и наименованием уже существует в ОПОП.");
 
             var oldDescription = $"{element.TypeElement}: {element.Name} ({element.Description})";
+            var previousElement = new { element.TypeElement, element.Name, element.Description, element.Version };
             element.TypeElement = typeElement;
             element.Name = normalizedName;
             element.Description = description?.Trim() ?? string.Empty;
@@ -906,7 +998,9 @@ namespace PersonalCabinetEducationProgram.Controllers
                 Comment = $"Изменена карточка элемента. Было: {oldDescription}"
             });
             _auditService.Record(GetCurrentUserId(), "EducationalProgramElement", element.Id, "Edited",
-                $"Изменена карточка. Было: {oldDescription}");
+                $"Изменена карточка. Было: {oldDescription}",
+                previousElement,
+                new { element.TypeElement, element.Name, element.Description, element.Version });
             try
             {
                 await _context.SaveChangesAsync();
@@ -929,12 +1023,15 @@ namespace PersonalCabinetEducationProgram.Controllers
             if (element.Version != version)
                 return ElementConflict(element.EducationalProgramId);
 
+            var previousArchiveState = new { element.IsArchived, element.ArchivedAt, element.ArchivedByUserId, element.Version };
             element.IsArchived = archived;
             element.ArchivedAt = archived ? DateTime.UtcNow : null;
             element.ArchivedByUserId = archived ? GetCurrentUserId() : null;
             element.Version++;
             _auditService.Record(GetCurrentUserId(), "EducationalProgramElement", element.Id,
-                archived ? "Archived" : "Restored", archived ? "Элемент перенесён в архив." : "Элемент восстановлен из архива.");
+                archived ? "Archived" : "Restored", archived ? "Элемент перенесён в архив." : "Элемент восстановлен из архива.",
+                previousArchiveState,
+                new { element.IsArchived, element.ArchivedAt, element.ArchivedByUserId, element.Version });
             _context.ElementStatusHistory.Add(new ElementStatusHistory
             {
                 EducationalProgramElementId = element.Id,
@@ -975,10 +1072,25 @@ namespace PersonalCabinetEducationProgram.Controllers
                     return RedirectToAction(nameof(ProgramDetails), new { id = element.EducationalProgramId });
                 }
 
+                var totalUploadSize = files.Sum(file => file.Length);
+                if (totalUploadSize > FileUploadLimits.MaxGroupSizeBytes)
+                {
+                    await _accountSecurityService.RecordInvalidUploadAsync(
+                        "группа файлов",
+                        totalUploadSize,
+                        $"Общий размер превышает {FileUploadLimits.MaxGroupSizeDisplay}.",
+                        countsTowardsBlock: false);
+                    TempData["ErrorMessage"] = $"Общий размер группы файлов не должен превышать {FileUploadLimits.MaxGroupSizeDisplay}.";
+                    return RedirectToAction(nameof(ProgramDetails), new { id = element.EducationalProgramId });
+                }
+
                 try
                 {
                     foreach (var file in files)
                         await _fileStorageService.ValidateFileAsync(file);
+
+                    _accountSecurityService.RecordDocumentUpload(files);
+                    await _accountSecurityService.ResetInvalidUploadSequenceAsync();
 
                     var storedFiles = new List<(string StoredFileName, string OriginalFileName)>();
                     try
@@ -1122,6 +1234,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             var currentAssignments = await _context.ApproverAssignments
                 .Where(a => a.FacultyId == facultyId && a.DepartmentId == departmentId)
                 .ToListAsync();
+            var previousApproverIds = currentAssignments.Select(assignment => assignment.ApproverUserId).ToArray();
             _context.ApproverAssignments.RemoveRange(currentAssignments);
 
             if (approverUserId.HasValue)
@@ -1144,7 +1257,9 @@ namespace PersonalCabinetEducationProgram.Controllers
 
             _auditService.Record(GetCurrentUserId(), facultyId.HasValue ? "Faculty" : "Department",
                 facultyId ?? departmentId!.Value, "ApproverAssigned",
-                approverUserId.HasValue ? $"Назначен согласующий, ID {approverUserId.Value}." : "Согласующий снят.");
+                approverUserId.HasValue ? $"Назначен согласующий, ID {approverUserId.Value}." : "Согласующий снят.",
+                new { ApproverUserIds = previousApproverIds },
+                new { ApproverUserId = approverUserId });
             await _context.SaveChangesAsync();
             return RedirectToAction(redirectAction);
         }
@@ -1237,7 +1352,8 @@ namespace PersonalCabinetEducationProgram.Controllers
             var department = new Departments { CodeDepartment = codeDepartment, Name = name };
             _context.Departments.Add(department);
             await _context.SaveChangesAsync();
-            _auditService.Record(GetCurrentUserId(), "Department", department.Id, "Created", $"Создана кафедра {department.Name}.");
+            _auditService.Record(GetCurrentUserId(), "Department", department.Id, "Created", $"Создана кафедра {department.Name}.",
+                newValues: new { department.CodeDepartment, department.Name });
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Departments));
         }
@@ -1256,9 +1372,12 @@ namespace PersonalCabinetEducationProgram.Controllers
             if (await _context.Departments.AnyAsync(d => d.Id != id &&
                     (d.CodeDepartment == normalizedCode || d.Name == normalizedName)))
                 return BadRequest("Кафедра с таким кодом или наименованием уже существует.");
+            var previousDepartment = new { department.CodeDepartment, department.Name };
             department.CodeDepartment = normalizedCode;
             department.Name = normalizedName;
-            _auditService.Record(GetCurrentUserId(), "Department", department.Id, "Edited", "Данные кафедры изменены.");
+            _auditService.Record(GetCurrentUserId(), "Department", department.Id, "Edited", "Данные кафедры изменены.",
+                previousDepartment,
+                new { department.CodeDepartment, department.Name });
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Departments));
         }
@@ -1276,7 +1395,8 @@ namespace PersonalCabinetEducationProgram.Controllers
                 TempData["ErrorMessage"] = "Кафедра используется в привязках ОПОП или согласующих и не может быть удалена.";
                 return RedirectToAction(nameof(Departments));
             }
-            _auditService.Record(GetCurrentUserId(), "Department", department.Id, "Deleted", $"Удалена кафедра {department.Name}.");
+            _auditService.Record(GetCurrentUserId(), "Department", department.Id, "Deleted", $"Удалена кафедра {department.Name}.",
+                previousValues: new { department.CodeDepartment, department.Name });
             _context.Departments.Remove(department);
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Departments));
@@ -1365,7 +1485,8 @@ namespace PersonalCabinetEducationProgram.Controllers
             var faculty = new Facultys { Name = name };
             _context.Facultys.Add(faculty);
             await _context.SaveChangesAsync();
-            _auditService.Record(GetCurrentUserId(), "Faculty", faculty.Id, "Created", $"Создан факультет {faculty.Name}.");
+            _auditService.Record(GetCurrentUserId(), "Faculty", faculty.Id, "Created", $"Создан факультет {faculty.Name}.",
+                newValues: new { faculty.Name });
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Faculties));
         }
@@ -1382,8 +1503,11 @@ namespace PersonalCabinetEducationProgram.Controllers
             var normalizedName = name.Trim();
             if (await _context.Facultys.AnyAsync(f => f.Id != id && f.Name == normalizedName))
                 return BadRequest("Факультет с таким наименованием уже существует.");
+            var previousFaculty = new { faculty.Name };
             faculty.Name = normalizedName;
-            _auditService.Record(GetCurrentUserId(), "Faculty", faculty.Id, "Edited", "Данные факультета изменены.");
+            _auditService.Record(GetCurrentUserId(), "Faculty", faculty.Id, "Edited", "Данные факультета изменены.",
+                previousFaculty,
+                new { faculty.Name });
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Faculties));
         }
@@ -1401,7 +1525,8 @@ namespace PersonalCabinetEducationProgram.Controllers
                 TempData["ErrorMessage"] = "Факультет используется в привязках ОПОП или согласующих и не может быть удалён.";
                 return RedirectToAction(nameof(Faculties));
             }
-            _auditService.Record(GetCurrentUserId(), "Faculty", faculty.Id, "Deleted", $"Удалён факультет {faculty.Name}.");
+            _auditService.Record(GetCurrentUserId(), "Faculty", faculty.Id, "Deleted", $"Удалён факультет {faculty.Name}.",
+                previousValues: new { faculty.Name });
             _context.Facultys.Remove(faculty);
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Faculties));

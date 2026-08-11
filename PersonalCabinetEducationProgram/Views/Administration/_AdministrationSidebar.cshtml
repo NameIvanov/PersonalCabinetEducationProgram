@@ -1,0 +1,42 @@
+@model PersonalCabinetEducationProgram.ViewModels.AdministrationPageViewModel
+@{
+    var navigation = Model.Navigation;
+    string Active(string section) => Model.ActiveSection == section ? "active" : string.Empty;
+}
+
+<aside class="administration-sidebar">
+    <div class="administration-sidebar-title">Администрирование</div>
+    <nav class="administration-nav" aria-label="Администрирование системы">
+        <a class="@Active("logs")" asp-controller="Administration" asp-action="Logs">
+            <span>Логи</span>
+            <span class="administration-nav-badge">@navigation.LogsToday</span>
+        </a>
+        <a class="@Active("server")" asp-controller="Administration" asp-action="Server">
+            <span>Состояние сервера</span>
+            <span class="administration-nav-badge @(navigation.ServerAvailable ? "ok" : "danger")">
+                @(navigation.ServerAvailable ? "OK" : "!")
+            </span>
+        </a>
+        <a class="@Active("storage")" asp-controller="Administration" asp-action="Storage">
+            <span>Состояние хранилища</span>
+            <span class="administration-nav-badge @(!navigation.StorageAvailable ? "danger" : "")">
+                @(navigation.StorageUsedPercent.HasValue ? $"{navigation.StorageUsedPercent}%" : navigation.StorageAvailable ? "OK" : "!")
+            </span>
+        </a>
+        <a class="@Active("security")" asp-controller="Administration" asp-action="Security">
+            <span>Безопасность</span>
+            @if (navigation.OpenSecurityEvents > 0)
+            {
+                <span class="administration-nav-badge warning">@navigation.OpenSecurityEvents</span>
+            }
+        </a>
+        <a class="@Active("audit")" asp-controller="Administration" asp-action="Audit">
+            <span>Журнал аудита</span>
+        </a>
+    </nav>
+    <div class="administration-sidebar-footer">
+        <span>Последняя проверка</span>
+        <strong>@navigation.CheckedAtUtc.ToLocalTime().ToString("сегодня, HH:mm:ss")</strong>
+        <span>@(navigation.ServerAvailable ? "Системные службы доступны" : "Есть недоступные службы")</span>
+    </div>
+</aside>

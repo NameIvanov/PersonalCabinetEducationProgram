@@ -1,0 +1,181 @@
+@model PersonalCabinetEducationProgram.ViewModels.AdministrationSecurityViewModel
+@using PersonalCabinetEducationProgram.Models
+@{
+    ViewData["Title"] = "Безопасность";
+    var filters = Model.Filters;
+    var pagination = Model.Pagination;
+    string NextDirection(string column) => Model.Sort == column && Model.Direction == "asc" ? "desc" : "asc";
+    Dictionary<string, string> RouteData(int page, string? sort = null, string? direction = null)
+    {
+        var values = new Dictionary<string, string>
+        {
+            ["page"] = page.ToString(), ["sort"] = sort ?? Model.Sort, ["direction"] = direction ?? Model.Direction
+        };
+        if (!string.IsNullOrWhiteSpace(filters.Search)) values["Search"] = filters.Search;
+        if (!string.IsNullOrWhiteSpace(filters.EventType)) values["EventType"] = filters.EventType;
+        if (!string.IsNullOrWhiteSpace(filters.Severity)) values["Severity"] = filters.Severity;
+        if (!string.IsNullOrWhiteSpace(filters.Status)) values["Status"] = filters.Status;
+        if (filters.DateFrom.HasValue) values["DateFrom"] = filters.DateFrom.Value.ToString("yyyy-MM-dd");
+        if (filters.DateTo.HasValue) values["DateTo"] = filters.DateTo.Value.ToString("yyyy-MM-dd");
+        return values;
+    }
+    Dictionary<string, string> SortRoute(string column) => RouteData(1, column, NextDirection(column));
+    string SeverityLabel(string value) => value switch
+    {
+        SecurityEventSeverities.Critical => "Критический",
+        SecurityEventSeverities.High => "Высокий",
+        SecurityEventSeverities.Warning => "Предупреждение",
+        SecurityEventSeverities.Information => "Информация",
+        _ => value
+    };
+    string SeverityClass(string value) => value switch
+    {
+        SecurityEventSeverities.Critical => "danger",
+        SecurityEventSeverities.High => "warning",
+        SecurityEventSeverities.Warning => "info",
+        _ => "neutral"
+    };
+    string StatusLabel(string value) => value switch
+    {
+        SecurityEventStatuses.New => "Новое",
+        SecurityEventStatuses.Investigating => "Расследуется",
+        SecurityEventStatuses.Resolved => "Решено",
+        SecurityEventStatuses.FalsePositive => "Ложное срабатывание",
+        _ => value
+    };
+}
+
+<div class="administration-shell">
+    @await Html.PartialAsync("_AdministrationSidebar", Model)
+    <section class="administration-content">
+        @await Html.PartialAsync("_AdministrationMessages")
+        <header class="administration-page-header">
+            <div>
+                <div class="administration-eyebrow">Контроль доступа</div>
+                <h1>Безопасность</h1>
+                <p>Входы, блокировки, отказы доступа, лимиты запросов и ошибки приложения</p>
+            </div>
+            <div class="administration-header-actions">
+                <a class="btn btn-outline-secondary" asp-action="ExportSecurity" asp-all-route-data="@RouteData(1)">Экспорт CSV</a>
+                <a class="btn btn-primary" asp-action="Security" asp-all-route-data="@RouteData(pagination.Page)">Обновить</a>
+            </div>
+        </header>
+
+        <div class="administration-metrics">
+            <article class="administration-metric"><span class="metric-label"><i class="metric-dot warning"></i>Новые</span><strong>@Model.NewCount</strong><small>ожидают просмотра</small></article>
+            <article class="administration-metric"><span class="metric-label"><i class="metric-dot info"></i>Расследуются</span><strong>@Model.InvestigatingCount</strong><small>в работе</small></article>
+            <article class="administration-metric"><span class="metric-label"><i class="metric-dot danger"></i>Высокие и критические</span><strong>@Model.HighAndCriticalCount</strong><small>среди открытых</small></article>
+            <article class="administration-metric"><span class="metric-label"><i class="metric-dot success"></i>Решено сегодня</span><strong>@Model.ResolvedTodayCount</strong><small>закрытых событий</small></article>
+        </div>
+
+        <form method="get" class="administration-filter-bar administration-filter-security">
+            <input type="hidden" name="sort" value="@Model.Sort" />
+            <input type="hidden" name="direction" value="@Model.Direction" />
+            <label><span>Пользователь, IP или событие</span><input class="form-control" type="search" name="Search" value="@filters.Search" placeholder="ФИО, ID, IP, Trace ID" /></label>
+            <label><span>Тип</span><select class="form-select" name="EventType">
+                <option value="">Все типы</option>
+                <option value="@SecurityEventTypes.LoginFailed" selected="@(filters.EventType == SecurityEventTypes.LoginFailed)">Неудачный вход</option>
+                <option value="@SecurityEventTypes.AccountLocked" selected="@(filters.EventType == SecurityEventTypes.AccountLocked)">Блокировка</option>
+                <option value="@SecurityEventTypes.AccessDenied" selected="@(filters.EventType == SecurityEventTypes.AccessDenied)">Отказ доступа</option>
+                <option value="@SecurityEventTypes.RateLimitExceeded" selected="@(filters.EventType == SecurityEventTypes.RateLimitExceeded)">Лимит запросов</option>
+                <option value="@SecurityEventTypes.ServerError" selected="@(filters.EventType == SecurityEventTypes.ServerError)">Ошибка сервера</option>
+                <option value="@SecurityEventTypes.InvalidFileUpload" selected="@(filters.EventType == SecurityEventTypes.InvalidFileUpload)">Отклонённый файл</option>
+                <option value="@SecurityEventTypes.LargeFileUpload" selected="@(filters.EventType == SecurityEventTypes.LargeFileUpload)">Крупный файл</option>
+                <option value="@SecurityEventTypes.ForeignLogin" selected="@(filters.EventType == SecurityEventTypes.ForeignLogin)">Иностранный IP</option>
+                <option value="@SecurityEventTypes.SuspiciousRequestVolume" selected="@(filters.EventType == SecurityEventTypes.SuspiciousRequestVolume)">Частые запросы</option>
+                <option value="@SecurityEventTypes.MassDownload" selected="@(filters.EventType == SecurityEventTypes.MassDownload)">Массовое скачивание</option>
+                <option value="@SecurityEventTypes.AccountAutomaticallyBlocked" selected="@(filters.EventType == SecurityEventTypes.AccountAutomaticallyBlocked)">Автоблокировка</option>
+                <option value="@SecurityEventTypes.PasswordReset" selected="@(filters.EventType == SecurityEventTypes.PasswordReset)">Сброс пароля</option>
+                <option value="@SecurityEventTypes.UserAdministration" selected="@(filters.EventType == SecurityEventTypes.UserAdministration)">Учётные записи</option>
+            </select></label>
+            <label><span>Важность</span><select class="form-select" name="Severity">
+                <option value="">Любая</option>
+                @foreach (var severity in SecurityEventSeverities.All)
+                {
+                    <option value="@severity" selected="@(filters.Severity == severity)">@SeverityLabel(severity)</option>
+                }
+            </select></label>
+            <label><span>Статус</span><select class="form-select" name="Status">
+                <option value="">Все статусы</option>
+                @foreach (var status in SecurityEventStatuses.All)
+                {
+                    <option value="@status" selected="@(filters.Status == status)">@StatusLabel(status)</option>
+                }
+            </select></label>
+            <label><span>Дата от</span><input class="form-control" type="date" name="DateFrom" value="@filters.DateFrom?.ToString("yyyy-MM-dd")" /></label>
+            <label><span>Дата до</span><input class="form-control" type="date" name="DateTo" value="@filters.DateTo?.ToString("yyyy-MM-dd")" /></label>
+            <div class="administration-filter-actions"><button class="btn btn-primary" type="submit">Найти</button><a class="btn btn-outline-secondary" asp-action="Security">Сбросить</a></div>
+        </form>
+
+        <div class="administration-table-frame">
+            <div class="table-responsive">
+                <table class="table administration-table mb-0">
+                    <thead><tr>
+                        <th><a asp-action="Security" asp-all-route-data="@SortRoute("date")">Последнее событие</a></th>
+                        <th><a asp-action="Security" asp-all-route-data="@SortRoute("severity")">Важность</a></th>
+                        <th><a asp-action="Security" asp-all-route-data="@SortRoute("type")">Событие</a></th>
+                        <th><a asp-action="Security" asp-all-route-data="@SortRoute("user")">Пользователь / IP</a></th>
+                        <th><a asp-action="Security" asp-all-route-data="@SortRoute("count")">Кол-во</a></th>
+                        <th><a asp-action="Security" asp-all-route-data="@SortRoute("status")">Статус</a></th>
+                        <th data-sortable="false">Разбор</th>
+                    </tr></thead>
+                    <tbody>
+                    @foreach (var entry in Model.Entries)
+                    {
+                        <tr>
+                            <td class="text-nowrap">@entry.LastOccurredAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")</td>
+                            <td><span class="administration-status @SeverityClass(entry.Severity)">@SeverityLabel(entry.Severity)</span></td>
+                            <td>
+                                <strong class="administration-action-name">@entry.Title</strong>
+                                <span class="administration-cell-note">@entry.EventType · @entry.HttpMethod @entry.Path</span>
+                                @if (!string.IsNullOrWhiteSpace(entry.Description))
+                                {
+                                    <span class="administration-cell-note">@entry.Description</span>
+                                }
+                            </td>
+                            <td>
+                                <strong class="administration-user-name">@(entry.UserFullName ?? entry.UserLogin ?? "Не авторизован")</strong>
+                                <span class="administration-cell-note">@(entry.UserId.HasValue ? $"ID {entry.UserId} · " : "")@entry.IpAddress</span>
+                            </td>
+                            <td>@entry.OccurrenceCount</td>
+                            <td><span class="administration-status neutral">@StatusLabel(entry.Status)</span></td>
+                            <td>
+                                <details class="security-review-panel">
+                                    <summary class="btn btn-outline-secondary btn-sm">Открыть</summary>
+                                    <form asp-action="UpdateSecurityEvent" method="post" data-confirm-form="Сохранить результат разбора события безопасности?">
+                                        <input type="hidden" name="id" value="@entry.Id" />
+                                        <label><span>Статус</span><select class="form-select form-select-sm" name="status">
+                                            @foreach (var status in SecurityEventStatuses.All)
+                                            {
+                                                <option value="@status" selected="@(entry.Status == status)">@StatusLabel(status)</option>
+                                            }
+                                        </select></label>
+                                        <label><span>Итог расследования</span><textarea class="form-control form-control-sm" name="reviewNote" maxlength="2000" rows="3">@entry.ReviewNote</textarea></label>
+                                        @if (!string.IsNullOrWhiteSpace(entry.TraceId))
+                                        {
+                                            <span class="administration-cell-note">Trace ID: @entry.TraceId</span>
+                                        }
+                                        <button class="btn btn-primary btn-sm" type="submit">Сохранить</button>
+                                    </form>
+                                </details>
+                            </td>
+                        </tr>
+                    }
+                    @if (Model.Entries.Count == 0)
+                    {
+                        <tr><td colspan="7" class="administration-empty">Событий по выбранным условиям нет</td></tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="administration-pagination">
+            <span>Показано @pagination.FirstItem–@pagination.LastItem из @pagination.TotalCount.ToString("N0") записей</span>
+            <div>
+                <a class="btn btn-outline-secondary @(pagination.Page <= 1 ? "disabled" : "")" asp-action="Security" asp-all-route-data="@RouteData(pagination.Page - 1)">Назад</a>
+                <span>@pagination.Page из @pagination.TotalPages</span>
+                <a class="btn btn-outline-secondary @(pagination.Page >= pagination.TotalPages ? "disabled" : "")" asp-action="Security" asp-all-route-data="@RouteData(pagination.Page + 1)">Далее</a>
+            </div>
+        </div>
+    </section>
+</div>

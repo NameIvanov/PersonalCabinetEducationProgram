@@ -56,7 +56,7 @@
                     {
                         <tr>
                             <td class="small text-nowrap">@entry.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")</td>
-                            <td>@entry.User.FullName</td>
+                            <td>@(entry.UserFullName ?? entry.UserLogin ?? $"Пользователь #{entry.UserId}")</td>
                             <td class="small">@entry.EntityType #@entry.EntityId</td>
                             <td><span class="badge bg-secondary-subtle text-secondary">@entry.Action</span></td>
                             <td class="small">@entry.Details</td>

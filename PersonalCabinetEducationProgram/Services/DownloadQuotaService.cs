@@ -64,17 +64,22 @@ namespace PersonalCabinetEducationProgram.Services
     public sealed class DownloadQuotaFilter : IAsyncResultFilter
     {
         private readonly DownloadQuotaService _quota;
+        private readonly AccountSecurityService _accountSecurityService;
 
-        public DownloadQuotaFilter(DownloadQuotaService quota)
+        public DownloadQuotaFilter(
+            DownloadQuotaService quota,
+            AccountSecurityService accountSecurityService)
         {
             _quota = quota;
+            _accountSecurityService = accountSecurityService;
         }
 
         public async Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
         {
             var policy = context.HttpContext.GetEndpoint()?.Metadata.GetMetadata<AppRateLimitAttribute>();
             if (policy?.PolicyName != AppRateLimitPolicies.FileDownload ||
-                context.Result is not PhysicalFileResult physicalFileResult)
+                context.Result is not PhysicalFileResult physicalFileResult ||
+                string.IsNullOrWhiteSpace(physicalFileResult.FileDownloadName))
             {
                 await next();
                 return;
@@ -93,6 +98,10 @@ namespace PersonalCabinetEducationProgram.Services
                 : $"ip:{context.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"}";
             if (_quota.TryConsume(partitionKey, fileInfo.Length, out var retryAfter))
             {
+                await _accountSecurityService.RecordSuccessfulDownloadAsync(
+                    Path.GetFileName(physicalFileResult.FileDownloadName),
+                    fileInfo.Length,
+                    context.HttpContext.RequestAborted);
                 await next();
                 return;
             }

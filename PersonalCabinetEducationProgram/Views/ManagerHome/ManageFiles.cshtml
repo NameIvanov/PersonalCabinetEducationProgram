@@ -36,10 +36,10 @@
                 <label class="form-label fw-semibold" for="currentFilesUpload">Добавить файлы в текущий комплект</label>
                 <div class="input-group">
                     <input id="currentFilesUpload" type="file" name="files" multiple accept=".pdf,.doc,.docx"
-                           data-max-size="52428800" class="form-control" required />
+                           data-max-size="52428800" data-max-total-size="209715200" class="form-control" required />
                     <button type="submit" class="btn btn-primary" onclick="return window.validateUploadFile(document.getElementById('currentFilesUpload'))">Добавить</button>
                 </div>
-                <div class="form-text">PDF, DOC или DOCX. Сейчас файлов: @currentFiles.Count из @FileUploadLimits.MaxFilesPerGroup.</div>
+                <div class="form-text">PDF, DOC или DOCX. До @FileUploadLimits.MaxFileSizeDisplay на файл и @FileUploadLimits.MaxGroupSizeDisplay на группу. Сейчас файлов: @currentFiles.Count из @FileUploadLimits.MaxFilesPerGroup.</div>
             </div>
         </form>
     }

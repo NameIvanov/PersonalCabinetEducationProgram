@@ -18,19 +18,25 @@ namespace PersonalCabinetEducationProgram.Controllers
         private readonly PlxParserService _parser;
         private readonly PlxImportStorageService _storage;
         private readonly CurriculumImportService _importService;
+        private readonly SecurityEventService _securityEventService;
+        private readonly AccountSecurityService _accountSecurityService;
 
         public CurriculumImportController(
             ApplicationDbContext context,
             ElementAccessService accessService,
             PlxParserService parser,
             PlxImportStorageService storage,
-            CurriculumImportService importService)
+            CurriculumImportService importService,
+            SecurityEventService securityEventService,
+            AccountSecurityService accountSecurityService)
         {
             _context = context;
             _accessService = accessService;
             _parser = parser;
             _storage = storage;
             _importService = importService;
+            _securityEventService = securityEventService;
+            _accountSecurityService = accountSecurityService;
         }
 
         [HttpGet]
@@ -96,7 +102,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         }
 
         [HttpPost]
-        [RequestSizeLimit(PlxParserService.MaxPlxFileSizeBytes)]
+        [RequestSizeLimit(PlxParserService.MaxPlxRequestSizeBytes)]
         [AppRateLimit(AppRateLimitPolicies.PlxPreview)]
         public async Task<IActionResult> Preview(
             int programId,
@@ -112,18 +118,26 @@ namespace PersonalCabinetEducationProgram.Controllers
             if (program == null)
                 return NotFound();
 
+            var invalidFormatAttempt = false;
             try
             {
                 if (file == null)
                     throw new InvalidOperationException("Выберите файл учебного плана PLX.");
                 if (!Path.GetExtension(file.FileName).Equals(".plx", StringComparison.OrdinalIgnoreCase))
+                {
+                    invalidFormatAttempt = true;
                     throw new InvalidOperationException("Для импорта требуется файл с расширением .plx.");
+                }
                 if (file.Length == 0 || file.Length > PlxParserService.MaxPlxFileSizeBytes)
                     throw new InvalidOperationException("Размер файла PLX должен быть больше 0 и не превышать 20 МБ.");
+
+                _accountSecurityService.RecordPlxUpload(file);
 
                 PlxImportPreview preview;
                 await using (var stream = file.OpenReadStream())
                     preview = await _parser.ParseAsync(stream, cancellationToken);
+
+                await _accountSecurityService.ResetInvalidUploadSequenceAsync(cancellationToken);
 
                 var requiresConfirmation = AddCompatibilityWarnings(program, preview);
                 var staged = await _storage.StageAsync(file, GetCurrentUserId(), programId, cancellationToken);
@@ -138,6 +152,12 @@ namespace PersonalCabinetEducationProgram.Controllers
             }
             catch (Exception ex) when (ex is InvalidOperationException or InvalidDataException or IOException or XmlException)
             {
+                await _accountSecurityService.RecordInvalidUploadAsync(
+                    file?.FileName,
+                    file?.Length ?? 0,
+                    ex.Message,
+                    invalidFormatAttempt || ex is InvalidDataException or XmlException,
+                    cancellationToken);
                 TempData["ErrorMessage"] = ex.Message;
                 return RedirectToAction(nameof(Index), new { programId });
             }
@@ -188,6 +208,14 @@ namespace PersonalCabinetEducationProgram.Controllers
             }
             catch (Exception ex) when (ex is InvalidOperationException or InvalidDataException or IOException or DbUpdateException)
             {
+                if (!ex.Message.StartsWith("Импорт отменён:", StringComparison.Ordinal))
+                {
+                    _securityEventService.Record(
+                        SecurityEventTypes.InvalidRequest,
+                        SecurityEventSeverities.Warning,
+                        "Не удалось применить импорт PLX",
+                        ex.Message);
+                }
                 if (!string.IsNullOrWhiteSpace(storedPath))
                     _storage.DeleteStored(storedPath);
                 TempData["ErrorMessage"] = ex.Message;

@@ -1,0 +1,178 @@
+@model PersonalCabinetEducationProgram.ViewModels.AdministrationLogsViewModel
+@using PersonalCabinetEducationProgram.Models
+@{
+    ViewData["Title"] = "Логи действий";
+    var filters = Model.Filters;
+    var pagination = Model.Pagination;
+    string NextDirection(string column) => Model.Sort == column && Model.Direction == "asc" ? "desc" : "asc";
+    Dictionary<string, string> RouteData(int page, string? sort = null, string? direction = null)
+    {
+        var values = new Dictionary<string, string>
+        {
+            ["page"] = page.ToString(),
+            ["sort"] = sort ?? Model.Sort,
+            ["direction"] = direction ?? Model.Direction
+        };
+        if (!string.IsNullOrWhiteSpace(filters.UserOrIp)) values["UserOrIp"] = filters.UserOrIp;
+        if (!string.IsNullOrWhiteSpace(filters.EventType)) values["EventType"] = filters.EventType;
+        if (!string.IsNullOrWhiteSpace(filters.Result)) values["Result"] = filters.Result;
+        if (filters.DateFrom.HasValue) values["DateFrom"] = filters.DateFrom.Value.ToString("yyyy-MM-dd");
+        if (filters.DateTo.HasValue) values["DateTo"] = filters.DateTo.Value.ToString("yyyy-MM-dd");
+        return values;
+    }
+    Dictionary<string, string> SortRoute(string column) => RouteData(1, column, NextDirection(column));
+    string StatusClass(int status) => status >= 500 ? "danger" : status >= 400 ? "warning" : status >= 300 ? "info" : "success";
+    string ResultLabel(string result) => result switch
+    {
+        SystemRequestResults.Success => "Успешно",
+        SystemRequestResults.Redirect => "Переход",
+        SystemRequestResults.ClientError => "Ошибка запроса",
+        SystemRequestResults.ServerError => "Ошибка сервера",
+        _ => result
+    };
+    string Uptime(TimeSpan value) => $"{(int)value.TotalDays} д {value.Hours:00} ч";
+}
+
+<div class="administration-shell">
+    @await Html.PartialAsync("_AdministrationSidebar", Model)
+    <section class="administration-content">
+        @await Html.PartialAsync("_AdministrationMessages")
+        <header class="administration-page-header">
+            <div>
+                <div class="administration-eyebrow">Мониторинг системы</div>
+                <h1>Логи действий</h1>
+                <p>Все запросы и действия пользователей в одном журнале</p>
+            </div>
+            <div class="administration-header-actions">
+                <a class="btn btn-outline-secondary" asp-action="ExportLogs" asp-all-route-data="@RouteData(1)">Экспорт CSV</a>
+                <a class="btn btn-primary" asp-action="Logs" asp-all-route-data="@RouteData(Model.Pagination.Page)">Обновить</a>
+            </div>
+        </header>
+
+        <div class="administration-metrics">
+            <article class="administration-metric">
+                <span class="metric-label"><i class="metric-dot success"></i>Сервер</span>
+                <strong>@Uptime(Model.Health.Uptime)</strong>
+                <small>работает</small>
+            </article>
+            <article class="administration-metric">
+                <span class="metric-label"><i class="metric-dot info"></i>Запросы сегодня</span>
+                <strong>@Model.Health.RequestsToday.ToString("N0")</strong>
+                <small>@Model.Health.ActiveRequests активных</small>
+            </article>
+            <article class="administration-metric">
+                <span class="metric-label"><i class="metric-dot warning"></i>Предупреждения</span>
+                <strong>@Model.Health.WarningsToday.ToString("N0")</strong>
+                <small>HTTP 4xx за сегодня</small>
+            </article>
+            <article class="administration-metric">
+                <span class="metric-label"><i class="metric-dot danger"></i>Ошибки</span>
+                <strong>@Model.Health.ErrorsToday.ToString("N0")</strong>
+                <small>HTTP 5xx за сегодня</small>
+            </article>
+        </div>
+
+        <form method="get" class="administration-filter-bar">
+            <input type="hidden" name="sort" value="@Model.Sort" />
+            <input type="hidden" name="direction" value="@Model.Direction" />
+            <label>
+                <span>Пользователь или IP</span>
+                <input class="form-control" type="search" name="UserOrIp" value="@filters.UserOrIp" placeholder="Введите ФИО, ID или адрес" />
+            </label>
+            <label>
+                <span>Тип события</span>
+                <select class="form-select" name="EventType">
+                    <option value="">Все события</option>
+                    <option value="@SystemRequestEventTypes.HttpRequest" selected="@(filters.EventType == SystemRequestEventTypes.HttpRequest)">HTTP-запросы</option>
+                    <option value="@SystemRequestEventTypes.Authentication" selected="@(filters.EventType == SystemRequestEventTypes.Authentication)">Авторизация</option>
+                    <option value="@SystemRequestEventTypes.FileOperation" selected="@(filters.EventType == SystemRequestEventTypes.FileOperation)">Файлы</option>
+                    <option value="@SystemRequestEventTypes.Workflow" selected="@(filters.EventType == SystemRequestEventTypes.Workflow)">Согласование</option>
+                    <option value="@SystemRequestEventTypes.Administration" selected="@(filters.EventType == SystemRequestEventTypes.Administration)">Администрирование</option>
+                </select>
+            </label>
+            <label>
+                <span>Результат</span>
+                <select class="form-select" name="Result">
+                    <option value="">Все результаты</option>
+                    <option value="@SystemRequestResults.Success" selected="@(filters.Result == SystemRequestResults.Success)">Успешно</option>
+                    <option value="@SystemRequestResults.Redirect" selected="@(filters.Result == SystemRequestResults.Redirect)">Переход</option>
+                    <option value="@SystemRequestResults.ClientError" selected="@(filters.Result == SystemRequestResults.ClientError)">Ошибка запроса</option>
+                    <option value="@SystemRequestResults.ServerError" selected="@(filters.Result == SystemRequestResults.ServerError)">Ошибка сервера</option>
+                </select>
+            </label>
+            <label>
+                <span>Дата от</span>
+                <input class="form-control" type="date" name="DateFrom" value="@filters.DateFrom?.ToString("yyyy-MM-dd")" />
+            </label>
+            <label>
+                <span>Дата до</span>
+                <input class="form-control" type="date" name="DateTo" value="@filters.DateTo?.ToString("yyyy-MM-dd")" />
+            </label>
+            <div class="administration-filter-actions">
+                <button class="btn btn-primary" type="submit">Найти</button>
+                <a class="btn btn-outline-secondary" asp-action="Logs">Сбросить</a>
+            </div>
+        </form>
+
+        <div class="administration-table-frame">
+            <div class="table-responsive">
+                <table class="table administration-table mb-0">
+                    <thead>
+                        <tr>
+                            <th><a asp-action="Logs" asp-all-route-data="@SortRoute("date")">Время</a></th>
+                            <th><a asp-action="Logs" asp-all-route-data="@SortRoute("user")">Пользователь</a></th>
+                            <th><a asp-action="Logs" asp-all-route-data="@SortRoute("ip")">IP-адрес</a></th>
+                            <th><a asp-action="Logs" asp-all-route-data="@SortRoute("action")">Действие</a></th>
+                            <th><a asp-action="Logs" asp-all-route-data="@SortRoute("status")">Ответ</a></th>
+                            <th><a asp-action="Logs" asp-all-route-data="@SortRoute("duration")">Время ответа</a></th>
+                            <th>Trace ID</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var entry in Model.Entries)
+                        {
+                            <tr>
+                                <td class="text-nowrap" data-sort-value="@entry.OccurredAtUtc.Ticks">@entry.OccurredAtUtc.ToLocalTime().ToString("HH:mm:ss.fff")</td>
+                                <td>
+                                    <strong class="administration-user-name">@(entry.UserFullName ?? entry.UserLogin ?? "Не авторизован")</strong>
+                                    <span class="administration-cell-note">@(entry.UserId.HasValue ? $"ID {entry.UserId}" : "без ID")</span>
+                                </td>
+                                <td class="text-nowrap">@entry.IpAddress</td>
+                                <td>
+                                    <strong class="administration-action-name">@(entry.Controller == null ? entry.Path : $"{entry.Controller}.{entry.Action}")</strong>
+                                    <span class="administration-cell-note">@entry.HttpMethod @entry.Path</span>
+                                </td>
+                                <td><span class="administration-status @StatusClass(entry.StatusCode)">@entry.StatusCode @ResultLabel(entry.Result)</span></td>
+                                <td class="text-nowrap">@entry.DurationMs.ToString("N0") мс</td>
+                                <td><a asp-action="RequestDetails" asp-route-id="@entry.Id" class="trace-link">@entry.TraceId</a></td>
+                            </tr>
+                        }
+                        @if (Model.Entries.Count == 0)
+                        {
+                            <tr><td colspan="7" class="administration-empty">По выбранным условиям записей нет</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="administration-pagination">
+            <span>Показано @pagination.FirstItem–@pagination.LastItem из @pagination.TotalCount.ToString("N0") записей</span>
+            <div>
+                <a class="btn btn-outline-secondary @(pagination.Page <= 1 ? "disabled" : "")" asp-action="Logs" asp-all-route-data="@RouteData(pagination.Page - 1)">Назад</a>
+                <span>@pagination.Page из @pagination.TotalPages</span>
+                <a class="btn btn-outline-secondary @(pagination.Page >= pagination.TotalPages ? "disabled" : "")" asp-action="Logs" asp-all-route-data="@RouteData(pagination.Page + 1)">Далее</a>
+            </div>
+        </div>
+
+        <details class="administration-maintenance">
+            <summary>Хранение и очистка технических логов</summary>
+            <p>Успешные запросы автоматически хранятся 90 дней, запросы с ошибками — 180 дней. Журнал аудита этой очисткой не затрагивается.</p>
+            <form asp-action="CleanupLogs" method="post" class="administration-cleanup-form" data-confirm-form="Удалить выбранные технические логи? Это действие нельзя отменить.">
+                <label><span>Удалить записи старше</span><input class="form-control" type="number" name="olderThanDays" min="30" max="3650" value="180" /></label>
+                <label class="form-check"><input class="form-check-input" type="checkbox" name="confirm" value="true" /><span>Подтверждаю удаление</span></label>
+                <button class="btn btn-outline-danger" type="submit">Удалить старые логи</button>
+            </form>
+        </details>
+    </section>
+</div>
