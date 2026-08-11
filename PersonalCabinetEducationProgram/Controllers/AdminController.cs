@@ -48,6 +48,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         }
 
         [Authorize(Roles = "Admin")]
+        [AppRateLimit(AppRateLimitPolicies.Search)]
         public async Task<IActionResult> Users(
             int page = 1, string sort = "id", string direction = "asc",
             [FromQuery] UserListFiltersViewModel? filters = null)
@@ -96,6 +97,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         }
 
         [Authorize(Roles = "Admin")]
+        [AppRateLimit(AppRateLimitPolicies.Search)]
         public async Task<IActionResult> Audit(
             int page = 1, string sort = "date", string direction = "desc",
             [FromQuery] AuditListFiltersViewModel? filters = null)
@@ -132,6 +134,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
+        [AppRateLimit(AppRateLimitPolicies.AdminUserMutation)]
         public async Task<IActionResult> ChangeApprovalStatus(int id, string approvalStatus, string? rejectionReason)
         {
             if (approvalStatus is not (UserApprovalStatus.Pending or UserApprovalStatus.Approved or UserApprovalStatus.Rejected))
@@ -163,6 +166,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         [HttpPost]
         [Authorize(Roles = "Admin")]
         [ValidateAntiForgeryToken]
+        [AppRateLimit(AppRateLimitPolicies.AdminUserCreate)]
         public async Task<IActionResult> CreateUser(
             string fullName,
             int roleId,
@@ -228,6 +232,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         [HttpPost]
         [Authorize(Roles = "Admin")]
         [ValidateAntiForgeryToken]
+        [AppRateLimit(AppRateLimitPolicies.AdminPasswordReset)]
         public async Task<IActionResult> ResetUserPassword(int id, string newPassword, string confirmPassword)
         {
             var user = await _userManager.FindByIdAsync(id.ToString());
@@ -264,6 +269,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         [HttpPost]
         [Authorize(Roles = "Admin")]
         [ValidateAntiForgeryToken]
+        [AppRateLimit(AppRateLimitPolicies.AdminUserMutation)]
         public async Task<IActionResult> EditUser(int id, string fullName, int? roleId, string post)
         {
             var validationError = EntityInputValidator.User(fullName, post);
@@ -330,6 +336,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         [HttpPost]
         [Authorize(Roles = "Admin")]
         [ValidateAntiForgeryToken]
+        [AppRateLimit(AppRateLimitPolicies.AdminUserDelete)]
         public async Task<IActionResult> DeleteUser(int id)
         {
             var user = await _userManager.FindByIdAsync(id.ToString());
@@ -361,6 +368,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             return RedirectToAction(nameof(Users));
         }
 
+        [AppRateLimit(AppRateLimitPolicies.Search)]
         public async Task<IActionResult> Programs(
             bool showArchived = false, int page = 1, string sort = "code", string direction = "asc",
             [FromQuery] ProgramListFiltersViewModel? filters = null)
@@ -425,6 +433,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         }
 
         [Authorize(Roles = "Admin")]
+        [AppRateLimit(AppRateLimitPolicies.Search)]
         public async Task<IActionResult> ProgramDetails(
             int id, bool showArchivedElements = false, int page = 1,
             string sort = "name", string direction = "asc",
@@ -470,6 +479,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         }
 
         [Authorize(Roles = "Admin")]
+        [AppRateLimit(AppRateLimitPolicies.Search)]
         public async Task<IActionResult> Assignments(
             int page = 1, string sort = "date", string direction = "desc",
             [FromQuery] AssignmentListFiltersViewModel? filters = null)
@@ -543,6 +553,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
+        [AppRateLimit(AppRateLimitPolicies.AdminStructureMutation)]
         public async Task<IActionResult> CreateProgram(string codeReferral, string name, string educationalLevel,
             int yearApprovals, int departmentId, int facultyId, int? managerUserId)
         {
@@ -627,6 +638,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
+        [AppRateLimit(AppRateLimitPolicies.AdminStructureMutation)]
         public async Task<IActionResult> EditProgram(
             int programId, int version, string codeReferral, string name,
             string educationalLevel, int yearApprovals)
@@ -671,6 +683,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
+        [AppRateLimit(AppRateLimitPolicies.AdminStructureMutation)]
         public async Task<IActionResult> UpdateProgramAssignments(
             int programId, int version, List<int> departmentIds, List<int> facultyIds)
         {
@@ -724,6 +737,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
+        [AppRateLimit(AppRateLimitPolicies.AdminStructureMutation)]
         public async Task<IActionResult> SetProgramArchived(int programId, int version, bool archived)
         {
             var program = await _context.EducationalPrograms.FindAsync(programId);
@@ -752,6 +766,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
+        [AppRateLimit(AppRateLimitPolicies.AdminStructureMutation)]
         public async Task<IActionResult> AssignProgramManager(int programId, int version, int? managerUserId)
         {
             var program = await _context.EducationalPrograms
@@ -810,6 +825,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
+        [AppRateLimit(AppRateLimitPolicies.AdminStructureMutation)]
         public async Task<IActionResult> CreateProgramElement(int programId, string typeElement, string name, string description)
         {
             if (!await _context.EducationalPrograms.AnyAsync(p => p.Id == programId && !p.IsArchived))
@@ -856,6 +872,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
+        [AppRateLimit(AppRateLimitPolicies.AdminStructureMutation)]
         public async Task<IActionResult> EditProgramElement(int elementId, int version, string typeElement, string name, string? description)
         {
             var element = await _context.EducationalProgramElements.FindAsync(elementId);
@@ -903,6 +920,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
+        [AppRateLimit(AppRateLimitPolicies.AdminStructureMutation)]
         public async Task<IActionResult> SetElementArchived(int elementId, int version, bool archived)
         {
             var element = await _context.EducationalProgramElements.FindAsync(elementId);
@@ -941,6 +959,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
+        [AppRateLimit(AppRateLimitPolicies.FileUpload)]
         public async Task<IActionResult> UploadElement(int elementId, List<IFormFile> files)
         {
             var element = await _context.EducationalProgramElements.FindAsync(elementId);
@@ -992,6 +1011,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
+        [AppRateLimit(AppRateLimitPolicies.WorkflowMutation)]
         public async Task<IActionResult> ApproveElement(int elementId, string? comment)
         {
             return await ChangeElementStatus(elementId, ElementApprovalStatus.Approved, comment ?? "Согласовано администратором");
@@ -999,6 +1019,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
+        [AppRateLimit(AppRateLimitPolicies.WorkflowMutation)]
         public async Task<IActionResult> SendElementToRevision(int elementId, string? comment)
         {
             return await ChangeElementStatus(elementId, ElementApprovalStatus.RevisionRequired, comment ?? "Отправлено на доработку администратором");
@@ -1006,6 +1027,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
+        [AppRateLimit(AppRateLimitPolicies.WorkflowMutation)]
         public async Task<IActionResult> PublishElement(int elementId, string? comment)
         {
             var element = await _context.EducationalProgramElements.FindAsync(elementId);
@@ -1019,6 +1041,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         }
 
         [Authorize(Roles = "Admin")]
+        [AppRateLimit(AppRateLimitPolicies.FileDownload)]
         public async Task<IActionResult> DownloadElement(int elementId)
         {
             await _notificationService.MarkElementReadAsync(GetCurrentUserId(), elementId);
@@ -1034,6 +1057,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         }
 
         [Authorize(Roles = "Admin")]
+        [AppRateLimit(AppRateLimitPolicies.FileDownload)]
         public async Task<IActionResult> PreviewElement(int elementId)
         {
             await _notificationService.MarkElementReadAsync(GetCurrentUserId(), elementId);
@@ -1070,6 +1094,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
+        [AppRateLimit(AppRateLimitPolicies.AdminStructureMutation)]
         public async Task<IActionResult> AssignApproverToFaculty(int? approverUserId, int facultyId)
         {
             return await CreateApproverAssignment(approverUserId, facultyId, null, nameof(Faculties));
@@ -1077,6 +1102,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
+        [AppRateLimit(AppRateLimitPolicies.AdminStructureMutation)]
         public async Task<IActionResult> AssignApproverToDepartment(int? approverUserId, int departmentId)
         {
             return await CreateApproverAssignment(approverUserId, null, departmentId, nameof(Departments));
@@ -1123,6 +1149,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             return RedirectToAction(redirectAction);
         }
 
+        [AppRateLimit(AppRateLimitPolicies.Search)]
         public async Task<IActionResult> Departments(
             int page = 1, string sort = "name", string direction = "asc",
             [FromQuery] DepartmentListFiltersViewModel? filters = null)
@@ -1158,6 +1185,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             return View(departments);
         }
 
+        [AppRateLimit(AppRateLimitPolicies.Search)]
         public async Task<IActionResult> DepartmentDetails(
             int id, [FromQuery] OrganizationDocumentFiltersViewModel? filters = null)
         {
@@ -1190,6 +1218,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
+        [AppRateLimit(AppRateLimitPolicies.AdminStructureMutation)]
         public async Task<IActionResult> CreateDepartment(string codeDepartment, string name)
         {
             var validationError = EntityInputValidator.Department(codeDepartment, name);
@@ -1215,6 +1244,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
+        [AppRateLimit(AppRateLimitPolicies.AdminStructureMutation)]
         public async Task<IActionResult> EditDepartment(int id, string codeDepartment, string name)
         {
             var department = await _context.Departments.FindAsync(id);
@@ -1235,6 +1265,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
+        [AppRateLimit(AppRateLimitPolicies.AdminStructureMutation)]
         public async Task<IActionResult> DeleteDepartment(int id)
         {
             var department = await _context.Departments.FindAsync(id);
@@ -1251,6 +1282,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             return RedirectToAction(nameof(Departments));
         }
 
+        [AppRateLimit(AppRateLimitPolicies.Search)]
         public async Task<IActionResult> Faculties(
             int page = 1, string sort = "name", string direction = "asc",
             [FromQuery] FacultyListFiltersViewModel? filters = null)
@@ -1282,6 +1314,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             return View(faculties);
         }
 
+        [AppRateLimit(AppRateLimitPolicies.Search)]
         public async Task<IActionResult> FacultyDetails(
             int id, [FromQuery] OrganizationDocumentFiltersViewModel? filters = null)
         {
@@ -1314,6 +1347,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
+        [AppRateLimit(AppRateLimitPolicies.AdminStructureMutation)]
         public async Task<IActionResult> CreateFaculty(string name)
         {
             var validationError = EntityInputValidator.Faculty(name);
@@ -1338,6 +1372,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
+        [AppRateLimit(AppRateLimitPolicies.AdminStructureMutation)]
         public async Task<IActionResult> EditFaculty(int id, string name)
         {
             var faculty = await _context.Facultys.FindAsync(id);
@@ -1355,6 +1390,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [Authorize(Roles = "Admin")]
+        [AppRateLimit(AppRateLimitPolicies.AdminStructureMutation)]
         public async Task<IActionResult> DeleteFaculty(int id)
         {
             var faculty = await _context.Facultys.FindAsync(id);

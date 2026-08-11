@@ -40,7 +40,7 @@
     }
 
     <section class="border rounded-2 p-3 mb-4">
-        <form asp-action="Preview" method="post" enctype="multipart/form-data">
+        <form asp-action="Preview" asp-route-programId="@Model.Program.Id" method="post" enctype="multipart/form-data">
             <input type="hidden" name="programId" value="@Model.Program.Id" />
             <label for="plxFile" class="form-label fw-semibold">Файл учебного плана</label>
             <div class="row g-3 align-items-center">

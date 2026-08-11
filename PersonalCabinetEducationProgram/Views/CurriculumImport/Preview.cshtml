@@ -76,7 +76,7 @@
 
     <div class="d-flex justify-content-end gap-2">
         <a asp-action="Index" asp-route-programId="@Model.Program.Id" class="btn btn-outline-secondary">Отмена</a>
-        <form asp-action="Apply" method="post">
+        <form asp-action="Apply" asp-route-programId="@Model.Program.Id" method="post">
             <input type="hidden" name="programId" value="@Model.Program.Id" />
             <input type="hidden" name="token" value="@Model.Token" />
             @if (Model.RequiresMismatchConfirmation)

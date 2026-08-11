@@ -43,6 +43,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             return int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
         }
 
+        [AppRateLimit(AppRateLimitPolicies.Search)]
         public async Task<IActionResult> Index(
             int? programId, string tab = "disciplines", int page = 1,
             string sort = "name", string direction = "asc",
@@ -98,6 +99,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             ViewBag.ElementFilters = result.Filters;
         }
 
+        [AppRateLimit(AppRateLimitPolicies.FileDownload)]
         public async Task<IActionResult> Download(int elementId)
         {
             if (!await _accessService.CanApproveElementAsync(User, elementId))
@@ -114,6 +116,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             return PhysicalFile(filePath, GetContentType(element.FileName), element.FileName ?? "download");
         }
 
+        [AppRateLimit(AppRateLimitPolicies.FileDownload)]
         public async Task<IActionResult> Preview(int elementId)
         {
             if (!await _accessService.CanApproveElementAsync(User, elementId))
@@ -132,6 +135,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         }
 
         [HttpPost]
+        [AppRateLimit(AppRateLimitPolicies.WorkflowMutation)]
         public async Task<IActionResult> Approve(int elementId, string? comment)
         {
             if (!await _accessService.CanApproveElementAsync(User, elementId))
@@ -162,6 +166,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         }
 
         [HttpPost]
+        [AppRateLimit(AppRateLimitPolicies.WorkflowMutation)]
         public async Task<IActionResult> Reject(int elementId, string? comment)
         {
             if (!await _accessService.CanApproveElementAsync(User, elementId))
@@ -192,6 +197,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         }
 
         [HttpPost]
+        [AppRateLimit(AppRateLimitPolicies.CommentCreate)]
         public async Task<IActionResult> AddComment(int elementId, string commentText)
         {
             if (!await _accessService.CanApproveElementAsync(User, elementId))
@@ -226,6 +232,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         }
 
         [HttpPost]
+        [AppRateLimit(AppRateLimitPolicies.CommentStatus)]
         public async Task<IActionResult> UpdateCommentStatus(int commentId, string status)
         {
             if (!CommentStatus.All.Contains(status))

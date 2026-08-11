@@ -46,6 +46,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             return int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
         }
 
+        [AppRateLimit(AppRateLimitPolicies.Search)]
         public async Task<IActionResult> Index(
             int? programId, string tab = "disciplines", int page = 1,
             string sort = "name", string direction = "asc",
@@ -93,6 +94,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         }
 
         [HttpPost]
+        [AppRateLimit(AppRateLimitPolicies.FileUpload)]
         public async Task<IActionResult> Upload(int elementId, List<IFormFile> files, bool returnToFiles = false)
         {
             var targetElement = await _context.EducationalProgramElements.FindAsync(elementId);
@@ -154,6 +156,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             return RedirectAfterUpload(elementId, programId, returnToFiles);
         }
 
+        [AppRateLimit(AppRateLimitPolicies.FileDownload)]
         public async Task<IActionResult> Download(int elementId)
         {
             if (!await _accessService.CanManageElementAsync(User, elementId))
@@ -169,6 +172,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             return PhysicalFile(safePath, GetContentType(element.FileName), element.FileName ?? "download");
         }
 
+        [AppRateLimit(AppRateLimitPolicies.FileDownload)]
         public async Task<IActionResult> Preview(int elementId)
         {
             if (!await _accessService.CanManageElementAsync(User, elementId))
@@ -189,6 +193,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         }
 
         [HttpPost]
+        [AppRateLimit(AppRateLimitPolicies.WorkflowMutation)]
         public async Task<IActionResult> SendForApproval(int elementId)
         {
             if (!await _accessService.CanManageElementAsync(User, elementId))
@@ -215,6 +220,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         }
 
         [HttpPost]
+        [AppRateLimit(AppRateLimitPolicies.CommentCreate)]
         public async Task<IActionResult> AddComment(int elementId, string commentText)
         {
             if (!await _accessService.CanManageElementAsync(User, elementId))
@@ -250,6 +256,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         }
 
         [HttpPost]
+        [AppRateLimit(AppRateLimitPolicies.CommentStatus)]
         public async Task<IActionResult> UpdateCommentStatus(int commentId, string status)
         {
             if (!CommentStatus.All.Contains(status))
@@ -342,6 +349,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         }
 
         [HttpPost]
+        [AppRateLimit(AppRateLimitPolicies.ElementEdit)]
         public async Task<IActionResult> EditElement(int elementId, int version, string name, string? description)
         {
             if (!await _accessService.CanManageElementAsync(User, elementId))
@@ -409,6 +417,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         }
 
         [HttpPost]
+        [AppRateLimit(AppRateLimitPolicies.FileRemove)]
         public async Task<IActionResult> RemoveCurrentFile(int fileId)
         {
             var elementId = await _context.EducationalProgramElementFiles
@@ -434,6 +443,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         }
 
         [HttpPost]
+        [AppRateLimit(AppRateLimitPolicies.FileUpload)]
         public async Task<IActionResult> ReplaceCurrentFile(int fileId, IFormFile? file)
         {
             var elementId = await _context.EducationalProgramElementFiles

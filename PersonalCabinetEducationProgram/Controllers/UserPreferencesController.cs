@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using PersonalCabinetEducationProgram.Models;
+using PersonalCabinetEducationProgram.Services;
 
 namespace PersonalCabinetEducationProgram.Controllers
 {
@@ -17,6 +18,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         }
 
         [HttpPost("theme")]
+        [AppRateLimit(AppRateLimitPolicies.PreferenceMutation)]
         public async Task<IActionResult> SetTheme([FromForm] string theme)
         {
             if (!UserTheme.IsValid(theme))

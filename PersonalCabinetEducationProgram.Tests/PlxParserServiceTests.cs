@@ -63,6 +63,26 @@ public class PlxParserServiceTests
     }
 
     [Fact]
+    public async Task ParseAsync_UsesPlanLinkedOopAndMmisEducationFormAttribute()
+    {
+        const string xml = """
+            <?xml version="1.0" encoding="utf-8"?>
+            <Документ>
+              <ООП Код="-2" Название="Математика. Информатика" КодРодительскогоООП="8196" />
+              <ООП Код="8196" Шифр="44.03.05" Название="Педагогическое образование" />
+              <Планы КодООП="8196" КодАктивногоООП="-2" КодФормыОбучения="1" Квалификация="Бакалавр" />
+              <ФормаОбучения Код="1" ФормаОбучения="Очная" />
+            </Документ>
+            """;
+
+        var result = await ParseAsync(xml);
+
+        Assert.Equal("44.03.05", result.PlanCode);
+        Assert.Equal("Математика. Информатика", result.PlanName);
+        Assert.Equal("Очная", result.EducationForm);
+    }
+
+    [Fact]
     public async Task ParseAsync_RejectsNonPlxRoot()
     {
         await Assert.ThrowsAsync<InvalidDataException>(() => ParseAsync("<root />"));

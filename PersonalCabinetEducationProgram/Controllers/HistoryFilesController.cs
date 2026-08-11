@@ -25,6 +25,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             _accessService = accessService;
         }
 
+        [AppRateLimit(AppRateLimitPolicies.FileDownload)]
         public async Task<IActionResult> Preview(int historyId)
         {
             var result = await GetHistoryFile(historyId);
@@ -35,6 +36,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             return PhysicalFile(result.Value.FullPath, GetContentType(result.Value.FileName));
         }
 
+        [AppRateLimit(AppRateLimitPolicies.FileDownload)]
         public async Task<IActionResult> Download(int historyId)
         {
             var result = await GetHistoryFile(historyId);

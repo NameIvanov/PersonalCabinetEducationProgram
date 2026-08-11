@@ -25,8 +25,10 @@ namespace PersonalCabinetEducationProgram.Controllers
             _settings = settings.Value;
         }
 
+        [AppRateLimit(AppRateLimitPolicies.FileDownload)]
         public Task<IActionResult> Preview(int id) => SendFile(id, false);
 
+        [AppRateLimit(AppRateLimitPolicies.FileDownload)]
         public Task<IActionResult> Download(int id) => SendFile(id, true);
 
         private async Task<IActionResult> SendFile(int id, bool download)

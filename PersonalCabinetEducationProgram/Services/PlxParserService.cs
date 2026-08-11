@@ -53,12 +53,19 @@ namespace PersonalCabinetEducationProgram.Services
             if (root == null || !root.Name.LocalName.Equals("Документ", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("Корневой элемент PLX «Документ» не найден.");
 
-            var warnings = new List<string>();
-            var oop = FindElements(document, "ООП").FirstOrDefault();
             var plan = FindElements(document, "Планы").FirstOrDefault();
+            var oopRecords = FindElements(document, "ООП").ToList();
+            var planOopCode = Attribute(plan, "КодООП");
+            var activeOopCode = Attribute(plan, "КодАктивногоООП");
+            var oop = oopRecords.FirstOrDefault(element => Attribute(element, "Код") == planOopCode)
+                ?? oopRecords.FirstOrDefault(element => !string.IsNullOrWhiteSpace(Attribute(element, "Шифр")))
+                ?? oopRecords.FirstOrDefault();
+            var activeOop = oopRecords.FirstOrDefault(element => Attribute(element, "Код") == activeOopCode);
+            var warnings = new List<string>();
             var planCode = Attribute(oop, "Шифр");
             var planName = FirstNotEmpty(
                 Attribute(plan, "Титул"),
+                Attribute(activeOop, "Название"),
                 Attribute(oop, "Название"),
                 Attribute(plan, "ИмяФайла"),
                 Attribute(root, "LastName"));
@@ -297,7 +304,10 @@ namespace PersonalCabinetEducationProgram.Services
             var formCode = FirstNotEmpty(Attribute(plan, "КодФормыОбучения"), Attribute(root, "КодФормыОбучения"));
             var form = FindElements(document, "ФормаОбучения")
                 .FirstOrDefault(element => Attribute(element, "Код") == formCode);
-            return FirstNotEmpty(Attribute(form, "Название"), Attribute(form, "Наименование"));
+            return FirstNotEmpty(
+                Attribute(form, "ФормаОбучения"),
+                Attribute(form, "Название"),
+                Attribute(form, "Наименование"));
         }
 
         private static IEnumerable<XElement> FindElements(XContainer document, string localName) =>

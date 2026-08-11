@@ -35,6 +35,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         [HttpPost]
         [AllowAnonymous]
         [ValidateAntiForgeryToken]
+        [AppRateLimit(AppRateLimitPolicies.Login)]
         public async Task<IActionResult> Login(LoginViewModel model)
         {
             if (!ModelState.IsValid)
@@ -48,7 +49,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             }
 
             var check = await _signInManager.CheckPasswordSignInAsync(user, model.Password, lockoutOnFailure: true);
-            if (!check.Succeeded && IsLegacyPasswordValid(user, model.Password))
+            if (!check.Succeeded && !check.IsLockedOut && IsLegacyPasswordValid(user, model.Password))
             {
                 user.PasswordHash = _identityPasswordHasher.HashPassword(user, model.Password);
                 user.SecurityStamp = Guid.NewGuid().ToString();
@@ -97,6 +98,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         [HttpPost]
         [AllowAnonymous]
         [ValidateAntiForgeryToken]
+        [AppRateLimit(AppRateLimitPolicies.Registration)]
         public async Task<IActionResult> Register(RegisterViewModel model)
         {
             if (model.RoleId == null || !AppRoles.SelfRegistrationIds.Contains(model.RoleId.Value))
@@ -145,6 +147,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         [Authorize]
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [AppRateLimit(AppRateLimitPolicies.Logout)]
         public async Task<IActionResult> Logout()
         {
             await _signInManager.SignOutAsync();

@@ -34,6 +34,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         }
 
         [HttpGet]
+        [AppRateLimit(AppRateLimitPolicies.Search)]
         public async Task<IActionResult> Index(
             int programId,
             int page = 1,
@@ -96,6 +97,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [RequestSizeLimit(PlxParserService.MaxPlxFileSizeBytes)]
+        [AppRateLimit(AppRateLimitPolicies.PlxPreview)]
         public async Task<IActionResult> Preview(
             int programId,
             IFormFile? file,
@@ -142,6 +144,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         }
 
         [HttpPost]
+        [AppRateLimit(AppRateLimitPolicies.PlxApply)]
         public async Task<IActionResult> Apply(
             int programId,
             string token,
@@ -200,6 +203,7 @@ namespace PersonalCabinetEducationProgram.Controllers
         }
 
         [HttpGet]
+        [AppRateLimit(AppRateLimitPolicies.FileDownload)]
         public async Task<IActionResult> Download(int id, CancellationToken cancellationToken)
         {
             var import = await _context.CurriculumImports

@@ -22,6 +22,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             _notificationService = notificationService;
         }
 
+        [AppRateLimit(AppRateLimitPolicies.Search)]
         public async Task<IActionResult> Index(
             bool unreadOnly = false, int page = 1, string sort = "date", string direction = "desc",
             [FromQuery] NotificationListFiltersViewModel? filters = null)
@@ -76,6 +77,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             });
         }
 
+        [AppRateLimit(AppRateLimitPolicies.NotificationMutation)]
         public async Task<IActionResult> Open(int id)
         {
             var userId = GetCurrentUserId();
@@ -104,6 +106,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [AppRateLimit(AppRateLimitPolicies.NotificationMutation)]
         public async Task<IActionResult> MarkAllRead()
         {
             await _notificationService.MarkAllReadAsync(GetCurrentUserId());
