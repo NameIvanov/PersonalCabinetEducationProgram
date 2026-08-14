@@ -304,7 +304,8 @@
                                         <td class="small">@(element.UploadDate?.ToString("dd.MM.yyyy") ?? "—")</td>
                                         <td>
                                             <div class="d-flex gap-1 flex-wrap">
-                                                @await Html.PartialAsync("_ElementFileButtons", element)
+                                                <a asp-action="ManageFiles" asp-route-elementId="@element.Id"
+                                                   class="btn btn-outline-primary btn-sm" title="Текущий комплект файлов">Файлы</a>
                                                 @if (PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(element.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Approved)
                                                 {
                                                     <button type="button" class="btn btn-outline-primary btn-sm" title="Опубликовать"
@@ -408,7 +409,8 @@
             <td class="small">@(element.UploadDate?.ToString("dd.MM.yyyy") ?? "—")</td>
             <td>
                 <div class="d-flex gap-1 flex-wrap">
-                    @await Html.PartialAsync("_ElementFileButtons", element)
+                    <a asp-action="ManageFiles" asp-route-elementId="@element.Id"
+                       class="btn btn-outline-primary btn-sm" title="Текущий комплект файлов">Файлы</a>
                     @if (PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(element.StatusApprovals) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Approved)
                     {
                         <button type="button" class="btn btn-outline-primary btn-sm" title="Опубликовать"

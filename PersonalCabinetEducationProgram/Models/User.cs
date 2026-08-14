@@ -49,5 +49,7 @@ namespace PersonalCabinetEducationProgram.Models
         public ICollection<Notification> Notifications { get; set; } = [];
         public ICollection<EducationalProgramElementFile> UploadedElementFiles { get; set; } = [];
         public ICollection<CurriculumImport> CurriculumImports { get; set; } = [];
+        public ICollection<UserLoginLocation> LoginLocations { get; set; } = [];
+        public ICollection<UserLoginSession> LoginSessions { get; set; } = [];
     }
 }

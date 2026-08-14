@@ -52,6 +52,25 @@ public class RateLimitingTests
     }
 
     [Fact]
+    public void EveryPhysicalDownloadAction_UsesPostToProtectSecurityCountersFromCsrf()
+    {
+        var downloadActions = typeof(AccountController).Assembly.GetTypes()
+            .Where(type => !type.IsAbstract && typeof(Controller).IsAssignableFrom(type))
+            .SelectMany(type => type.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly))
+            .Where(method => method.Name is "Download" or "DownloadElement")
+            .ToList();
+
+        var unsafeActions = downloadActions
+            .Where(method => method.GetCustomAttribute<HttpPostAttribute>(inherit: true) == null)
+            .Select(method => $"{method.DeclaringType!.Name}.{method.Name}")
+            .OrderBy(name => name)
+            .ToList();
+
+        Assert.True(unsafeActions.Count == 0,
+            $"Physical download actions callable by GET: {string.Join(", ", unsafeActions)}");
+    }
+
+    [Fact]
     public async Task LoginPolicyRejectsEleventhRequestFromSameIp()
     {
         var limiter = CreateLimiter();

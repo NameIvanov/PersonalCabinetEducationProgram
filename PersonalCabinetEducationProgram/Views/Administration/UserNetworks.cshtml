@@ -1,0 +1,115 @@
+@model PersonalCabinetEducationProgram.ViewModels.AdministrationUserNetworksViewModel
+@{
+    ViewData["Title"] = "Сети пользователя";
+    var pagination = Model.Pagination;
+    string NextDirection(string column) => Model.Sort == column && Model.Direction == "asc" ? "desc" : "asc";
+    Dictionary<string, string> RouteData(int page, string? sort = null, string? direction = null) => new()
+    {
+        ["userId"] = Model.User.Id.ToString(),
+        ["page"] = page.ToString(),
+        ["sort"] = sort ?? Model.Sort,
+        ["direction"] = direction ?? Model.Direction
+    };
+    Dictionary<string, string> SortRoute(string column) => RouteData(1, column, NextDirection(column));
+}
+
+<div class="administration-shell">
+    @await Html.PartialAsync("_AdministrationSidebar", Model)
+    <section class="administration-content">
+        @await Html.PartialAsync("_AdministrationMessages")
+        <header class="administration-page-header">
+            <div>
+                <div class="administration-eyebrow">История входов</div>
+                <h1>Сети пользователя</h1>
+                <p>@Model.User.FullName · @Model.User.UserName · ID @Model.User.Id</p>
+            </div>
+            <div class="administration-header-actions">
+                <a class="btn btn-outline-secondary" asp-action="Security">К событиям безопасности</a>
+            </div>
+        </header>
+
+        <div class="administration-table-frame">
+            <div class="table-responsive">
+                <table class="table administration-table mb-0">
+                    <thead><tr>
+                        <th>Последний IP</th>
+                        <th><a asp-action="UserNetworks" asp-all-route-data="@SortRoute("network")">Подсеть</a></th>
+                        <th><a asp-action="UserNetworks" asp-all-route-data="@SortRoute("country")">Страна</a></th>
+                        <th><a asp-action="UserNetworks" asp-all-route-data="@SortRoute("firstSeen")">Первый вход</a></th>
+                        <th><a asp-action="UserNetworks" asp-all-route-data="@SortRoute("lastSeen")">Последний вход</a></th>
+                        <th><a asp-action="UserNetworks" asp-all-route-data="@SortRoute("count")">Входов</a></th>
+                        <th>Состояние</th>
+                        <th>Действия</th>
+                    </tr></thead>
+                    <tbody>
+                    @foreach (var location in Model.Locations)
+                    {
+                        <tr class="@(location.IsArchived ? "text-muted" : "")">
+                            <td>@location.IpAddress</td>
+                            <td><code>@location.NetworkAddress/@location.NetworkPrefixLength</code></td>
+                            <td>
+                                @(location.IsLocal
+                                    ? "Локальная сеть"
+                                    : location.CountryName ?? location.CountryCode ?? "Не определена")
+                            </td>
+                            <td class="text-nowrap">@location.FirstSeenAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                            <td class="text-nowrap">@location.LastSeenAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                            <td>@location.SuccessfulLoginCount</td>
+                            <td>
+                                @if (location.IsArchived)
+                                {
+                                    <span class="administration-status neutral">Архив</span>
+                                }
+                                else if (location.IsTrusted)
+                                {
+                                    <span class="administration-status success">Доверенная</span>
+                                }
+                                else
+                                {
+                                    <span class="administration-status info">Обычная</span>
+                                }
+                            </td>
+                            <td>
+                                <div class="d-flex flex-wrap gap-2">
+                                    @if (!location.IsArchived)
+                                    {
+                                        <form asp-action="SetNetworkTrust" method="post">
+                                            <input type="hidden" name="userId" value="@Model.User.Id" />
+                                            <input type="hidden" name="networkId" value="@location.Id" />
+                                            <input type="hidden" name="isTrusted" value="@(!location.IsTrusted ? "true" : "false")" />
+                                            <button class="btn btn-outline-secondary btn-sm" type="submit">
+                                                @(location.IsTrusted ? "Снять доверие" : "Сделать доверенной")
+                                            </button>
+                                        </form>
+                                        <form asp-action="ArchiveUserNetwork" method="post"
+                                              data-confirm-form="Архивировать эту запись сети?">
+                                            <input type="hidden" name="userId" value="@Model.User.Id" />
+                                            <input type="hidden" name="networkId" value="@location.Id" />
+                                            <button class="btn btn-outline-danger btn-sm" type="submit">Архивировать</button>
+                                        </form>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    @if (Model.Locations.Count == 0)
+                    {
+                        <tr><td colspan="8" class="administration-empty">История сетей пока пуста</td></tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="administration-pagination">
+            <span>Показано @pagination.FirstItem–@pagination.LastItem из @pagination.TotalCount записей</span>
+            <div>
+                <a class="btn btn-outline-secondary @(pagination.Page <= 1 ? "disabled" : "")"
+                   asp-action="UserNetworks" asp-all-route-data="@RouteData(pagination.Page - 1)">Назад</a>
+                <span>@pagination.Page из @pagination.TotalPages</span>
+                <a class="btn btn-outline-secondary @(pagination.Page >= pagination.TotalPages ? "disabled" : "")"
+                   asp-action="UserNetworks" asp-all-route-data="@RouteData(pagination.Page + 1)">Далее</a>
+            </div>
+        </div>
+    </section>
+</div>

@@ -88,11 +88,65 @@ namespace PersonalCabinetEducationProgram.Services
                 await using var scope = _scopeFactory.CreateAsyncScope();
                 var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
                 if (requests.Count > 0)
+                {
                     context.SystemRequestLogs.AddRange(requests);
+                    await UpdateIpAddressStatesAsync(context, requests, cancellationToken);
+                }
+                List<SecurityEventLog> aggregatedSecurityEvents = [];
                 if (securityEvents.Count > 0)
-                    context.SecurityEventLogs.AddRange(AggregateBurstEvents(securityEvents));
+                {
+                    aggregatedSecurityEvents = AggregateBurstEvents(securityEvents).ToList();
+                    context.SecurityEventLogs.AddRange(aggregatedSecurityEvents);
+                }
 
                 await context.SaveChangesAsync(cancellationToken);
+
+                var affectedUserIds = aggregatedSecurityEvents
+                    .Where(CountsTowardsAccountRisk)
+                    .Select(item => item.UserId!.Value)
+                    .Distinct()
+                    .ToList();
+                if (affectedUserIds.Count > 0)
+                {
+                    var accountSecurity = scope.ServiceProvider.GetRequiredService<AccountSecurityService>();
+                    foreach (var userId in affectedUserIds)
+                    {
+                        try
+                        {
+                            await accountSecurity.EvaluateAccumulatedRiskAsync(userId, cancellationToken);
+                        }
+                        catch (Exception exception)
+                        {
+                            _logger.LogError(exception,
+                                "Failed to evaluate accumulated security risk for user {UserId}.",
+                                userId);
+                        }
+                    }
+                }
+
+                var affectedIpAddresses = aggregatedSecurityEvents
+                    .Where(CountsTowardsIpRisk)
+                    .Select(item => IpAddressNormalizer.NormalizeOrUnknown(item.IpAddress))
+                    .Where(item => item != "unknown")
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                if (affectedIpAddresses.Count > 0)
+                {
+                    var ipSecurity = scope.ServiceProvider.GetRequiredService<IpAddressSecurityService>();
+                    foreach (var ipAddress in affectedIpAddresses)
+                    {
+                        try
+                        {
+                            await ipSecurity.EvaluateAccumulatedAccountRiskAsync(ipAddress, cancellationToken);
+                        }
+                        catch (Exception exception)
+                        {
+                            _logger.LogError(exception,
+                                "Failed to evaluate accumulated account risk for IP {IpAddress}.",
+                                ipAddress);
+                        }
+                    }
+                }
                 return true;
             }
             catch (Exception exception)
@@ -128,6 +182,74 @@ namespace PersonalCabinetEducationProgram.Services
                     newest.OccurrenceCount = group.Sum(entry => entry.OccurrenceCount);
                     return newest;
                 });
+        }
+
+        private static bool CountsTowardsAccountRisk(SecurityEventLog item) =>
+            item.UserId.HasValue &&
+            item.Status != SecurityEventStatuses.FalsePositive &&
+            item.EventType != SecurityEventTypes.AccountAutomaticallyBlocked &&
+            item.EventType != SecurityEventTypes.AccountRiskThresholdReached &&
+            item.EventType != SecurityEventTypes.IpAutomaticallyBlocked &&
+            item.EventType != SecurityEventTypes.IpRiskThresholdReached &&
+            item.Severity is SecurityEventSeverities.High or SecurityEventSeverities.Critical;
+
+        private static bool CountsTowardsIpRisk(SecurityEventLog item) =>
+            item.UserId.HasValue &&
+            item.Status != SecurityEventStatuses.FalsePositive &&
+            item.EventType != SecurityEventTypes.AccountAutomaticallyBlocked &&
+            item.EventType != SecurityEventTypes.AccountRiskThresholdReached &&
+            item.EventType != SecurityEventTypes.IpAutomaticallyBlocked &&
+            item.EventType != SecurityEventTypes.IpRiskThresholdReached &&
+            item.Severity is SecurityEventSeverities.High or SecurityEventSeverities.Critical;
+
+        private static async Task UpdateIpAddressStatesAsync(
+            ApplicationDbContext context,
+            IReadOnlyCollection<SystemRequestLog> requests,
+            CancellationToken cancellationToken)
+        {
+            var summaries = requests
+                .Select(request => new
+                {
+                    Request = request,
+                    IpAddress = IpAddressNormalizer.NormalizeOrUnknown(request.IpAddress)
+                })
+                .Where(item => item.IpAddress != "unknown")
+                .GroupBy(item => item.IpAddress, StringComparer.OrdinalIgnoreCase)
+                .Select(group => new
+                {
+                    IpAddress = group.Key,
+                    First = group.Min(item => item.Request.OccurredAtUtc),
+                    Last = group.MaxBy(item => item.Request.OccurredAtUtc)!.Request,
+                    Count = group.LongCount()
+                })
+                .ToList();
+            if (summaries.Count == 0)
+                return;
+
+            var addresses = summaries.Select(item => item.IpAddress).ToList();
+            var existing = await context.IpAddressSecurityStates
+                .Where(item => addresses.Contains(item.IpAddress))
+                .ToDictionaryAsync(item => item.IpAddress, StringComparer.OrdinalIgnoreCase, cancellationToken);
+            foreach (var summary in summaries)
+            {
+                if (!existing.TryGetValue(summary.IpAddress, out var state))
+                {
+                    state = new IpAddressSecurityState
+                    {
+                        IpAddress = summary.IpAddress,
+                        FirstSeenAtUtc = summary.First
+                    };
+                    context.IpAddressSecurityStates.Add(state);
+                }
+
+                state.LastSeenAtUtc = summary.Last.OccurredAtUtc;
+                state.RequestCount = checked(state.RequestCount + summary.Count);
+                state.LastUserId = summary.Last.UserId;
+                state.LastUserLogin = summary.Last.UserLogin;
+                state.LastUserFullName = summary.Last.UserFullName;
+                state.LastHttpMethod = summary.Last.HttpMethod;
+                state.LastPath = summary.Last.Path;
+            }
         }
 
         private static async Task DelayAfterFailure(CancellationToken cancellationToken)

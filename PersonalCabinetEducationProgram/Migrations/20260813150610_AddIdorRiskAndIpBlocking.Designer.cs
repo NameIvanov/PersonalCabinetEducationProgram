@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PersonalCabinetEducationProgram.Data;
 
@@ -10,9 +11,11 @@ using PersonalCabinetEducationProgram.Data;
 namespace PersonalCabinetEducationProgram.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260813150610_AddIdorRiskAndIpBlocking")]
+    partial class AddIdorRiskAndIpBlocking
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1082,29 +1085,6 @@ namespace PersonalCabinetEducationProgram.Migrations
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bigint");
-
-                    b.Property<int>("AccountRiskEscalationLevel")
-                        .HasColumnType("int")
-                        .HasColumnName("account_risk_escalation_level");
-
-                    b.Property<DateTime?>("AccountRiskLastBlockedAtUtc")
-                        .HasPrecision(6)
-                        .HasColumnType("datetime(6)")
-                        .HasColumnName("account_risk_last_blocked_at_utc");
-
-                    b.Property<DateTime?>("AccountRiskMarkedAtUtc")
-                        .HasPrecision(6)
-                        .HasColumnType("datetime(6)")
-                        .HasColumnName("account_risk_marked_at_utc");
-
-                    b.Property<int>("AccountRiskScore")
-                        .HasColumnType("int")
-                        .HasColumnName("account_risk_score");
-
-                    b.Property<DateTime?>("AccountRiskWindowResetAtUtc")
-                        .HasPrecision(6)
-                        .HasColumnType("datetime(6)")
-                        .HasColumnName("account_risk_window_reset_at_utc");
 
                     b.Property<DateTime?>("AttemptWindowStartedAtUtc")
                         .HasPrecision(6)

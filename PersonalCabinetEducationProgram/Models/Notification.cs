@@ -13,7 +13,7 @@ namespace PersonalCabinetEducationProgram.Models
         public int UserId { get; set; }
 
         [Column("educational_program_element_id")]
-        public int EducationalProgramElementId { get; set; }
+        public int? EducationalProgramElementId { get; set; }
 
         [Column("actor_name")]
         public string ActorName { get; set; } = string.Empty;
@@ -37,6 +37,6 @@ namespace PersonalCabinetEducationProgram.Models
         public DateTime? ReadAt { get; set; }
 
         public User User { get; set; } = null!;
-        public EducationalProgramElement Element { get; set; } = null!;
+        public EducationalProgramElement? Element { get; set; }
     }
 }

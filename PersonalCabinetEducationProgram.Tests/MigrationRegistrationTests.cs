@@ -24,6 +24,9 @@ public class MigrationRegistrationTests
         Assert.Contains("20260811125514_AddAdministrationMonitoring", context.Database.GetMigrations());
         Assert.Contains("20260811130419_PreserveAuditAfterUserDeletion", context.Database.GetMigrations());
         Assert.Contains("20260811134443_AddAutomatedSecurityControls", context.Database.GetMigrations());
+        Assert.Contains("20260812115345_AddUnusualLoginMonitoring", context.Database.GetMigrations());
+        Assert.Contains("20260813150610_AddIdorRiskAndIpBlocking", context.Database.GetMigrations());
+        Assert.Contains("20260813161105_AddIpAccountRiskEscalation", context.Database.GetMigrations());
         Assert.False(context.Database.HasPendingModelChanges());
     }
 }

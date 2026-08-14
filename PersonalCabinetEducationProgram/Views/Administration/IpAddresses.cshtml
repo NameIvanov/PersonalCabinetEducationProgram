@@ -1,0 +1,141 @@
+@model PersonalCabinetEducationProgram.ViewModels.AdministrationIpAddressesViewModel
+@using PersonalCabinetEducationProgram.Models
+@{
+    ViewData["Title"] = "IP-адреса";
+    var filters = Model.Filters;
+    var pagination = Model.Pagination;
+    var now = DateTime.UtcNow;
+    Dictionary<string, string> RouteData(int page, string? category = null) => new()
+    {
+        ["page"] = page.ToString(),
+        ["category"] = category ?? Model.Category,
+        ["Search"] = filters.Search ?? string.Empty,
+        ["State"] = filters.State ?? string.Empty,
+        ["EscalationLevel"] = filters.EscalationLevel?.ToString() ?? string.Empty,
+        ["Account"] = filters.Account ?? string.Empty,
+        ["Activity"] = filters.Activity
+    };
+    string StatusLabel(IpAddressSecurityState item) => item.IsPermanentlyBlocked
+        ? "Заблокирован"
+        : item.BlockedUntilUtc > now
+            ? "Временно ограничен"
+            : item.IsSuspicious ? "Подозрительный" : "Разрешён";
+    string StatusClass(IpAddressSecurityState item) => item.IsPermanentlyBlocked
+        ? "danger"
+        : item.BlockedUntilUtc > now
+            ? "info"
+            : item.IsSuspicious ? "warning" : "success";
+}
+
+<div class="administration-shell">
+    @await Html.PartialAsync("_AdministrationSidebar", Model)
+    <section class="administration-content">
+        @await Html.PartialAsync("_AdministrationMessages")
+        <header class="administration-page-header">
+            <div>
+                <div class="administration-eyebrow">Контроль сетевого доступа</div>
+                <h1>IP-адреса</h1>
+                <p>Все обращения к сайту, подозрительная активность и управление блокировками IP</p>
+            </div>
+            <div class="administration-header-actions">
+                <details class="ip-manual-action">
+                    <summary class="btn btn-outline-danger">Заблокировать IP</summary>
+                    <form asp-action="BlockIpAddress" method="post" data-confirm-form="Заблокировать указанный IP-адрес до решения администратора?">
+                        <label><span>IP-адрес</span><input class="form-control form-control-sm" name="ipAddress" required maxlength="45" placeholder="192.0.2.10" /></label>
+                        <label><span>Причина</span><textarea class="form-control form-control-sm" name="reviewNote" maxlength="1000" rows="3" required></textarea></label>
+                        <button class="btn btn-danger btn-sm" type="submit">Заблокировать</button>
+                    </form>
+                </details>
+                <a class="btn btn-primary" asp-action="IpAddresses" asp-all-route-data="@RouteData(pagination.Page)">Обновить</a>
+            </div>
+        </header>
+
+        <div class="administration-metrics">
+            <article class="administration-metric"><span class="metric-label"><i class="metric-dot info"></i>Активных IP за 24 часа</span><strong>@Model.ActiveLastDayCount</strong><small>обращались к сайту</small></article>
+            <article class="administration-metric"><span class="metric-label"><i class="metric-dot warning"></i>Подозрительные</span><strong>@Model.SuspiciousCount</strong><small>требуют внимания</small></article>
+            <article class="administration-metric"><span class="metric-label"><i class="metric-dot danger"></i>Заблокированные</span><strong>@Model.BlockedCount</strong><small>временно или постоянно</small></article>
+            <article class="administration-metric"><span class="metric-label"><i class="metric-dot success"></i>Отклонено запросов</span><strong>@Model.RejectedRequestCount</strong><small>HTTP 403 за 24 часа</small></article>
+        </div>
+
+        <nav class="administration-tabs" aria-label="Категории IP-адресов">
+            <a class="@(Model.Category == "all" ? "active" : "")" asp-action="IpAddresses" asp-all-route-data="@RouteData(1, "all")">Все обращения <span>@Model.ActiveLastDayCount</span></a>
+            <a class="@(Model.Category == "suspicious" ? "active" : "")" asp-action="IpAddresses" asp-all-route-data="@RouteData(1, "suspicious")">Подозрительные <span>@Model.SuspiciousCount</span></a>
+            <a class="@(Model.Category == "blocked" ? "active" : "")" asp-action="IpAddresses" asp-all-route-data="@RouteData(1, "blocked")">Заблокированные <span>@Model.BlockedCount</span></a>
+            <a class="@(Model.Category == "history" ? "active" : "")" asp-action="IpAddresses" asp-all-route-data="@RouteData(1, "history")">История блокировок</a>
+        </nav>
+
+        <form method="get" class="administration-filter-bar administration-filter-ip">
+            <input type="hidden" name="category" value="@Model.Category" />
+            <label><span>IP, пользователь или маршрут</span><input class="form-control" type="search" name="Search" value="@filters.Search" placeholder="Например, 185.220 или Иванов" /></label>
+            <label><span>Состояние</span><select class="form-select" name="State">
+                <option value="">Все состояния</option><option value="allowed" selected="@(filters.State == "allowed")">Разрешён</option><option value="suspicious" selected="@(filters.State == "suspicious")">Подозрительный</option><option value="blocked" selected="@(filters.State == "blocked")">Заблокирован</option>
+            </select></label>
+            <label><span>Уровень эскалации</span><select class="form-select" name="EscalationLevel">
+                <option value="">Все уровни</option><option value="0" selected="@(filters.EscalationLevel == 0)">Нет</option><option value="1" selected="@(filters.EscalationLevel == 1)">1 · первая блокировка</option><option value="2" selected="@(filters.EscalationLevel == 2)">2 · сутки</option><option value="3" selected="@(filters.EscalationLevel == 3)">3 · постоянный</option>
+            </select></label>
+            <label><span>Связь с аккаунтом</span><select class="form-select" name="Account">
+                <option value="">Любая</option><option value="authenticated" selected="@(filters.Account == "authenticated")">Авторизован</option><option value="anonymous" selected="@(filters.Account == "anonymous")">Не авторизован</option>
+            </select></label>
+            <label><span>Активность</span><select class="form-select" name="Activity">
+                <option value="day" selected="@(filters.Activity == "day")">За 24 часа</option><option value="week" selected="@(filters.Activity == "week")">За 7 суток</option><option value="month" selected="@(filters.Activity == "month")">За 30 суток</option><option value="all" selected="@(filters.Activity == "all")">За всё время</option>
+            </select></label>
+            <div class="administration-filter-actions"><button class="btn btn-primary" type="submit">Найти</button><a class="btn btn-outline-secondary" asp-action="IpAddresses" asp-route-category="@Model.Category">Сбросить</a></div>
+        </form>
+
+        <div class="administration-callout ip-identity-warning">
+            <span><strong>Важно:</strong> совпадение IP не доказывает личность пользователя и само по себе не начисляет баллы аккаунту.</span>
+            <span>Риск аккаунтов на IP: 6 баллов/24 часа → подозрительный; 15 баллов → 1 час; повтор за неделю → сутки; ещё один повтор → до разблокировки.</span>
+            <span>Анонимный подбор ID: 3 попытки/10 мин → 30 минут → ещё 3/7 суток → 24 часа → следующая попытка → до разблокировки.</span>
+        </div>
+
+        <div class="administration-table-frame">
+            <div class="table-responsive">
+                <table class="table administration-table administration-ip-table mb-0">
+                    <thead><tr><th>IP-адрес</th><th>Состояние</th><th>Последний запрос</th><th>Запросов</th><th>Баллы / попытки</th><th>Уровень</th><th>Срок блокировки</th><th>Пользователь</th><th>Действия</th></tr></thead>
+                    <tbody>
+                    @foreach (var entry in Model.Entries)
+                    {
+                        <tr>
+                            <td><strong class="ip-address-value">@entry.IpAddress</strong><span class="administration-cell-note">Первый: @entry.FirstSeenAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</span></td>
+                            <td><span class="administration-status @StatusClass(entry)">@StatusLabel(entry)</span>@if (entry.IsManuallyBlocked) { <span class="administration-cell-note">вручную</span> }</td>
+                            <td><strong>@entry.LastSeenAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")</strong><span class="administration-cell-note">@entry.LastHttpMethod @entry.LastPath</span></td>
+                            <td>@entry.RequestCount.ToString("N0")</td>
+                            <td><strong>@entry.AccountRiskScore / 15</strong><span class="administration-cell-note">анонимных попыток: @entry.SuspiciousAttemptCount</span>@if (entry.AttemptsInWindow > 0) { <span class="administration-cell-note">в текущем окне: @entry.AttemptsInWindow</span> }</td>
+                            <td><strong class="ip-escalation-level-@Math.Max(entry.EscalationLevel, entry.AccountRiskEscalationLevel)">риск: @entry.AccountRiskEscalationLevel · IDOR: @entry.EscalationLevel</strong></td>
+                            <td>
+                                @if (entry.IsPermanentlyBlocked) { <strong>До разблокировки</strong> }
+                                else if (entry.BlockedUntilUtc > now) { <strong>до @entry.BlockedUntilUtc.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</strong> }
+                                else { <span class="administration-cell-note">Не заблокирован</span> }
+                                @if (!string.IsNullOrWhiteSpace(entry.BlockReason)) { <span class="administration-cell-note">@entry.BlockReason</span> }
+                            </td>
+                            <td><strong class="administration-user-name">@(entry.LastUserFullName ?? entry.LastUserLogin ?? "Не авторизован")</strong><span class="administration-cell-note">@(entry.LastUserId.HasValue ? $"ID {entry.LastUserId}" : "аккаунт не определён")</span></td>
+                            <td>
+                                <div class="ip-row-actions">
+                                    @if (entry.IsPermanentlyBlocked || entry.BlockedUntilUtc > now)
+                                    {
+                                        <details class="ip-inline-action"><summary class="btn btn-outline-success btn-sm">Разблокировать</summary><form asp-action="UnblockIpAddress" method="post" data-confirm-form="Разблокировать этот IP-адрес?"><input type="hidden" name="ipAddress" value="@entry.IpAddress" /><textarea class="form-control form-control-sm" name="reviewNote" maxlength="1000" rows="2" required placeholder="Причина разблокировки"></textarea><button class="btn btn-success btn-sm" type="submit">Подтвердить</button></form></details>
+                                    }
+                                    else
+                                    {
+                                        @if (entry.IsSuspicious)
+                                        {
+                                            <details class="ip-inline-action"><summary class="btn btn-outline-warning btn-sm">Снять подозрение</summary><form asp-action="ClearIpSuspicion" method="post" data-confirm-form="Снять с этого IP статус подозрительного и начать накопление заново?"><input type="hidden" name="ipAddress" value="@entry.IpAddress" /><textarea class="form-control form-control-sm" name="reviewNote" maxlength="1000" rows="2" required placeholder="Причина снятия подозрения"></textarea><button class="btn btn-warning btn-sm" type="submit">Подтвердить</button></form></details>
+                                        }
+                                        <details class="ip-inline-action"><summary class="btn btn-outline-danger btn-sm">Блокировать</summary><form asp-action="BlockIpAddress" method="post" data-confirm-form="Заблокировать этот IP-адрес?"><input type="hidden" name="ipAddress" value="@entry.IpAddress" /><textarea class="form-control form-control-sm" name="reviewNote" maxlength="1000" rows="2" required placeholder="Причина блокировки"></textarea><button class="btn btn-danger btn-sm" type="submit">Подтвердить</button></form></details>
+                                    }
+                                    <a class="btn btn-outline-secondary btn-sm" asp-action="Security" asp-route-Search="@entry.IpAddress">История</a>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    @if (Model.Entries.Count == 0) { <tr><td colspan="9" class="administration-empty">IP-адресов по выбранным условиям нет</td></tr> }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="administration-pagination">
+            <span>Показано @pagination.FirstItem–@pagination.LastItem из @pagination.TotalCount.ToString("N0") IP-адресов</span>
+            <div><a class="btn btn-outline-secondary @(pagination.Page <= 1 ? "disabled" : "")" asp-action="IpAddresses" asp-all-route-data="@RouteData(pagination.Page - 1)">Назад</a><span>@pagination.Page из @pagination.TotalPages</span><a class="btn btn-outline-secondary @(pagination.Page >= pagination.TotalPages ? "disabled" : "")" asp-action="IpAddresses" asp-all-route-data="@RouteData(pagination.Page + 1)">Далее</a></div>
+        </div>
+    </section>
+</div>

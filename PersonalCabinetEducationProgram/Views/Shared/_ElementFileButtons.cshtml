@@ -20,8 +20,9 @@
                     <span class="small text-truncate flex-grow-1" style="max-width: 220px;" title="@file.OriginalFileName">@file.OriginalFileName</span>
                     <a asp-controller="ElementFiles" asp-action="Preview" asp-route-id="@file.Id"
                        class="btn btn-outline-secondary btn-sm flex-shrink-0" title="Просмотр" target="_blank">📄</a>
-                    <a asp-controller="ElementFiles" asp-action="Download" asp-route-id="@file.Id"
-                       class="btn btn-outline-secondary btn-sm flex-shrink-0" title="Скачать">⬇</a>
+                    <form asp-controller="ElementFiles" asp-action="Download" asp-route-id="@file.Id" method="post" class="d-inline flex-shrink-0">
+                        <button class="btn btn-outline-secondary btn-sm" type="submit" title="Скачать">⬇</button>
+                    </form>
                 </li>
             }
         </ul>
@@ -31,8 +32,9 @@ else if (files.Count == 1)
 {
     <a asp-controller="ElementFiles" asp-action="Preview" asp-route-id="@files[0].Id"
        class="btn btn-outline-secondary btn-sm" title="Просмотр" target="_blank">📄</a>
-    <a asp-controller="ElementFiles" asp-action="Download" asp-route-id="@files[0].Id"
-       class="btn btn-outline-secondary btn-sm" title="Скачать">⬇</a>
+    <form asp-controller="ElementFiles" asp-action="Download" asp-route-id="@files[0].Id" method="post" class="d-inline">
+        <button class="btn btn-outline-secondary btn-sm" type="submit" title="Скачать">⬇</button>
+    </form>
 }
 else if (files.Count > 1)
 {
@@ -59,8 +61,11 @@ else if (files.Count > 1)
         <ul class="dropdown-menu dropdown-menu-end shadow-sm">
             @foreach (var file in files)
             {
-                <li><a class="dropdown-item small text-truncate" style="max-width:320px"
-                       asp-controller="ElementFiles" asp-action="Download" asp-route-id="@file.Id">@file.OriginalFileName</a></li>
+                <li>
+                    <form asp-controller="ElementFiles" asp-action="Download" asp-route-id="@file.Id" method="post">
+                        <button class="dropdown-item small text-truncate" style="max-width:320px" type="submit">@file.OriginalFileName</button>
+                    </form>
+                </li>
             }
         </ul>
     </div>

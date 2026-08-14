@@ -230,7 +230,8 @@ namespace PersonalCabinetEducationProgram.Controllers
             return RedirectToAction(nameof(Index), new { programId });
         }
 
-        [HttpGet]
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         [AppRateLimit(AppRateLimitPolicies.FileDownload)]
         public async Task<IActionResult> Download(int id, CancellationToken cancellationToken)
         {

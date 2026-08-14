@@ -126,5 +126,47 @@ namespace PersonalCabinetEducationProgram.Services
 
             await _context.SaveChangesAsync();
         }
+
+        public void CreateSecurity(int userId, string title, string message)
+        {
+            _context.Notifications.Add(new Notification
+            {
+                UserId = userId,
+                EducationalProgramElementId = null,
+                ActorName = "Система безопасности",
+                Type = NotificationType.Security,
+                Title = title,
+                Message = message,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
+        public async Task CreateSecurityForAdministratorsAsync(
+            string title,
+            string message,
+            int? exceptUserId = null,
+            CancellationToken cancellationToken = default)
+        {
+            var administratorIds = await _context.UserRoles
+                .Where(role => role.RoleId == AppRoles.AdminId &&
+                               (!exceptUserId.HasValue || role.UserId != exceptUserId.Value))
+                .Select(role => role.UserId)
+                .ToListAsync(cancellationToken);
+
+            foreach (var administratorId in administratorIds)
+                CreateSecurity(administratorId, title, message);
+        }
+
+        public async Task MarkReadAsync(int userId, int notificationId)
+        {
+            var notification = await _context.Notifications
+                .SingleOrDefaultAsync(item => item.Id == notificationId && item.UserId == userId);
+            if (notification == null || notification.IsRead)
+                return;
+
+            notification.IsRead = true;
+            notification.ReadAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+        }
     }
 }

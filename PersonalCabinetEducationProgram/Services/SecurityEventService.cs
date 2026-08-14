@@ -26,7 +26,8 @@ namespace PersonalCabinetEducationProgram.Services
             string? description = null,
             int? userId = null,
             string? userLogin = null,
-            string? userFullName = null)
+            string? userFullName = null,
+            string? ipAddress = null)
         {
             var context = _httpContextAccessor.HttpContext;
             var now = DateTime.UtcNow;
@@ -44,7 +45,7 @@ namespace PersonalCabinetEducationProgram.Services
                 UserId = userId ?? GetUserId(context),
                 UserLogin = LimitNullable(userLogin ?? context?.User.FindFirstValue("Username"), 256),
                 UserFullName = LimitNullable(userFullName ?? context?.User.Identity?.Name, 300),
-                IpAddress = Limit(GetIpAddress(context), 45),
+                IpAddress = Limit(ipAddress ?? GetIpAddress(context), 45),
                 HttpMethod = LimitNullable(context?.Request.Method, 10),
                 Path = LimitNullable(context?.Request.Path.Value, 2048),
                 TraceId = LimitNullable(context?.TraceIdentifier, 100),
@@ -62,7 +63,7 @@ namespace PersonalCabinetEducationProgram.Services
             int.TryParse(context?.User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
 
         private static string GetIpAddress(HttpContext? context) =>
-            context?.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            IpAddressNormalizer.NormalizeOrUnknown(context?.Connection.RemoteIpAddress?.ToString());
 
         private static string Limit(string value, int maxLength) =>
             value.Length <= maxLength ? value : value[..maxLength];

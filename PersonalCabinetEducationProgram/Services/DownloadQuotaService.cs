@@ -85,6 +85,8 @@ namespace PersonalCabinetEducationProgram.Services
                 return;
             }
 
+            PreventDownloadCaching(context.HttpContext.Response);
+
             var fileInfo = new FileInfo(physicalFileResult.FileName);
             if (!fileInfo.Exists)
             {
@@ -115,6 +117,13 @@ namespace PersonalCabinetEducationProgram.Services
                 Content = $"Превышена часовая квота скачивания 2 ГБ. Повторите попытку через {retryAfterSeconds} сек."
             };
             await next();
+        }
+
+        public static void PreventDownloadCaching(HttpResponse response)
+        {
+            response.Headers.CacheControl = "no-store, no-cache, must-revalidate, max-age=0";
+            response.Headers.Pragma = "no-cache";
+            response.Headers.Expires = "0";
         }
     }
 }

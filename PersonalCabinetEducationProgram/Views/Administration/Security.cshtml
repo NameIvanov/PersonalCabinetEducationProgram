@@ -71,22 +71,34 @@
         <form method="get" class="administration-filter-bar administration-filter-security">
             <input type="hidden" name="sort" value="@Model.Sort" />
             <input type="hidden" name="direction" value="@Model.Direction" />
-            <label><span>Пользователь, IP или событие</span><input class="form-control" type="search" name="Search" value="@filters.Search" placeholder="ФИО, ID, IP, Trace ID" /></label>
+            <label><span>Пользователь, IP, подсеть или событие</span><input class="form-control" type="search" name="Search" value="@filters.Search" placeholder="ФИО, ID, IP, подсеть, страна" /></label>
             <label><span>Тип</span><select class="form-select" name="EventType">
                 <option value="">Все типы</option>
                 <option value="@SecurityEventTypes.LoginFailed" selected="@(filters.EventType == SecurityEventTypes.LoginFailed)">Неудачный вход</option>
+                <option value="@SecurityEventTypes.NewLoginNetwork" selected="@(filters.EventType == SecurityEventTypes.NewLoginNetwork)">Новая сеть входа</option>
+                <option value="@SecurityEventTypes.ForeignLogin" selected="@(filters.EventType == SecurityEventTypes.ForeignLogin)">Иностранная сеть</option>
+                <option value="@SecurityEventTypes.LoginCountryUnknown" selected="@(filters.EventType == SecurityEventTypes.LoginCountryUnknown)">Страна не определена</option>
+                <option value="@SecurityEventTypes.ImpossibleTravel" selected="@(filters.EventType == SecurityEventTypes.ImpossibleTravel)">Невозможное перемещение</option>
+                <option value="@SecurityEventTypes.FrequentNetworkChanges" selected="@(filters.EventType == SecurityEventTypes.FrequentNetworkChanges)">Частая смена сетей</option>
+                <option value="@SecurityEventTypes.NewNetworkAfterFailedLogins" selected="@(filters.EventType == SecurityEventTypes.NewNetworkAfterFailedLogins)">Новая сеть после ошибок входа</option>
+                <option value="@SecurityEventTypes.ConcurrentForeignSessions" selected="@(filters.EventType == SecurityEventTypes.ConcurrentForeignSessions)">Одновременные сети</option>
                 <option value="@SecurityEventTypes.AccountLocked" selected="@(filters.EventType == SecurityEventTypes.AccountLocked)">Блокировка</option>
                 <option value="@SecurityEventTypes.AccessDenied" selected="@(filters.EventType == SecurityEventTypes.AccessDenied)">Отказ доступа</option>
                 <option value="@SecurityEventTypes.RateLimitExceeded" selected="@(filters.EventType == SecurityEventTypes.RateLimitExceeded)">Лимит запросов</option>
                 <option value="@SecurityEventTypes.ServerError" selected="@(filters.EventType == SecurityEventTypes.ServerError)">Ошибка сервера</option>
                 <option value="@SecurityEventTypes.InvalidFileUpload" selected="@(filters.EventType == SecurityEventTypes.InvalidFileUpload)">Отклонённый файл</option>
                 <option value="@SecurityEventTypes.LargeFileUpload" selected="@(filters.EventType == SecurityEventTypes.LargeFileUpload)">Крупный файл</option>
-                <option value="@SecurityEventTypes.ForeignLogin" selected="@(filters.EventType == SecurityEventTypes.ForeignLogin)">Иностранный IP</option>
                 <option value="@SecurityEventTypes.SuspiciousRequestVolume" selected="@(filters.EventType == SecurityEventTypes.SuspiciousRequestVolume)">Частые запросы</option>
                 <option value="@SecurityEventTypes.MassDownload" selected="@(filters.EventType == SecurityEventTypes.MassDownload)">Массовое скачивание</option>
                 <option value="@SecurityEventTypes.AccountAutomaticallyBlocked" selected="@(filters.EventType == SecurityEventTypes.AccountAutomaticallyBlocked)">Автоблокировка</option>
                 <option value="@SecurityEventTypes.PasswordReset" selected="@(filters.EventType == SecurityEventTypes.PasswordReset)">Сброс пароля</option>
                 <option value="@SecurityEventTypes.UserAdministration" selected="@(filters.EventType == SecurityEventTypes.UserAdministration)">Учётные записи</option>
+                <option value="@SecurityEventTypes.IdorAttempt" selected="@(filters.EventType == SecurityEventTypes.IdorAttempt)">Попытка IDOR</option>
+                <option value="@SecurityEventTypes.ProtectedObjectProbe" selected="@(filters.EventType == SecurityEventTypes.ProtectedObjectProbe)">Анонимный подбор ID</option>
+                <option value="@SecurityEventTypes.IpAutomaticallyBlocked" selected="@(filters.EventType == SecurityEventTypes.IpAutomaticallyBlocked)">Автоблокировка IP</option>
+                <option value="@SecurityEventTypes.IpRiskThresholdReached" selected="@(filters.EventType == SecurityEventTypes.IpRiskThresholdReached)">Риск-порог IP</option>
+                <option value="@SecurityEventTypes.IpAdministration" selected="@(filters.EventType == SecurityEventTypes.IpAdministration)">Управление IP</option>
+                <option value="@SecurityEventTypes.AccountRiskThresholdReached" selected="@(filters.EventType == SecurityEventTypes.AccountRiskThresholdReached)">Риск-порог аккаунта</option>
             </select></label>
             <label><span>Важность</span><select class="form-select" name="Severity">
                 <option value="">Любая</option>
@@ -132,10 +144,22 @@
                                 {
                                     <span class="administration-cell-note">@entry.Description</span>
                                 }
+                                @if (!string.IsNullOrWhiteSpace(entry.NetworkAddress))
+                                {
+                                    <span class="administration-cell-note">
+                                        Сеть: @entry.NetworkAddress/@entry.NetworkPrefixLength ·
+                                        @(entry.CountryName ?? entry.CountryCode ?? "страна не определена") ·
+                                        @entry.LastOccurredAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                                    </span>
+                                }
                             </td>
                             <td>
                                 <strong class="administration-user-name">@(entry.UserFullName ?? entry.UserLogin ?? "Не авторизован")</strong>
                                 <span class="administration-cell-note">@(entry.UserId.HasValue ? $"ID {entry.UserId} · " : "")@entry.IpAddress</span>
+                                @if (entry.UserId.HasValue)
+                                {
+                                    <a class="administration-cell-note" asp-action="UserNetworks" asp-route-userId="@entry.UserId.Value">История сетей</a>
+                                }
                             </td>
                             <td>@entry.OccurrenceCount</td>
                             <td><span class="administration-status neutral">@StatusLabel(entry.Status)</span></td>

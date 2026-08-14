@@ -1152,7 +1152,9 @@ namespace PersonalCabinetEducationProgram.Controllers
             return await ChangeElementStatus(elementId, ElementApprovalStatus.Published, comment ?? "Опубликовано администратором");
         }
 
+        [HttpPost]
         [Authorize(Roles = "Admin")]
+        [ValidateAntiForgeryToken]
         [AppRateLimit(AppRateLimitPolicies.FileDownload)]
         public async Task<IActionResult> DownloadElement(int elementId)
         {

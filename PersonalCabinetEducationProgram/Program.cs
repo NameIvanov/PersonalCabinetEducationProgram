@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Server.IIS;
@@ -10,6 +11,13 @@ using PersonalCabinetEducationProgram.Services;
 using Pomelo.EntityFrameworkCore.MySql.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
+
+if (builder.Environment.IsEnvironment("Testing"))
+    builder.Services.AddDataProtection().UseEphemeralDataProtectionProvider();
 
 builder.Services.AddControllersWithViews(options =>
 {
@@ -31,12 +39,21 @@ builder.WebHost.ConfigureKestrel(options =>
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = Math.Max(1, builder.Configuration.GetValue<int?>("TrustedProxies:ForwardLimit") ?? 1);
+    options.KnownProxies.Clear();
+    options.KnownNetworks.Clear();
+    foreach (var value in builder.Configuration.GetSection("TrustedProxies:KnownProxies").Get<string[]>() ?? [])
+    {
+        if (System.Net.IPAddress.TryParse(value, out var address))
+            options.KnownProxies.Add(address);
+    }
 });
 builder.Services.AddRateLimiter(AppRateLimiterConfiguration.Configure);
 builder.Services.AddHttpContextAccessor();
 
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? throw new InvalidOperationException("Connection string 'DefaultConnection' is not configured.");
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(connectionString))
+    throw new InvalidOperationException("Connection string 'DefaultConnection' is not configured.");
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseMySql(
@@ -65,6 +82,24 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.LoginPath = "/Account/Login";
     options.LogoutPath = "/Account/Logout";
     options.AccessDeniedPath = "/Account/AccessDenied";
+    options.Events.OnRedirectToAccessDenied = context =>
+    {
+        // Cookie authentication converts Forbid() into a 302 redirect. Record the
+        // denial here because the request logger otherwise only sees the redirect.
+        if (!ObjectAuthorizationIncidentService.WasRecorded(context.HttpContext))
+        {
+            var securityEvents = context.HttpContext.RequestServices
+                .GetRequiredService<SecurityEventService>();
+            securityEvents.Record(
+                SecurityEventTypes.AccessDenied,
+                SecurityEventSeverities.High,
+                "Отказ в доступе",
+                $"Доступ к {context.Request.Path}{context.Request.QueryString} запрещён политикой авторизации.");
+        }
+
+        context.Response.Redirect(context.RedirectUri);
+        return Task.CompletedTask;
+    };
 });
 
 builder.Services.Configure<SecurityStampValidatorOptions>(options =>
@@ -81,11 +116,16 @@ builder.Services.AddScoped<IFileStorageService, FileSystemStorageService>();
 builder.Services.AddScoped<ElementWorkflowService>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<ElementAccessService>();
+builder.Services.AddScoped<ObjectAuthorizationIncidentService>();
+builder.Services.AddScoped<ProtectedObjectProbeDetector>();
+builder.Services.AddScoped<IpAddressSecurityService>();
 builder.Services.AddScoped<ElementListQueryService>();
 builder.Services.AddScoped<ElementFilterService>();
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<SecurityEventService>();
 builder.Services.AddScoped<AccountSecurityService>();
+builder.Services.AddScoped<LoginSecurityService>();
+builder.Services.AddSingleton<IIpNetworkService, IpNetworkService>();
 builder.Services.AddScoped<SystemHealthService>();
 builder.Services.AddScoped<StorageHealthService>();
 builder.Services.AddScoped<PlxParserService>();
@@ -96,6 +136,7 @@ builder.Services.AddSingleton<SystemLogQueue>();
 builder.Services.AddSingleton<RequestActivityTracker>();
 builder.Services.AddSingleton<SuspiciousActivityMonitor>();
 builder.Services.AddSingleton<SecurityBlockedAccountRegistry>();
+builder.Services.AddSingleton<IpAddressBlockRegistry>();
 builder.Services.AddHostedService<SystemLogWriterService>();
 builder.Services.AddHostedService<LogRetentionService>();
 builder.Services.Configure<DownloadQuotaOptions>(_ => { });
@@ -118,6 +159,27 @@ using (var scope = app.Services.CreateScope())
         .ToListAsync();
     foreach (var userId in blockedUserIds)
         blockedAccounts.Block(userId);
+
+    var blockedIpAddresses = scope.ServiceProvider.GetRequiredService<IpAddressBlockRegistry>();
+    var nowUtc = DateTime.UtcNow;
+    var ipBlocks = await dbContext.IpAddressSecurityStates
+        .Where(state => state.IsPermanentlyBlocked || state.BlockedUntilUtc > nowUtc)
+        .Select(state => new
+        {
+            state.IpAddress,
+            state.IsPermanentlyBlocked,
+            state.BlockedUntilUtc,
+            state.EscalationLevel
+        })
+        .ToListAsync();
+    foreach (var state in ipBlocks)
+    {
+        blockedIpAddresses.Set(
+            state.IpAddress,
+            state.IsPermanentlyBlocked,
+            state.BlockedUntilUtc,
+            state.EscalationLevel);
+    }
 }
 
 app.UseForwardedHeaders();
@@ -128,6 +190,10 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
+app.UseMiddleware<RequestLoggingMiddleware>();
+app.UseRouting();
+app.UseAuthentication();
+app.UseMiddleware<IpAddressSecurityMiddleware>();
 app.UseHttpsRedirection();
 app.Use(async (context, next) =>
 {
@@ -140,9 +206,7 @@ app.Use(async (context, next) =>
     await next();
 });
 app.UseStaticFiles();
-app.UseRouting();
-app.UseAuthentication();
-app.UseMiddleware<RequestLoggingMiddleware>();
+app.UseMiddleware<UserLoginSessionMiddleware>();
 app.UseMiddleware<SecurityBlockedAccountMiddleware>();
 app.UseRateLimiter();
 app.UseAuthorization();

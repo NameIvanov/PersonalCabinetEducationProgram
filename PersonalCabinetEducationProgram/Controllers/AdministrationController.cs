@@ -19,17 +19,23 @@ namespace PersonalCabinetEducationProgram.Controllers
         private readonly SystemHealthService _systemHealthService;
         private readonly StorageHealthService _storageHealthService;
         private readonly AuditService _auditService;
+        private readonly ObjectAuthorizationIncidentService _authorizationIncidents;
+        private readonly IpAddressSecurityService _ipSecurityService;
 
         public AdministrationController(
             ApplicationDbContext context,
             SystemHealthService systemHealthService,
             StorageHealthService storageHealthService,
-            AuditService auditService)
+            AuditService auditService,
+            ObjectAuthorizationIncidentService authorizationIncidents,
+            IpAddressSecurityService ipSecurityService)
         {
             _context = context;
             _systemHealthService = systemHealthService;
             _storageHealthService = storageHealthService;
             _auditService = auditService;
+            _authorizationIncidents = authorizationIncidents;
+            _ipSecurityService = ipSecurityService;
         }
 
         public IActionResult Index() => RedirectToAction(nameof(Logs));
@@ -218,6 +224,13 @@ namespace PersonalCabinetEducationProgram.Controllers
                 new { Status = status, ReviewNote = reviewNote });
             await _context.SaveChangesAsync(cancellationToken);
 
+            if (entry.UserId.HasValue &&
+                entry.Severity is SecurityEventSeverities.High or SecurityEventSeverities.Critical &&
+                IpAddressNormalizer.TryNormalize(entry.IpAddress, out var riskIpAddress))
+            {
+                await _ipSecurityService.EvaluateAccumulatedAccountRiskAsync(riskIpAddress, cancellationToken);
+            }
+
             TempData["AdministrationSuccess"] = "Событие безопасности обновлено.";
             return RedirectToAction(nameof(Security));
         }
@@ -249,6 +262,285 @@ namespace PersonalCabinetEducationProgram.Controllers
                     entry.ReviewNote);
             }
             return CsvFile(csv, $"security-events-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+        }
+
+        [AppRateLimit(AppRateLimitPolicies.Search)]
+        public async Task<IActionResult> UserNetworks(
+            int userId,
+            int page = 1,
+            string sort = "lastSeen",
+            string direction = "desc",
+            CancellationToken cancellationToken = default)
+        {
+            var user = await _context.Users.AsNoTracking()
+                .SingleOrDefaultAsync(item => item.Id == userId, cancellationToken);
+            if (user == null)
+                return NotFound();
+
+            var query = SortUserNetworks(
+                _context.UserLoginLocations.AsNoTracking().Where(item => item.UserId == userId),
+                sort,
+                direction);
+            var totalCount = await query.LongCountAsync(cancellationToken);
+            var pagination = NormalizePagination(page, totalCount);
+            var locations = await query
+                .Skip((pagination.Page - 1) * pagination.PageSize)
+                .Take(pagination.PageSize)
+                .ToListAsync(cancellationToken);
+
+            return View(new AdministrationUserNetworksViewModel
+            {
+                ActiveSection = "security",
+                Navigation = await BuildNavigationAsync(true, cancellationToken),
+                User = user,
+                Locations = locations,
+                Pagination = pagination,
+                Sort = NormalizeNetworkSort(sort),
+                Direction = NormalizeDirection(direction)
+            });
+        }
+
+        [AppRateLimit(AppRateLimitPolicies.Search)]
+        public async Task<IActionResult> IpAddresses(
+            string category = "all",
+            int page = 1,
+            [FromQuery] IpAddressFilters? filters = null,
+            CancellationToken cancellationToken = default)
+        {
+            filters ??= new IpAddressFilters();
+            category = category is "suspicious" or "blocked" or "history" ? category : "all";
+            var now = DateTime.UtcNow;
+            var accountRiskAddresses = await _context.IpAddressSecurityStates.AsNoTracking()
+                .Where(item => item.AccountRiskMarkedAtUtc != null &&
+                               !item.IsPermanentlyBlocked &&
+                               (item.BlockedUntilUtc == null || item.BlockedUntilUtc <= now))
+                .Select(item => item.IpAddress)
+                .ToListAsync(cancellationToken);
+            foreach (var address in accountRiskAddresses)
+                await _ipSecurityService.EvaluateAccumulatedAccountRiskAsync(address, cancellationToken);
+
+            var query = _context.IpAddressSecurityStates.AsNoTracking();
+
+            var activityStart = filters.Activity switch
+            {
+                "week" => now.AddDays(-7),
+                "month" => now.AddDays(-30),
+                "all" => DateTime.MinValue,
+                _ => now.AddHours(-24)
+            };
+            query = query.Where(item => item.LastSeenAtUtc >= activityStart);
+
+            if (!string.IsNullOrWhiteSpace(filters.Search))
+            {
+                var search = filters.Search.Trim();
+                query = query.Where(item =>
+                    item.IpAddress.Contains(search) ||
+                    (item.LastUserLogin != null && item.LastUserLogin.Contains(search)) ||
+                    (item.LastUserFullName != null && item.LastUserFullName.Contains(search)) ||
+                    (item.LastPath != null && item.LastPath.Contains(search)));
+            }
+
+            var blockedExpression = (System.Linq.Expressions.Expression<Func<IpAddressSecurityState, bool>>)
+                (item => item.IsPermanentlyBlocked || item.BlockedUntilUtc > now);
+            if (category == "blocked" || filters.State == "blocked")
+                query = query.Where(blockedExpression);
+            else if (category == "suspicious" || filters.State == "suspicious")
+                query = query.Where(item =>
+                    !item.IsPermanentlyBlocked &&
+                    (item.BlockedUntilUtc == null || item.BlockedUntilUtc <= now) &&
+                    (item.SuspiciousAttemptCount > 0 || item.AccountRiskMarkedAtUtc != null));
+            else if (filters.State == "allowed")
+                query = query.Where(item =>
+                    !item.IsPermanentlyBlocked &&
+                    (item.BlockedUntilUtc == null || item.BlockedUntilUtc <= now) &&
+                    item.SuspiciousAttemptCount == 0 && item.AccountRiskMarkedAtUtc == null);
+            else if (category == "history")
+                query = query.Where(item => item.BlockedAtUtc != null || item.UnblockedAtUtc != null);
+
+            if (filters.EscalationLevel.HasValue)
+                query = query.Where(item => item.EscalationLevel == filters.EscalationLevel.Value ||
+                                            item.AccountRiskEscalationLevel == filters.EscalationLevel.Value);
+            if (filters.Account == "authenticated")
+                query = query.Where(item => item.LastUserId != null);
+            else if (filters.Account == "anonymous")
+                query = query.Where(item => item.LastUserId == null);
+
+            query = query.OrderByDescending(item =>
+                    item.IsPermanentlyBlocked || item.BlockedUntilUtc > now)
+                .ThenByDescending(item => item.SuspiciousAttemptCount)
+                .ThenByDescending(item => item.AccountRiskScore)
+                .ThenByDescending(item => item.LastSeenAtUtc);
+            var totalCount = await query.LongCountAsync(cancellationToken);
+            var pagination = NormalizePagination(page, totalCount);
+            var entries = await query
+                .Skip((pagination.Page - 1) * pagination.PageSize)
+                .Take(pagination.PageSize)
+                .ToListAsync(cancellationToken);
+
+            return View(new AdministrationIpAddressesViewModel
+            {
+                ActiveSection = "ip-addresses",
+                Navigation = await BuildNavigationAsync(true, cancellationToken),
+                Entries = entries,
+                Filters = filters,
+                Pagination = pagination,
+                Category = category,
+                ActiveLastDayCount = await _context.IpAddressSecurityStates.LongCountAsync(
+                    item => item.LastSeenAtUtc >= now.AddHours(-24), cancellationToken),
+                SuspiciousCount = await _context.IpAddressSecurityStates.LongCountAsync(
+                    item => (item.SuspiciousAttemptCount > 0 || item.AccountRiskMarkedAtUtc != null) &&
+                            !item.IsPermanentlyBlocked &&
+                            (item.BlockedUntilUtc == null || item.BlockedUntilUtc <= now),
+                    cancellationToken),
+                BlockedCount = await _context.IpAddressSecurityStates.LongCountAsync(
+                    item => item.IsPermanentlyBlocked || item.BlockedUntilUtc > now,
+                    cancellationToken),
+                RejectedRequestCount = await _context.SystemRequestLogs.LongCountAsync(
+                    item => item.OccurredAtUtc >= now.AddHours(-24) && item.StatusCode == StatusCodes.Status403Forbidden,
+                    cancellationToken)
+            });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [AppRateLimit(AppRateLimitPolicies.AdminStructureMutation)]
+        public async Task<IActionResult> BlockIpAddress(
+            string ipAddress,
+            string? reviewNote,
+            CancellationToken cancellationToken)
+        {
+            var result = await _ipSecurityService.BlockManuallyAsync(
+                ipAddress,
+                GetCurrentUserId(),
+                reviewNote,
+                cancellationToken);
+            TempData[result.Succeeded ? "AdministrationSuccess" : "AdministrationError"] =
+                result.Succeeded ? $"IP-адрес {result.State!.IpAddress} заблокирован." : result.Error;
+            return RedirectToAction(nameof(IpAddresses), new { category = "blocked" });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [AppRateLimit(AppRateLimitPolicies.AdminStructureMutation)]
+        public async Task<IActionResult> UnblockIpAddress(
+            string ipAddress,
+            string? reviewNote,
+            CancellationToken cancellationToken)
+        {
+            var result = await _ipSecurityService.UnblockAsync(
+                ipAddress,
+                GetCurrentUserId(),
+                reviewNote,
+                cancellationToken);
+            TempData[result.Succeeded ? "AdministrationSuccess" : "AdministrationError"] =
+                result.Succeeded ? $"IP-адрес {result.State!.IpAddress} разблокирован." : result.Error;
+            return RedirectToAction(nameof(IpAddresses));
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [AppRateLimit(AppRateLimitPolicies.AdminStructureMutation)]
+        public async Task<IActionResult> ClearIpSuspicion(
+            string ipAddress,
+            string? reviewNote,
+            CancellationToken cancellationToken)
+        {
+            var result = await _ipSecurityService.ClearSuspicionAsync(
+                ipAddress,
+                GetCurrentUserId(),
+                reviewNote,
+                cancellationToken);
+            TempData[result.Succeeded ? "AdministrationSuccess" : "AdministrationError"] =
+                result.Succeeded
+                    ? $"С IP-адреса {result.State!.IpAddress} снят статус подозрительного. Накопление начато заново."
+                    : result.Error;
+            return RedirectToAction(nameof(IpAddresses), new { category = "suspicious" });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [AppRateLimit(AppRateLimitPolicies.AdminStructureMutation)]
+        public async Task<IActionResult> SetNetworkTrust(
+            int userId,
+            long networkId,
+            bool isTrusted,
+            CancellationToken cancellationToken = default)
+        {
+            var location = await _context.UserLoginLocations.SingleOrDefaultAsync(item =>
+                item.Id == networkId && item.UserId == userId,
+                cancellationToken);
+            if (location == null)
+            {
+                if (await _context.UserLoginLocations.AsNoTracking()
+                        .AnyAsync(item => item.Id == networkId, cancellationToken))
+                {
+                    _authorizationIncidents.Record(
+                        "UserLoginLocation",
+                        networkId,
+                        $"изменение доверия через подменённый userId {userId}");
+                }
+                return NotFound();
+            }
+
+            var previous = location.IsTrusted;
+            location.IsTrusted = isTrusted;
+            _auditService.Record(
+                GetCurrentUserId(),
+                "UserLoginLocation",
+                location.Id,
+                isTrusted ? "NetworkTrusted" : "NetworkTrustRemoved",
+                $"Для пользователя ID {userId} изменено доверие к сети " +
+                $"{location.NetworkAddress}/{location.NetworkPrefixLength}.",
+                new { IsTrusted = previous, location.UserId },
+                new { location.IsTrusted, location.UserId });
+            await _context.SaveChangesAsync(cancellationToken);
+
+            TempData["AdministrationSuccess"] = isTrusted
+                ? "Сеть отмечена как доверенная."
+                : "Доверие к сети снято.";
+            return RedirectToAction(nameof(UserNetworks), new { userId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [AppRateLimit(AppRateLimitPolicies.AdminStructureMutation)]
+        public async Task<IActionResult> ArchiveUserNetwork(
+            int userId,
+            long networkId,
+            CancellationToken cancellationToken = default)
+        {
+            var location = await _context.UserLoginLocations.SingleOrDefaultAsync(item =>
+                item.Id == networkId && item.UserId == userId,
+                cancellationToken);
+            if (location == null)
+            {
+                if (await _context.UserLoginLocations.AsNoTracking()
+                        .AnyAsync(item => item.Id == networkId, cancellationToken))
+                {
+                    _authorizationIncidents.Record(
+                        "UserLoginLocation",
+                        networkId,
+                        $"архивирование через подменённый userId {userId}");
+                }
+                return NotFound();
+            }
+
+            var previous = new { location.IsArchived, location.IsTrusted, location.UserId };
+            location.IsArchived = true;
+            location.IsTrusted = false;
+            _auditService.Record(
+                GetCurrentUserId(),
+                "UserLoginLocation",
+                location.Id,
+                "NetworkArchived",
+                $"Для пользователя ID {userId} архивирована сеть " +
+                $"{location.NetworkAddress}/{location.NetworkPrefixLength}.",
+                previous,
+                new { location.IsArchived, location.IsTrusted, location.UserId });
+            await _context.SaveChangesAsync(cancellationToken);
+
+            TempData["AdministrationSuccess"] = "Запись сети архивирована.";
+            return RedirectToAction(nameof(UserNetworks), new { userId });
         }
 
         [AppRateLimit(AppRateLimitPolicies.Search)]
@@ -358,12 +650,17 @@ namespace PersonalCabinetEducationProgram.Controllers
             var today = ToUtcStart(DateOnly.FromDateTime(DateTime.Now));
             long logsToday = 0;
             long openSecurityEvents = 0;
+            long blockedIpAddresses = 0;
             try
             {
                 logsToday = await _context.SystemRequestLogs.LongCountAsync(log => log.OccurredAtUtc >= today, cancellationToken);
                 openSecurityEvents = await _context.SecurityEventLogs.LongCountAsync(log =>
                     log.Severity != SecurityEventSeverities.Information &&
                     (log.Status == SecurityEventStatuses.New || log.Status == SecurityEventStatuses.Investigating),
+                    cancellationToken);
+                var now = DateTime.UtcNow;
+                blockedIpAddresses = await _context.IpAddressSecurityStates.LongCountAsync(state =>
+                    state.IsPermanentlyBlocked || state.BlockedUntilUtc > now,
                     cancellationToken);
             }
             catch
@@ -375,6 +672,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             {
                 LogsToday = logsToday,
                 OpenSecurityEvents = openSecurityEvents,
+                BlockedIpAddresses = blockedIpAddresses,
                 ServerAvailable = serverAvailable,
                 StorageAvailable = storage.Available,
                 StorageUsedPercent = storage.UsedSpacePercent,
@@ -420,6 +718,9 @@ namespace PersonalCabinetEducationProgram.Controllers
                     (log.UserLogin != null && log.UserLogin.Contains(value)) ||
                     (log.UserFullName != null && log.UserFullName.Contains(value)) ||
                     log.IpAddress.Contains(value) ||
+                    (log.NetworkAddress != null && log.NetworkAddress.Contains(value)) ||
+                    (log.CountryName != null && log.CountryName.Contains(value)) ||
+                    (log.CountryCode != null && log.CountryCode.Contains(value)) ||
                     (log.TraceId != null && log.TraceId.Contains(value)));
             }
             if (!string.IsNullOrWhiteSpace(filters.EventType))
@@ -541,6 +842,32 @@ namespace PersonalCabinetEducationProgram.Controllers
             };
         }
 
+        private static IQueryable<UserLoginLocation> SortUserNetworks(
+            IQueryable<UserLoginLocation> query,
+            string sort,
+            string direction)
+        {
+            var descending = NormalizeDirection(direction) == "desc";
+            return NormalizeNetworkSort(sort) switch
+            {
+                "network" => descending
+                    ? query.OrderByDescending(item => item.NetworkAddress).ThenByDescending(item => item.NetworkPrefixLength)
+                    : query.OrderBy(item => item.NetworkAddress).ThenBy(item => item.NetworkPrefixLength),
+                "country" => descending
+                    ? query.OrderByDescending(item => item.CountryName).ThenByDescending(item => item.LastSeenAtUtc)
+                    : query.OrderBy(item => item.CountryName).ThenBy(item => item.LastSeenAtUtc),
+                "firstSeen" => descending
+                    ? query.OrderByDescending(item => item.FirstSeenAtUtc)
+                    : query.OrderBy(item => item.FirstSeenAtUtc),
+                "count" => descending
+                    ? query.OrderByDescending(item => item.SuccessfulLoginCount).ThenByDescending(item => item.LastSeenAtUtc)
+                    : query.OrderBy(item => item.SuccessfulLoginCount).ThenBy(item => item.LastSeenAtUtc),
+                _ => descending
+                    ? query.OrderByDescending(item => item.LastSeenAtUtc)
+                    : query.OrderBy(item => item.LastSeenAtUtc)
+            };
+        }
+
         private static IQueryable<AuditLog> SortAuditLogs(IQueryable<AuditLog> query, string sort, string direction)
         {
             var descending = NormalizeDirection(direction) == "desc";
@@ -568,6 +895,9 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         private static string NormalizeSecuritySort(string? sort) =>
             sort is "severity" or "type" or "user" or "count" or "status" ? sort : "date";
+
+        private static string NormalizeNetworkSort(string? sort) =>
+            sort is "network" or "country" or "firstSeen" or "count" ? sort : "lastSeen";
 
         private static string NormalizeAuditSort(string? sort) =>
             sort is "user" or "entity" or "action" or "ip" ? sort : "date";

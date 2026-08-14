@@ -23,22 +23,26 @@ namespace PersonalCabinetEducationProgram.Services
             string action,
             string details,
             object? previousValues = null,
-            object? newValues = null)
+            object? newValues = null,
+            string? userLogin = null,
+            string? userFullName = null,
+            string? userRole = null,
+            string? ipAddress = null)
         {
             var httpContext = _httpContextAccessor.HttpContext;
             _context.AuditLogs.Add(new AuditLog
             {
                 UserId = userId,
-                UserLogin = httpContext?.User.FindFirstValue("Username"),
-                UserFullName = httpContext?.User.Identity?.Name,
+                UserLogin = userLogin ?? httpContext?.User.FindFirstValue("Username"),
+                UserFullName = userFullName ?? httpContext?.User.Identity?.Name,
                 EntityType = entityType,
                 EntityId = entityId,
                 Action = action,
                 Details = details,
-                IpAddress = httpContext?.Connection.RemoteIpAddress?.ToString(),
-                UserRole = httpContext == null
+                IpAddress = ipAddress ?? httpContext?.Connection.RemoteIpAddress?.ToString(),
+                UserRole = userRole ?? (httpContext == null
                     ? null
-                    : string.Join(", ", httpContext.User.FindAll(ClaimTypes.Role).Select(claim => claim.Value)),
+                    : string.Join(", ", httpContext.User.FindAll(ClaimTypes.Role).Select(claim => claim.Value))),
                 TraceId = httpContext?.TraceIdentifier,
                 PreviousValues = SerializeValues(previousValues),
                 NewValues = SerializeValues(newValues),

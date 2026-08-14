@@ -36,6 +36,8 @@ namespace PersonalCabinetEducationProgram.Controllers
             return PhysicalFile(result.Value.FullPath, GetContentType(result.Value.FileName));
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         [AppRateLimit(AppRateLimitPolicies.FileDownload)]
         public async Task<IActionResult> Download(int historyId)
         {

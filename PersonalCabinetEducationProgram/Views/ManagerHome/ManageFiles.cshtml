@@ -5,12 +5,15 @@
     ViewData["Title"] = "Файлы элемента ОПОП";
     var currentFiles = Model.Files.Where(f => f.IsCurrent && !f.IsRemoved).OrderBy(f => f.OriginalFileName).ToList();
     var status = ElementApprovalStatus.Normalize(Model.StatusApprovals);
-    var editable = status is ElementApprovalStatus.NotUploaded or ElementApprovalStatus.Uploaded or ElementApprovalStatus.RevisionRequired
-        && !currentFiles.Any(f => f.IsSubmitted);
+    var allowFileEditing = ViewBag.AllowFileEditing as bool? ?? true;
+    var returnController = ViewBag.ReturnController as string ?? "ManagerHome";
+    var statusAllowsEditing = status is ElementApprovalStatus.NotUploaded or
+        ElementApprovalStatus.Uploaded or ElementApprovalStatus.RevisionRequired;
+    var editable = allowFileEditing && statusAllowsEditing && !currentFiles.Any(f => f.IsSubmitted);
 }
 
 <div class="container py-4" style="max-width: 920px;">
-    <a asp-action="Index" asp-route-programId="@Model.EducationalProgramId" class="text-decoration-none">← Назад к программе</a>
+    <a asp-controller="@returnController" asp-action="Index" asp-route-programId="@Model.EducationalProgramId" class="text-decoration-none">← Назад к программе</a>
     <div class="d-flex justify-content-between align-items-start gap-3 mt-2 mb-4">
         <div>
             <h3 class="fw-bold mb-1">Текущий комплект файлов</h3>
@@ -22,7 +25,11 @@
     {
         <div class="alert alert-danger">@errorMessage</div>
     }
-    @if (!editable)
+    @if (!allowFileEditing)
+    {
+        <div class="alert alert-info">Текущий комплект доступен для просмотра и скачивания.</div>
+    }
+    else if (!editable)
     {
         <div class="alert alert-info">Комплект зафиксирован и доступен только для просмотра.</div>
     }
@@ -56,7 +63,9 @@
                     <td>
                         <div class="d-flex flex-wrap gap-2">
                             <a asp-controller="ElementFiles" asp-action="Preview" asp-route-id="@file.Id" target="_blank" class="btn btn-outline-secondary btn-sm">Открыть</a>
-                            <a asp-controller="ElementFiles" asp-action="Download" asp-route-id="@file.Id" class="btn btn-outline-secondary btn-sm">Скачать</a>
+                            <form asp-controller="ElementFiles" asp-action="Download" asp-route-id="@file.Id" method="post" class="d-inline">
+                                <button type="submit" class="btn btn-outline-secondary btn-sm">Скачать</button>
+                            </form>
                             @if (editable)
                             {
                                 <form method="post" enctype="multipart/form-data" asp-action="ReplaceCurrentFile" class="d-inline">

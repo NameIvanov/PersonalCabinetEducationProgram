@@ -13,6 +13,7 @@ namespace PersonalCabinetEducationProgram.ViewModels
     {
         public long LogsToday { get; init; }
         public long OpenSecurityEvents { get; init; }
+        public long BlockedIpAddresses { get; init; }
         public bool ServerAvailable { get; init; }
         public bool StorageAvailable { get; init; }
         public int? StorageUsedPercent { get; init; }
@@ -61,6 +62,27 @@ namespace PersonalCabinetEducationProgram.ViewModels
         public required string Direction { get; init; }
     }
 
+    public sealed class AdministrationUserNetworksViewModel : AdministrationPageViewModel
+    {
+        public required User User { get; init; }
+        public required IReadOnlyList<UserLoginLocation> Locations { get; init; }
+        public required AdministrationPagination Pagination { get; init; }
+        public required string Sort { get; init; }
+        public required string Direction { get; init; }
+    }
+
+    public sealed class AdministrationIpAddressesViewModel : AdministrationPageViewModel
+    {
+        public required IReadOnlyList<IpAddressSecurityState> Entries { get; init; }
+        public required IpAddressFilters Filters { get; init; }
+        public required AdministrationPagination Pagination { get; init; }
+        public required string Category { get; init; }
+        public long ActiveLastDayCount { get; init; }
+        public long SuspiciousCount { get; init; }
+        public long BlockedCount { get; init; }
+        public long RejectedRequestCount { get; init; }
+    }
+
     public sealed class AdministrationRequestDetailsViewModel : AdministrationPageViewModel
     {
         public required SystemRequestLog Entry { get; init; }
@@ -100,5 +122,14 @@ namespace PersonalCabinetEducationProgram.ViewModels
         public string? IpOrTrace { get; set; }
         public DateOnly? DateFrom { get; set; }
         public DateOnly? DateTo { get; set; }
+    }
+
+    public sealed class IpAddressFilters
+    {
+        public string? Search { get; set; }
+        public string? State { get; set; }
+        public int? EscalationLevel { get; set; }
+        public string? Account { get; set; }
+        public string Activity { get; set; } = "day";
     }
 }

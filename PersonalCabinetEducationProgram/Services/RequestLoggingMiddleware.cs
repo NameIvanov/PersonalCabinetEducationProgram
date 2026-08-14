@@ -92,7 +92,7 @@ namespace PersonalCabinetEducationProgram.Services
                     UserId = request.UserId,
                     UserLogin = request.UserLogin,
                     UserFullName = request.UserFullName,
-                    IpAddress = request.IpAddress,
+                    IpAddress = IpAddressNormalizer.NormalizeOrUnknown(request.IpAddress),
                     HttpMethod = request.HttpMethod,
                     Path = request.Path,
                     TraceId = request.TraceId,
@@ -163,6 +163,8 @@ namespace PersonalCabinetEducationProgram.Services
             }
             else if (request.StatusCode == StatusCodes.Status403Forbidden)
             {
+                if (ObjectAuthorizationIncidentService.WasRecorded(context))
+                    return;
                 eventType = SecurityEventTypes.AccessDenied;
                 severity = SecurityEventSeverities.High;
                 title = "Отказ в доступе";
@@ -203,7 +205,7 @@ namespace PersonalCabinetEducationProgram.Services
                 UserId = request.UserId,
                 UserLogin = request.UserLogin,
                 UserFullName = request.UserFullName,
-                IpAddress = request.IpAddress,
+                IpAddress = IpAddressNormalizer.NormalizeOrUnknown(request.IpAddress),
                 HttpMethod = request.HttpMethod,
                 Path = request.Path,
                 TraceId = request.TraceId,

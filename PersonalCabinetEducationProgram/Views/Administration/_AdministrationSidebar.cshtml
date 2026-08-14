@@ -30,6 +30,13 @@
                 <span class="administration-nav-badge warning">@navigation.OpenSecurityEvents</span>
             }
         </a>
+        <a class="@Active("ip-addresses")" asp-controller="Administration" asp-action="IpAddresses">
+            <span>IP-адреса</span>
+            @if (navigation.BlockedIpAddresses > 0)
+            {
+                <span class="administration-nav-badge danger">@navigation.BlockedIpAddresses</span>
+            }
+        </a>
         <a class="@Active("audit")" asp-controller="Administration" asp-action="Audit">
             <span>Журнал аудита</span>
         </a>

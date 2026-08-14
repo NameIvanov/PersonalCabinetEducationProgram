@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
 using PersonalCabinetEducationProgram.Models;
 using PersonalCabinetEducationProgram.Services;
 using PersonalCabinetEducationProgram.ViewModels;
@@ -14,23 +13,23 @@ namespace PersonalCabinetEducationProgram.Controllers
         private readonly SignInManager<User> _signInManager;
         private readonly IPasswordHasher<User> _identityPasswordHasher;
         private readonly SecurityEventService _securityEventService;
-        private readonly IIpGeolocationService _ipGeolocationService;
-        private readonly string _allowedCountryCode;
+        private readonly LoginSecurityService _loginSecurityService;
+        private readonly ILogger<AccountController> _logger;
 
         public AccountController(
             UserManager<User> userManager,
             SignInManager<User> signInManager,
             IPasswordHasher<User> identityPasswordHasher,
             SecurityEventService securityEventService,
-            IIpGeolocationService ipGeolocationService,
-            IOptions<SecurityMonitoringOptions> securityMonitoringOptions)
+            LoginSecurityService loginSecurityService,
+            ILogger<AccountController> logger)
         {
             _userManager = userManager;
             _signInManager = signInManager;
             _identityPasswordHasher = identityPasswordHasher;
             _securityEventService = securityEventService;
-            _ipGeolocationService = ipGeolocationService;
-            _allowedCountryCode = securityMonitoringOptions.Value.IpGeolocation.AllowedCountryCode;
+            _loginSecurityService = loginSecurityService;
+            _logger = logger;
         }
 
         [AllowAnonymous]
@@ -61,13 +60,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             var user = await _userManager.FindByNameAsync(model.Username);
             if (user == null)
             {
-                _securityEventService.Record(
-                    SecurityEventTypes.LoginFailed,
-                    SecurityEventSeverities.Warning,
-                    "Неудачная попытка входа",
-                    "Пользователь с указанным логином не найден.",
-                    userLogin: model.Username);
-                await RecordForeignLoginAsync(null, model.Username, succeeded: false, locked: false);
+                await RecordFailedLoginSafelyAsync(null, model.Username, locked: false);
                 AddInvalidCredentialsError();
                 return View(model);
             }
@@ -87,17 +80,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
             if (!check.Succeeded)
             {
-                _securityEventService.Record(
-                    check.IsLockedOut ? SecurityEventTypes.AccountLocked : SecurityEventTypes.LoginFailed,
-                    check.IsLockedOut ? SecurityEventSeverities.High : SecurityEventSeverities.Warning,
-                    check.IsLockedOut ? "Учётная запись заблокирована" : "Неудачная попытка входа",
-                    check.IsLockedOut
-                        ? "Превышено допустимое количество неудачных попыток входа."
-                        : "Указан неверный пароль.",
-                    user.Id,
-                    user.UserName,
-                    user.FullName);
-                await RecordForeignLoginAsync(user, model.Username, succeeded: false, locked: check.IsLockedOut);
+                await RecordFailedLoginSafelyAsync(user, model.Username, check.IsLockedOut);
                 if (check.IsLockedOut)
                 {
                     ModelState.AddModelError(
@@ -114,7 +97,6 @@ namespace PersonalCabinetEducationProgram.Controllers
             if (user.ApprovalStatus == UserApprovalStatus.Pending)
             {
                 RecordRejectedLogin(user, "Учётная запись ещё не подтверждена администратором.");
-                await RecordForeignLoginAsync(user, model.Username, succeeded: false, locked: false);
                 ModelState.AddModelError(string.Empty, "Ваш аккаунт ожидает подтверждения администратором.");
                 return View(model);
             }
@@ -122,7 +104,6 @@ namespace PersonalCabinetEducationProgram.Controllers
             if (user.ApprovalStatus == UserApprovalStatus.Rejected)
             {
                 RecordRejectedLogin(user, "Учётная запись отклонена администратором.");
-                await RecordForeignLoginAsync(user, model.Username, succeeded: false, locked: false);
                 var reason = string.IsNullOrWhiteSpace(user.RejectionReason)
                     ? string.Empty
                     : $" Причина: {user.RejectionReason}";
@@ -130,15 +111,27 @@ namespace PersonalCabinetEducationProgram.Controllers
                 return View(model);
             }
 
-            await _signInManager.SignInAsync(user, isPersistent: false);
-            _securityEventService.Record(
-                SecurityEventTypes.LoginSucceeded,
-                SecurityEventSeverities.Information,
-                "Успешный вход",
-                userId: user.Id,
-                userLogin: user.UserName,
-                userFullName: user.FullName);
-            await RecordForeignLoginAsync(user, model.Username, succeeded: true, locked: false);
+            var loginSessionId = Guid.NewGuid().ToString("N");
+            await _signInManager.SignInWithClaimsAsync(
+                user,
+                isPersistent: false,
+                [new System.Security.Claims.Claim(LoginSecurityService.SessionIdClaimType, loginSessionId)]);
+            try
+            {
+                var monitoring = await _loginSecurityService.RecordSuccessfulLoginAsync(
+                    user,
+                    loginSessionId,
+                    HttpContext.RequestAborted);
+                if (monitoring.AccountBlocked)
+                {
+                    await _signInManager.SignOutAsync();
+                    return RedirectToAction(nameof(Login), new { securityBlocked = true });
+                }
+            }
+            catch (Exception exception) when (!HttpContext.RequestAborted.IsCancellationRequested)
+            {
+                _logger.LogError(exception, "Post-login security monitoring failed for user {UserId}.", user.Id);
+            }
             return RedirectToAction(nameof(RedirectByRole));
         }
 
@@ -215,6 +208,16 @@ namespace PersonalCabinetEducationProgram.Controllers
         [AppRateLimit(AppRateLimitPolicies.Logout)]
         public async Task<IActionResult> Logout()
         {
+            try
+            {
+                await _loginSecurityService.EndSessionAsync(
+                    User.FindFirst(LoginSecurityService.SessionIdClaimType)?.Value,
+                    HttpContext.RequestAborted);
+            }
+            catch (Exception exception) when (!HttpContext.RequestAborted.IsCancellationRequested)
+            {
+                _logger.LogError(exception, "Failed to close the login session during logout.");
+            }
             await _signInManager.SignOutAsync();
             return RedirectToAction(nameof(Login));
         }
@@ -264,44 +267,27 @@ namespace PersonalCabinetEducationProgram.Controllers
                 user.FullName);
         }
 
-        private async Task RecordForeignLoginAsync(
-            User? user,
-            string attemptedLogin,
-            bool succeeded,
-            bool locked)
+        private async Task RecordFailedLoginSafelyAsync(User? user, string attemptedLogin, bool locked)
         {
-            var lookup = await _ipGeolocationService.LookupAsync(
-                HttpContext.Connection.RemoteIpAddress,
-                HttpContext.RequestAborted);
-            if (!lookup.IsPublicAddress || !lookup.WasResolved ||
-                string.Equals(lookup.CountryCode, _allowedCountryCode, StringComparison.OrdinalIgnoreCase))
+            try
             {
-                return;
+                await _loginSecurityService.RecordFailedLoginAsync(
+                    user,
+                    attemptedLogin,
+                    locked,
+                    HttpContext.RequestAborted);
             }
-
-            var severity = locked
-                ? SecurityEventSeverities.Critical
-                : succeeded
-                    ? SecurityEventSeverities.Warning
-                    : SecurityEventSeverities.High;
-            var title = locked
-                ? "Заблокирован вход с иностранного IP"
-                : succeeded
-                    ? "Вход с иностранного IP"
-                    : "Неудачный вход с иностранного IP";
-            var country = string.IsNullOrWhiteSpace(lookup.CountryName)
-                ? lookup.CountryCode
-                : $"{lookup.CountryName} ({lookup.CountryCode})";
-
-            _securityEventService.Record(
-                SecurityEventTypes.ForeignLogin,
-                severity,
-                title,
-                $"Страна IP-адреса: {country}. Результат входа: " +
-                (locked ? "учётная запись заблокирована" : succeeded ? "успешно" : "отказ"),
-                user?.Id,
-                user?.UserName ?? attemptedLogin,
-                user?.FullName);
+            catch (Exception exception) when (!HttpContext.RequestAborted.IsCancellationRequested)
+            {
+                _logger.LogError(exception, "Failed to persist failed login monitoring data.");
+                _securityEventService.Record(
+                    locked ? SecurityEventTypes.AccountLocked : SecurityEventTypes.LoginFailed,
+                    locked ? SecurityEventSeverities.High : SecurityEventSeverities.Warning,
+                    locked ? "Учётная запись заблокирована" : "Неудачная попытка входа",
+                    userId: user?.Id,
+                    userLogin: user?.UserName ?? attemptedLogin,
+                    userFullName: user?.FullName);
+            }
         }
 
         private void AddIdentityErrors(IdentityResult result)

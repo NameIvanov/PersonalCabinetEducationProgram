@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PersonalCabinetEducationProgram.Data;
 
@@ -10,9 +11,11 @@ using PersonalCabinetEducationProgram.Data;
 namespace PersonalCabinetEducationProgram.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260812115345_AddUnusualLoginMonitoring")]
+    partial class AddUnusualLoginMonitoring
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1075,160 +1078,6 @@ namespace PersonalCabinetEducationProgram.Migrations
                             Id = 3,
                             Name = "Факультет педагогического образования"
                         });
-                });
-
-            modelBuilder.Entity("PersonalCabinetEducationProgram.Models.IpAddressSecurityState", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    b.Property<int>("AccountRiskEscalationLevel")
-                        .HasColumnType("int")
-                        .HasColumnName("account_risk_escalation_level");
-
-                    b.Property<DateTime?>("AccountRiskLastBlockedAtUtc")
-                        .HasPrecision(6)
-                        .HasColumnType("datetime(6)")
-                        .HasColumnName("account_risk_last_blocked_at_utc");
-
-                    b.Property<DateTime?>("AccountRiskMarkedAtUtc")
-                        .HasPrecision(6)
-                        .HasColumnType("datetime(6)")
-                        .HasColumnName("account_risk_marked_at_utc");
-
-                    b.Property<int>("AccountRiskScore")
-                        .HasColumnType("int")
-                        .HasColumnName("account_risk_score");
-
-                    b.Property<DateTime?>("AccountRiskWindowResetAtUtc")
-                        .HasPrecision(6)
-                        .HasColumnType("datetime(6)")
-                        .HasColumnName("account_risk_window_reset_at_utc");
-
-                    b.Property<DateTime?>("AttemptWindowStartedAtUtc")
-                        .HasPrecision(6)
-                        .HasColumnType("datetime(6)")
-                        .HasColumnName("attempt_window_started_at_utc");
-
-                    b.Property<int>("AttemptsInWindow")
-                        .HasColumnType("int")
-                        .HasColumnName("attempts_in_window");
-
-                    b.Property<string>("BlockReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("varchar(500)")
-                        .HasColumnName("block_reason");
-
-                    b.Property<DateTime?>("BlockedAtUtc")
-                        .HasPrecision(6)
-                        .HasColumnType("datetime(6)")
-                        .HasColumnName("blocked_at_utc");
-
-                    b.Property<int?>("BlockedByUserId")
-                        .HasColumnType("int")
-                        .HasColumnName("blocked_by_user_id");
-
-                    b.Property<DateTime?>("BlockedUntilUtc")
-                        .HasPrecision(6)
-                        .HasColumnType("datetime(6)")
-                        .HasColumnName("blocked_until_utc");
-
-                    b.Property<int>("EscalationLevel")
-                        .HasColumnType("int")
-                        .HasColumnName("escalation_level");
-
-                    b.Property<DateTime?>("EscalationStartedAtUtc")
-                        .HasPrecision(6)
-                        .HasColumnType("datetime(6)")
-                        .HasColumnName("escalation_started_at_utc");
-
-                    b.Property<DateTime>("FirstSeenAtUtc")
-                        .HasPrecision(6)
-                        .HasColumnType("datetime(6)")
-                        .HasColumnName("first_seen_at_utc");
-
-                    b.Property<string>("IpAddress")
-                        .IsRequired()
-                        .HasMaxLength(45)
-                        .HasColumnType("varchar(45)")
-                        .HasColumnName("ip_address");
-
-                    b.Property<bool>("IsManuallyBlocked")
-                        .HasColumnType("tinyint(1)")
-                        .HasColumnName("is_manually_blocked");
-
-                    b.Property<bool>("IsPermanentlyBlocked")
-                        .HasColumnType("tinyint(1)")
-                        .HasColumnName("is_permanently_blocked");
-
-                    b.Property<string>("LastHttpMethod")
-                        .HasMaxLength(10)
-                        .HasColumnType("varchar(10)")
-                        .HasColumnName("last_http_method");
-
-                    b.Property<string>("LastPath")
-                        .HasMaxLength(2048)
-                        .HasColumnType("varchar(2048)")
-                        .HasColumnName("last_path");
-
-                    b.Property<DateTime>("LastSeenAtUtc")
-                        .HasPrecision(6)
-                        .HasColumnType("datetime(6)")
-                        .HasColumnName("last_seen_at_utc");
-
-                    b.Property<string>("LastUserFullName")
-                        .HasMaxLength(300)
-                        .HasColumnType("varchar(300)")
-                        .HasColumnName("last_user_full_name");
-
-                    b.Property<int?>("LastUserId")
-                        .HasColumnType("int")
-                        .HasColumnName("last_user_id");
-
-                    b.Property<string>("LastUserLogin")
-                        .HasMaxLength(256)
-                        .HasColumnType("varchar(256)")
-                        .HasColumnName("last_user_login");
-
-                    b.Property<long>("RequestCount")
-                        .HasColumnType("bigint")
-                        .HasColumnName("request_count");
-
-                    b.Property<string>("ReviewNote")
-                        .HasMaxLength(1000)
-                        .HasColumnType("varchar(1000)")
-                        .HasColumnName("review_note");
-
-                    b.Property<int>("SuspiciousAttemptCount")
-                        .HasColumnType("int")
-                        .HasColumnName("suspicious_attempt_count");
-
-                    b.Property<DateTime?>("UnblockedAtUtc")
-                        .HasPrecision(6)
-                        .HasColumnType("datetime(6)")
-                        .HasColumnName("unblocked_at_utc");
-
-                    b.Property<int?>("UnblockedByUserId")
-                        .HasColumnType("int")
-                        .HasColumnName("unblocked_by_user_id");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("IpAddress")
-                        .IsUnique()
-                        .HasDatabaseName("ux_ip_security_address");
-
-                    b.HasIndex("LastSeenAtUtc")
-                        .HasDatabaseName("ix_ip_security_last_seen");
-
-                    b.HasIndex("EscalationLevel", "LastSeenAtUtc")
-                        .HasDatabaseName("ix_ip_security_escalation");
-
-                    b.HasIndex("IsPermanentlyBlocked", "BlockedUntilUtc")
-                        .HasDatabaseName("ix_ip_security_blocked");
-
-                    b.ToTable("ip_address_security_states", "personal_cabinet");
                 });
 
             modelBuilder.Entity("PersonalCabinetEducationProgram.Models.Notification", b =>

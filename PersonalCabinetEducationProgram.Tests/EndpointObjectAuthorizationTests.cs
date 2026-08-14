@@ -26,18 +26,22 @@ public sealed class EndpointObjectAuthorizationTests
             "/ManagerHome/Comments?elementId=1",
             "/ManagerHome/EditElement?elementId=1",
             "/ManagerHome/ManageFiles?elementId=1",
-            "/ManagerHome/Download?elementId=1",
             "/ManagerHome/Preview?elementId=1",
             $"/ElementFiles/Preview?id={objectIds.FileId}",
-            $"/ElementFiles/Download?id={objectIds.FileId}",
-            "/CurriculumImport/Index?programId=1",
-            $"/CurriculumImport/Download?id={objectIds.ImportId}");
+            "/CurriculumImport/Index?programId=1");
 
         await AssertStatusAsync(client, HttpStatusCode.NotFound,
-            $"/HistoryFiles/Preview?historyId={objectIds.HistoryId}",
-            $"/HistoryFiles/Download?historyId={objectIds.HistoryId}");
+            $"/HistoryFiles/Preview?historyId={objectIds.HistoryId}");
 
         var token = await GetAntiforgeryTokenAsync(client, "/ManagerHome/Index");
+        await AssertPostStatusAsync(client, "/ElementFiles/Download", HttpStatusCode.Forbidden,
+            token, ("id", objectIds.FileId.ToString()));
+        await AssertPostStatusAsync(client, "/ManagerHome/Download", HttpStatusCode.Forbidden,
+            token, ("elementId", "1"));
+        await AssertPostStatusAsync(client, "/HistoryFiles/Download", HttpStatusCode.NotFound,
+            token, ("historyId", objectIds.HistoryId.ToString()));
+        await AssertPostStatusAsync(client, "/CurriculumImport/Download", HttpStatusCode.Forbidden,
+            token, ("id", objectIds.ImportId.ToString()));
         await AssertPostStatusAsync(client, "/ManagerHome/SendForApproval", HttpStatusCode.Forbidden,
             token, ("elementId", "1"));
         await AssertPostStatusAsync(client, "/ManagerHome/AddComment", HttpStatusCode.Forbidden,
@@ -54,6 +58,8 @@ public sealed class EndpointObjectAuthorizationTests
             token, ("elementId", "1"));
         await AssertPostStatusAsync(client, "/CurriculumImport/Apply", HttpStatusCode.Forbidden,
             token, ("programId", "1"), ("token", "invalid"));
+        await AssertPostStatusAsync(client, "/CurriculumImport/Preview", HttpStatusCode.Forbidden,
+            token, ("programId", "1"));
     }
 
     [Fact]
@@ -67,11 +73,20 @@ public sealed class EndpointObjectAuthorizationTests
             "/ApproverHome/Index?programId=1",
             "/ApproverHome/History?elementId=1",
             "/ApproverHome/Comments?elementId=1",
-            "/ApproverHome/Download?elementId=1",
+            "/ApproverHome/ManageFiles?elementId=1",
             "/ApproverHome/Preview?elementId=1",
-            $"/ElementFiles/Download?id={objectIds.FileId}");
+            $"/ElementFiles/Preview?id={objectIds.FileId}");
+
+        await AssertStatusAsync(client, HttpStatusCode.NotFound,
+            $"/HistoryFiles/Preview?historyId={objectIds.HistoryId}");
 
         var token = await GetAntiforgeryTokenAsync(client, "/ApproverHome/Index");
+        await AssertPostStatusAsync(client, "/ElementFiles/Download", HttpStatusCode.Forbidden,
+            token, ("id", objectIds.FileId.ToString()));
+        await AssertPostStatusAsync(client, "/ApproverHome/Download", HttpStatusCode.Forbidden,
+            token, ("elementId", "1"));
+        await AssertPostStatusAsync(client, "/HistoryFiles/Download", HttpStatusCode.NotFound,
+            token, ("historyId", objectIds.HistoryId.ToString()));
         await AssertPostStatusAsync(client, "/ApproverHome/Approve", HttpStatusCode.Forbidden,
             token, ("elementId", "1"));
         await AssertPostStatusAsync(client, "/ApproverHome/Reject", HttpStatusCode.Forbidden,
@@ -102,13 +117,15 @@ public sealed class EndpointObjectAuthorizationTests
             "/Administration/Audit",
             "/ModeratorHome/History?elementId=1",
             "/ModeratorHome/Comments?elementId=1",
-            "/ModeratorHome/Download?elementId=1",
+            "/ModeratorHome/ManageFiles?elementId=1",
             "/ModeratorHome/Preview?elementId=1");
 
         var token = await GetAntiforgeryTokenAsync(client, "/ModeratorHome/Index");
         await AssertPostStatusAsync(client, "/ModeratorHome/Publish", HttpStatusCode.Forbidden,
             token, ("elementId", "1"));
         await AssertPostStatusAsync(client, "/ModeratorHome/Unpublish", HttpStatusCode.Forbidden,
+            token, ("elementId", "1"));
+        await AssertPostStatusAsync(client, "/ModeratorHome/Download", HttpStatusCode.Forbidden,
             token, ("elementId", "1"));
     }
 
@@ -170,6 +187,22 @@ public sealed class EndpointObjectAuthorizationTests
         Assert.Equal(HttpStatusCode.OK, (await approver.GetAsync("/ApproverHome/History?elementId=1")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await moderator.GetAsync("/ModeratorHome/History?elementId=1")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync("/Admin/Programs")).StatusCode);
+
+        var managerFiles = await manager.GetStringAsync("/ManagerHome/ManageFiles?elementId=1");
+        var approverFiles = await approver.GetStringAsync("/ApproverHome/ManageFiles?elementId=1");
+        var moderatorFiles = await moderator.GetStringAsync("/ModeratorHome/ManageFiles?elementId=1");
+
+        Assert.Contains("currentFilesUpload", managerFiles);
+        Assert.Contains("Текущий комплект файлов", approverFiles);
+        Assert.Contains("Текущий комплект файлов", moderatorFiles);
+        Assert.Contains("доступен для просмотра и скачивания", approverFiles);
+        Assert.Contains("доступен для просмотра и скачивания", moderatorFiles);
+        Assert.DoesNotContain("currentFilesUpload", approverFiles);
+        Assert.DoesNotContain("currentFilesUpload", moderatorFiles);
+        Assert.DoesNotContain("ReplaceCurrentFile", approverFiles);
+        Assert.DoesNotContain("ReplaceCurrentFile", moderatorFiles);
+        Assert.DoesNotContain("RemoveCurrentFile", approverFiles);
+        Assert.DoesNotContain("RemoveCurrentFile", moderatorFiles);
     }
 
     private static async Task<(int FileId, int HistoryId, int ImportId, int CommentId)> SeedProtectedObjectsAsync(

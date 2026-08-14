@@ -9,7 +9,9 @@ namespace PersonalCabinetEducationProgram.Services
         bool IsPublicAddress,
         bool WasResolved,
         string? CountryCode,
-        string? CountryName)
+        string? CountryName,
+        double? Latitude = null,
+        double? Longitude = null)
     {
         public static IpCountryLookup LocalOrReserved { get; } = new(false, false, null, null);
         public static IpCountryLookup UnknownPublic { get; } = new(true, false, null, null);
@@ -73,8 +75,10 @@ namespace PersonalCabinetEducationProgram.Services
                     var success = !root.TryGetProperty("success", out var successValue) || successValue.GetBoolean();
                     var countryCode = ReadString(root, "country_code")?.ToUpperInvariant();
                     var countryName = ReadString(root, "country");
+                    var latitude = ReadDouble(root, "latitude");
+                    var longitude = ReadDouble(root, "longitude");
                     result = success && !string.IsNullOrWhiteSpace(countryCode)
-                        ? new IpCountryLookup(true, true, countryCode, countryName)
+                        ? new IpCountryLookup(true, true, countryCode, countryName, latitude, longitude)
                         : IpCountryLookup.UnknownPublic;
                 }
             }
@@ -101,6 +105,9 @@ namespace PersonalCabinetEducationProgram.Services
             if (address.IsIPv4MappedToIPv6)
                 address = address.MapToIPv4();
             if (IPAddress.IsLoopback(address))
+                return false;
+            if (address.Equals(IPAddress.Any) || address.Equals(IPAddress.IPv6Any) ||
+                address.Equals(IPAddress.None) || address.Equals(IPAddress.IPv6None))
                 return false;
 
             var bytes = address.GetAddressBytes();
@@ -131,6 +138,11 @@ namespace PersonalCabinetEducationProgram.Services
         private static string? ReadString(JsonElement element, string propertyName) =>
             element.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.String
                 ? value.GetString()
+                : null;
+
+        private static double? ReadDouble(JsonElement element, string propertyName) =>
+            element.TryGetProperty(propertyName, out var value) && value.TryGetDouble(out var result)
+                ? result
                 : null;
     }
 }

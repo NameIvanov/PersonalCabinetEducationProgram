@@ -46,6 +46,21 @@ namespace PersonalCabinetEducationProgram.Models
         [MaxLength(45)]
         public string IpAddress { get; set; } = string.Empty;
 
+        [Column("network_address")]
+        [MaxLength(45)]
+        public string? NetworkAddress { get; set; }
+
+        [Column("network_prefix_length")]
+        public int? NetworkPrefixLength { get; set; }
+
+        [Column("country_code")]
+        [MaxLength(2)]
+        public string? CountryCode { get; set; }
+
+        [Column("country_name")]
+        [MaxLength(150)]
+        public string? CountryName { get; set; }
+
         [Column("http_method")]
         [MaxLength(10)]
         public string? HttpMethod { get; set; }
@@ -114,10 +129,22 @@ namespace PersonalCabinetEducationProgram.Models
         public const string InvalidFileUpload = "InvalidFileUpload";
         public const string LargeFileUpload = "LargeFileUpload";
         public const string ForeignLogin = "ForeignLogin";
+        public const string NewLoginNetwork = "NewLoginNetwork";
+        public const string LoginCountryUnknown = "LoginCountryUnknown";
+        public const string ImpossibleTravel = "ImpossibleTravel";
+        public const string FrequentNetworkChanges = "FrequentNetworkChanges";
+        public const string NewNetworkAfterFailedLogins = "NewNetworkAfterFailedLogins";
+        public const string ConcurrentForeignSessions = "ConcurrentForeignSessions";
         public const string SuspiciousRequestVolume = "SuspiciousRequestVolume";
         public const string MassDownload = "MassDownload";
         public const string AccountAutomaticallyBlocked = "AccountAutomaticallyBlocked";
         public const string PasswordReset = "PasswordReset";
         public const string UserAdministration = "UserAdministration";
+        public const string IdorAttempt = "IdorAttempt";
+        public const string ProtectedObjectProbe = "ProtectedObjectProbe";
+        public const string IpAutomaticallyBlocked = "IpAutomaticallyBlocked";
+        public const string IpRiskThresholdReached = "IpRiskThresholdReached";
+        public const string IpAdministration = "IpAdministration";
+        public const string AccountRiskThresholdReached = "AccountRiskThresholdReached";
     }
 }

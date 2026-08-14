@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using PersonalCabinetEducationProgram.Data;
 using PersonalCabinetEducationProgram.Models;
@@ -269,6 +270,104 @@ namespace PersonalCabinetEducationProgram.Services
                     "Учётная запись разблокирована",
                     $"Администратор разблокировал пользователя {user.UserName} (ID {user.Id}).");
                 return new AccountUnlockResult(true, user.UserName, null);
+            }
+            finally
+            {
+                accountLock.Release();
+            }
+        }
+
+        public async Task<bool> BlockForLoginRiskAsync(
+            User user,
+            string reason,
+            CancellationToken cancellationToken = default)
+        {
+            var accountLock = _activityMonitor.GetAccountLock(user.Id);
+            await accountLock.WaitAsync(cancellationToken);
+            try
+            {
+                if (user.SecurityBlockedAtUtc.HasValue)
+                    return true;
+
+                var isAdministrator = await _userManager.IsInRoleAsync(user, AppRoles.Admin);
+                await BlockOrEscalateAsync(user, reason, cancellationToken);
+                return !isAdministrator;
+            }
+            finally
+            {
+                accountLock.Release();
+            }
+        }
+
+        public async Task<int> EvaluateAccumulatedRiskAsync(
+            int userId,
+            CancellationToken cancellationToken = default)
+        {
+            var accountLock = _activityMonitor.GetAccountLock(userId);
+            await accountLock.WaitAsync(cancellationToken);
+            try
+            {
+                var windowStart = _timeProvider.GetUtcNow().UtcDateTime
+                    .AddHours(-Math.Max(1, _options.AccountRiskWindowHours));
+                var riskEvents = await _context.SecurityEventLogs
+                    .AsNoTracking()
+                    .Where(item => item.UserId == userId &&
+                                   item.LastOccurredAtUtc >= windowStart &&
+                                   item.Status != SecurityEventStatuses.FalsePositive &&
+                                   item.EventType != SecurityEventTypes.AccountAutomaticallyBlocked &&
+                                   item.EventType != SecurityEventTypes.AccountRiskThresholdReached &&
+                                   item.EventType != SecurityEventTypes.IpAutomaticallyBlocked &&
+                                   item.EventType != SecurityEventTypes.IpRiskThresholdReached &&
+                                   (item.Severity == SecurityEventSeverities.High ||
+                                    item.Severity == SecurityEventSeverities.Critical))
+                    .Select(item => new { item.Severity, item.OccurrenceCount })
+                    .ToListAsync(cancellationToken);
+                var scoreValue = riskEvents.Sum(item =>
+                    (long)Math.Max(1, item.OccurrenceCount) *
+                    (item.Severity == SecurityEventSeverities.Critical
+                        ? Math.Max(1, _options.CriticalSeverityRiskPoints)
+                        : Math.Max(1, _options.HighSeverityRiskPoints)));
+                var score = (int)Math.Min(int.MaxValue, scoreValue);
+
+                if (score < Math.Max(1, _options.AccountRiskBlockScore))
+                    return score;
+
+                var user = await _userManager.FindByIdAsync(userId.ToString());
+                if (user == null || user.SecurityBlockedAtUtc.HasValue)
+                    return score;
+
+                if (await _userManager.IsInRoleAsync(user, AppRoles.Admin))
+                {
+                    var warningExists = await _context.SecurityEventLogs.AsNoTracking().AnyAsync(item =>
+                        item.UserId == userId &&
+                        item.EventType == SecurityEventTypes.AccountRiskThresholdReached &&
+                        item.LastOccurredAtUtc >= windowStart &&
+                        item.Status != SecurityEventStatuses.FalsePositive,
+                        cancellationToken);
+                    if (!warningExists)
+                    {
+                        _securityEvents.Record(
+                            SecurityEventTypes.AccountRiskThresholdReached,
+                            SecurityEventSeverities.Critical,
+                            "Администратор достиг критического риск-порога",
+                            $"За последние {_options.AccountRiskWindowHours} ч. накоплено {score} баллов. " +
+                            "Автоматическая блокировка администратора не применяется.",
+                            user.Id,
+                            user.UserName,
+                            user.FullName);
+                    }
+
+                    return score;
+                }
+
+                await BlockOrEscalateAsync(
+                    user,
+                    $"За последние {_options.AccountRiskWindowHours} ч. накоплено {score} баллов риска; " +
+                    $"порог автоматической блокировки: {_options.AccountRiskBlockScore}. " +
+                    $"Событие уровня High даёт {_options.HighSeverityRiskPoints} балл, Critical — " +
+                    $"{_options.CriticalSeverityRiskPoints} балла.",
+                    cancellationToken);
+                return score;
             }
             finally
             {

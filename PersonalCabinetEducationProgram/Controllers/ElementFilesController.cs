@@ -28,6 +28,8 @@ namespace PersonalCabinetEducationProgram.Controllers
         [AppRateLimit(AppRateLimitPolicies.FileDownload)]
         public Task<IActionResult> Preview(int id) => SendFile(id, false);
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         [AppRateLimit(AppRateLimitPolicies.FileDownload)]
         public Task<IActionResult> Download(int id) => SendFile(id, true);
 

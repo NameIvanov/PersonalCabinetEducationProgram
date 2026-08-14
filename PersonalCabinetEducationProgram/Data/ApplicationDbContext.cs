@@ -22,6 +22,9 @@ namespace PersonalCabinetEducationProgram.Data
         public DbSet<CurriculumImport> CurriculumImports { get; set; }
         public DbSet<SystemRequestLog> SystemRequestLogs { get; set; }
         public DbSet<SecurityEventLog> SecurityEventLogs { get; set; }
+        public DbSet<UserLoginLocation> UserLoginLocations { get; set; }
+        public DbSet<UserLoginSession> UserLoginSessions { get; set; }
+        public DbSet<IpAddressSecurityState> IpAddressSecurityStates { get; set; }
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) { }
 
@@ -270,7 +273,71 @@ namespace PersonalCabinetEducationProgram.Data
                 entity.HasIndex(log => new { log.Severity, log.LastOccurredAtUtc }).HasDatabaseName("ix_security_severity_date");
                 entity.HasIndex(log => new { log.UserId, log.LastOccurredAtUtc }).HasDatabaseName("ix_security_user_date");
                 entity.HasIndex(log => new { log.IpAddress, log.LastOccurredAtUtc }).HasDatabaseName("ix_security_ip_date");
+                entity.HasIndex(log => new { log.NetworkAddress, log.NetworkPrefixLength, log.LastOccurredAtUtc })
+                    .HasDatabaseName("ix_security_network_date");
                 entity.HasIndex(log => log.TraceId).HasDatabaseName("ix_security_trace");
+            });
+
+            modelBuilder.Entity<UserLoginLocation>(entity =>
+            {
+                entity.Property(location => location.FirstSeenAtUtc).HasPrecision(6);
+                entity.Property(location => location.LastSeenAtUtc).HasPrecision(6);
+                entity.HasOne(location => location.User)
+                    .WithMany(user => user.LoginLocations)
+                    .HasForeignKey(location => location.UserId)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("fk_login_location_user");
+                entity.HasIndex(location => location.UserId).HasDatabaseName("ix_login_location_user");
+                entity.HasIndex(location => new
+                    {
+                        location.UserId,
+                        location.NetworkAddress,
+                        location.NetworkPrefixLength
+                    })
+                    .IsUnique()
+                    .HasDatabaseName("ux_login_location_user_network");
+                entity.HasIndex(location => location.LastSeenAtUtc).HasDatabaseName("ix_login_location_last_seen");
+                entity.HasIndex(location => location.CountryCode).HasDatabaseName("ix_login_location_country");
+            });
+
+            modelBuilder.Entity<UserLoginSession>(entity =>
+            {
+                entity.Property(session => session.CreatedAtUtc).HasPrecision(6);
+                entity.Property(session => session.LastActivityAtUtc).HasPrecision(6);
+                entity.Property(session => session.EndedAtUtc).HasPrecision(6);
+                entity.HasOne(session => session.User)
+                    .WithMany(user => user.LoginSessions)
+                    .HasForeignKey(session => session.UserId)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("fk_login_session_user");
+                entity.HasIndex(session => session.SessionId)
+                    .IsUnique()
+                    .HasDatabaseName("ux_login_session_id");
+                entity.HasIndex(session => new { session.UserId, session.IsActive, session.LastActivityAtUtc })
+                    .HasDatabaseName("ix_login_session_user_active");
+            });
+
+            modelBuilder.Entity<IpAddressSecurityState>(entity =>
+            {
+                entity.Property(state => state.FirstSeenAtUtc).HasPrecision(6);
+                entity.Property(state => state.LastSeenAtUtc).HasPrecision(6);
+                entity.Property(state => state.AttemptWindowStartedAtUtc).HasPrecision(6);
+                entity.Property(state => state.EscalationStartedAtUtc).HasPrecision(6);
+                entity.Property(state => state.AccountRiskMarkedAtUtc).HasPrecision(6);
+                entity.Property(state => state.AccountRiskWindowResetAtUtc).HasPrecision(6);
+                entity.Property(state => state.AccountRiskLastBlockedAtUtc).HasPrecision(6);
+                entity.Property(state => state.BlockedUntilUtc).HasPrecision(6);
+                entity.Property(state => state.BlockedAtUtc).HasPrecision(6);
+                entity.Property(state => state.UnblockedAtUtc).HasPrecision(6);
+                entity.HasIndex(state => state.IpAddress)
+                    .IsUnique()
+                    .HasDatabaseName("ux_ip_security_address");
+                entity.HasIndex(state => state.LastSeenAtUtc)
+                    .HasDatabaseName("ix_ip_security_last_seen");
+                entity.HasIndex(state => new { state.IsPermanentlyBlocked, state.BlockedUntilUtc })
+                    .HasDatabaseName("ix_ip_security_blocked");
+                entity.HasIndex(state => new { state.EscalationLevel, state.LastSeenAtUtc })
+                    .HasDatabaseName("ix_ip_security_escalation");
             });
 
             // Seed Roles

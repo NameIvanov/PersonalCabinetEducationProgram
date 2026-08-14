@@ -94,7 +94,9 @@
                         <tr>
                             <td class="text-nowrap">@import.ImportedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
                             <td>
-                                <a asp-action="Download" asp-route-id="@import.Id">@import.OriginalFileName</a>
+                                <form asp-action="Download" asp-route-id="@import.Id" method="post" class="d-inline">
+                                    <button type="submit" class="btn btn-link p-0 align-baseline">@import.OriginalFileName</button>
+                                </form>
                             </td>
                             <td>@(string.IsNullOrWhiteSpace(import.PlanCode) ? "—" : import.PlanCode)</td>
                             <td>@import.ImportedByUser?.FullName</td>

@@ -60,8 +60,9 @@
                                             <span class="small fw-semibold">@h.FileName</span>
                                             <a asp-controller="HistoryFiles" asp-action="Preview" asp-route-historyId="@h.Id"
                                                class="btn btn-outline-secondary btn-sm" target="_blank">Открыть</a>
-                                            <a asp-controller="HistoryFiles" asp-action="Download" asp-route-historyId="@h.Id"
-                                               class="btn btn-outline-secondary btn-sm">Скачать</a>
+                                            <form asp-controller="HistoryFiles" asp-action="Download" asp-route-historyId="@h.Id" method="post" class="d-inline">
+                                                <button type="submit" class="btn btn-outline-secondary btn-sm">Скачать</button>
+                                            </form>
                                         </div>
                                     }
                                 </div>
@@ -103,7 +104,9 @@
                                         </span>
                                         <span class="d-flex gap-1 flex-shrink-0">
                                             <a asp-controller="ElementFiles" asp-action="Preview" asp-route-id="@file.Id" class="btn btn-outline-secondary btn-sm" target="_blank">Открыть</a>
-                                            <a asp-controller="ElementFiles" asp-action="Download" asp-route-id="@file.Id" class="btn btn-outline-secondary btn-sm">Скачать</a>
+                                            <form asp-controller="ElementFiles" asp-action="Download" asp-route-id="@file.Id" method="post" class="d-inline">
+                                                <button type="submit" class="btn btn-outline-secondary btn-sm">Скачать</button>
+                                            </form>
                                         </span>
                                     </div>
                                 }

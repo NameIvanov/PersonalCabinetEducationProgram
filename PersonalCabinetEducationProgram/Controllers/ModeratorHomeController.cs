@@ -82,6 +82,29 @@ namespace PersonalCabinetEducationProgram.Controllers
             ViewBag.ElementFilters = result.Filters;
         }
 
+        [HttpGet]
+        public async Task<IActionResult> ManageFiles(int elementId)
+        {
+            if (!await _accessService.CanModerateElementAsync(User, elementId))
+                return Forbid();
+
+            await _notificationService.MarkElementReadAsync(GetCurrentUserId(), elementId);
+            var element = await _context.EducationalProgramElements
+                .Include(item => item.Files)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(item => item.Id == elementId &&
+                                             !item.IsArchived &&
+                                             !item.EducationalProgram.IsArchived);
+            if (element == null)
+                return NotFound();
+
+            ViewBag.AllowFileEditing = false;
+            ViewBag.ReturnController = nameof(ModeratorHomeController).Replace("Controller", "");
+            return View("~/Views/ManagerHome/ManageFiles.cshtml", element);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         [AppRateLimit(AppRateLimitPolicies.FileDownload)]
         public async Task<IActionResult> Download(int elementId)
         {

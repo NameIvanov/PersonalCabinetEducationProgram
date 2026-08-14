@@ -15,6 +15,17 @@ namespace PersonalCabinetEducationProgram.Tests;
 
 public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
+    private readonly Action<IServiceCollection>? _configureServices;
+
+    public CustomWebApplicationFactory()
+    {
+    }
+
+    internal CustomWebApplicationFactory(Action<IServiceCollection> configureServices)
+    {
+        _configureServices = configureServices;
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -36,6 +47,8 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 })
                 .AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>(
                     TestAuthenticationHandler.SchemeName, _ => { });
+
+            _configureServices?.Invoke(services);
         });
     }
 }

@@ -13,13 +13,16 @@ namespace PersonalCabinetEducationProgram.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly NotificationService _notificationService;
+        private readonly ObjectAuthorizationIncidentService _authorizationIncidents;
 
         public NotificationsController(
             ApplicationDbContext context,
-            NotificationService notificationService)
+            NotificationService notificationService,
+            ObjectAuthorizationIncidentService authorizationIncidents)
         {
             _context = context;
             _notificationService = notificationService;
+            _authorizationIncidents = authorizationIncidents;
         }
 
         [AppRateLimit(AppRateLimitPolicies.Search)]
@@ -35,15 +38,15 @@ namespace PersonalCabinetEducationProgram.Controllers
             var candidates = await baseQuery
                 .Where(n => !unreadOnly || !n.IsRead)
                 .Include(n => n.Element)
-                .ThenInclude(e => e.EducationalProgram)
+                .ThenInclude(e => e!.EducationalProgram)
                 .AsNoTracking()
                 .ToListAsync();
             IEnumerable<Notification> filteredQuery = candidates.Where(notification =>
                 ListFilterMatcher.AnyText([notification.Title, notification.Message], filters.Title) &&
                 ListFilterMatcher.AnyText(
-                    [notification.Element.EducationalProgram.CodeReferral, notification.Element.EducationalProgram.Name],
+                    [notification.Element?.EducationalProgram.CodeReferral, notification.Element?.EducationalProgram.Name],
                     filters.Program) &&
-                ListFilterMatcher.Text(notification.Element.Name, filters.Element) &&
+                ListFilterMatcher.Text(notification.Element?.Name, filters.Element) &&
                 ListFilterMatcher.Text(notification.ActorName, filters.Actor) &&
                 ListFilterMatcher.Date(notification.CreatedAt, filters.DateFrom, filters.DateTo) &&
                 (string.IsNullOrWhiteSpace(filters.ReadStatus) ||
@@ -53,8 +56,8 @@ namespace PersonalCabinetEducationProgram.Controllers
             filteredQuery = sort switch
             {
                 "title" => descending ? filteredQuery.OrderByDescending(n => n.Title) : filteredQuery.OrderBy(n => n.Title),
-                "program" => descending ? filteredQuery.OrderByDescending(n => n.Element.EducationalProgram.Name) : filteredQuery.OrderBy(n => n.Element.EducationalProgram.Name),
-                "element" => descending ? filteredQuery.OrderByDescending(n => n.Element.Name) : filteredQuery.OrderBy(n => n.Element.Name),
+                "program" => descending ? filteredQuery.OrderByDescending(n => n.Element == null ? string.Empty : n.Element.EducationalProgram.Name) : filteredQuery.OrderBy(n => n.Element == null ? string.Empty : n.Element.EducationalProgram.Name),
+                "element" => descending ? filteredQuery.OrderByDescending(n => n.Element == null ? string.Empty : n.Element.Name) : filteredQuery.OrderBy(n => n.Element == null ? string.Empty : n.Element.Name),
                 "actor" => descending ? filteredQuery.OrderByDescending(n => n.ActorName) : filteredQuery.OrderBy(n => n.ActorName),
                 _ => descending ? filteredQuery.OrderByDescending(n => n.CreatedAt) : filteredQuery.OrderBy(n => n.CreatedAt)
             };
@@ -86,11 +89,16 @@ namespace PersonalCabinetEducationProgram.Controllers
                 .FirstOrDefaultAsync(n => n.Id == id && n.UserId == userId);
 
             if (notification == null)
+            {
+                if (await _context.Notifications.AsNoTracking().AnyAsync(n => n.Id == id))
+                    _authorizationIncidents.Record("Notification", id, "просмотр уведомления");
                 return NotFound();
+            }
 
-            await _notificationService.MarkElementReadAsync(
-                userId,
-                notification.EducationalProgramElementId);
+            await _notificationService.MarkReadAsync(userId, notification.Id);
+
+            if (!notification.EducationalProgramElementId.HasValue)
+                return RedirectToAction(nameof(Index));
 
             var controller = User.IsInRole(AppRoles.Moderator)
                 ? "ModeratorHome"
@@ -101,7 +109,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             return RedirectToAction(
                 "History",
                 controller,
-                new { elementId = notification.EducationalProgramElementId });
+                new { elementId = notification.EducationalProgramElementId.Value });
         }
 
         [HttpPost]

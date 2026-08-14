@@ -1368,6 +1368,75 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #555a63; }
     grid-template-columns: repeat(6, minmax(120px, 1fr)) auto;
 }
 
+.administration-filter-ip {
+    grid-template-columns: minmax(190px, 1.5fr) repeat(4, minmax(120px, 1fr)) auto;
+}
+
+.administration-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 10px;
+    padding: 5px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--surface);
+}
+
+.administration-tabs a {
+    display: flex;
+    min-height: 34px;
+    align-items: center;
+    gap: 7px;
+    padding: 0 13px;
+    border-radius: 5px;
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.administration-tabs a.active {
+    background: var(--active);
+    color: var(--accent-strong);
+}
+
+.administration-tabs a span {
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: var(--surface);
+    font-size: 9px;
+}
+
+.ip-identity-warning {
+    margin-bottom: 11px;
+    font-size: 10px;
+}
+
+.administration-ip-table { min-width: 1320px; }
+.ip-address-value { color: var(--heading); font-family: Consolas, monospace; font-size: 10px; }
+.ip-escalation-level-1 { color: var(--info); }
+.ip-escalation-level-2 { color: var(--warning); }
+.ip-escalation-level-3 { color: var(--danger); }
+.ip-row-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.ip-inline-action, .ip-manual-action { position: relative; }
+.ip-inline-action > summary, .ip-manual-action > summary { list-style: none; }
+.ip-inline-action > summary::-webkit-details-marker, .ip-manual-action > summary::-webkit-details-marker { display: none; }
+.ip-inline-action form, .ip-manual-action form {
+    position: absolute;
+    z-index: 20;
+    right: 0;
+    width: 260px;
+    display: grid;
+    gap: 8px;
+    margin-top: 5px;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--surface-raised);
+    box-shadow: 0 10px 28px rgba(22, 42, 64, .14);
+}
+.ip-manual-action form { width: 300px; }
+
 .administration-filter-bar label,
 .administration-cleanup-form label,
 .security-review-panel label {

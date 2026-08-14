@@ -70,7 +70,7 @@ namespace PersonalCabinetEducationProgram.Controllers
                     .ToList();
             }
 
-            if (programId.HasValue && programs.All(p => p.Id != programId.Value))
+            if (programId.HasValue && !await _accessService.CanApproveProgramAsync(User, programId.Value))
                 return Forbid();
 
             int? selectedProgramId = programId ?? programs.FirstOrDefault()?.Id;
@@ -99,6 +99,29 @@ namespace PersonalCabinetEducationProgram.Controllers
             ViewBag.ElementFilters = result.Filters;
         }
 
+        [HttpGet]
+        public async Task<IActionResult> ManageFiles(int elementId)
+        {
+            if (!await _accessService.CanApproveElementAsync(User, elementId))
+                return Forbid();
+
+            await _notificationService.MarkElementReadAsync(GetCurrentUserId(), elementId);
+            var element = await _context.EducationalProgramElements
+                .Include(item => item.Files)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(item => item.Id == elementId &&
+                                             !item.IsArchived &&
+                                             !item.EducationalProgram.IsArchived);
+            if (element == null)
+                return NotFound();
+
+            ViewBag.AllowFileEditing = false;
+            ViewBag.ReturnController = nameof(ApproverHomeController).Replace("Controller", "");
+            return View("~/Views/ManagerHome/ManageFiles.cshtml", element);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         [AppRateLimit(AppRateLimitPolicies.FileDownload)]
         public async Task<IActionResult> Download(int elementId)
         {

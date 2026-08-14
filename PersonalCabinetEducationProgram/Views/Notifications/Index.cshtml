@@ -77,6 +77,7 @@
                 {
                     NotificationType.FileUploaded => "file",
                     NotificationType.CommentAdded => "comment",
+                    NotificationType.Security => "security",
                     _ => "status"
                 };
 
@@ -86,10 +87,17 @@
                         <span class="notification-kind @typeClass">@notification.Title</span>
                         <time>@notification.CreatedAt.ToString("dd.MM.yyyy HH:mm")</time>
                     </div>
-                    <div class="notification-program">
-                        @notification.Element.EducationalProgram.CodeReferral · @notification.Element.EducationalProgram.Name
-                    </div>
-                    <div class="notification-element">@notification.Element.Name</div>
+                    @if (notification.Element != null)
+                    {
+                        <div class="notification-program">
+                            @notification.Element.EducationalProgram.CodeReferral · @notification.Element.EducationalProgram.Name
+                        </div>
+                        <div class="notification-element">@notification.Element.Name</div>
+                    }
+                    else
+                    {
+                        <div class="notification-program">Безопасность учётной записи</div>
+                    }
                     <div class="notification-message">@notification.Message</div>
                     <div class="notification-actor">@notification.ActorName</div>
                 </a>

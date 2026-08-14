@@ -65,7 +65,7 @@ namespace PersonalCabinetEducationProgram.Controllers
                 .Include(p => p.Managers)
                 .ToListAsync();
 
-            if (programId.HasValue && programs.All(p => p.Id != programId.Value))
+            if (programId.HasValue && !await _accessService.CanManageProgramAsync(User, programId.Value))
                 return Forbid();
 
             int? selectedProgramId = programId ?? programs.FirstOrDefault()?.Id;
@@ -174,6 +174,8 @@ namespace PersonalCabinetEducationProgram.Controllers
             return RedirectAfterUpload(elementId, programId, returnToFiles);
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         [AppRateLimit(AppRateLimitPolicies.FileDownload)]
         public async Task<IActionResult> Download(int elementId)
         {
