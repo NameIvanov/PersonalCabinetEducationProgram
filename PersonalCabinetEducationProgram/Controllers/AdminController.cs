@@ -496,7 +496,9 @@ namespace PersonalCabinetEducationProgram.Controllers
         [Authorize(Roles = "Admin")]
         [AppRateLimit(AppRateLimitPolicies.Search)]
         public async Task<IActionResult> ProgramDetails(
-            int id, bool showArchivedElements = false, int page = 1,
+            int id, bool showArchivedElements = false,
+            int mainPage = 1, int modulePage = 1, int disciplinePage = 1,
+            int practicePage = 1, int courseworkPage = 1, int giaPage = 1,
             string sort = "name", string direction = "asc",
             [FromQuery] ElementListFiltersViewModel? filters = null)
         {
@@ -511,7 +513,15 @@ namespace PersonalCabinetEducationProgram.Controllers
                 return NotFound();
 
             const int pageSize = 25;
-            page = Math.Max(page, 1);
+            var requestedPages = new Dictionary<string, int>
+            {
+                [EducationalProgramElementTypes.Main] = mainPage,
+                [EducationalProgramElementTypes.Module] = modulePage,
+                [EducationalProgramElementTypes.Discipline] = disciplinePage,
+                [EducationalProgramElementTypes.Practice] = practicePage,
+                [EducationalProgramElementTypes.Coursework] = courseworkPage,
+                [EducationalProgramElementTypes.Gia] = giaPage
+            };
             var elementsQuery = _context.EducationalProgramElements
                 .Where(e => e.EducationalProgramId == id && e.IsArchived == showArchivedElements)
                 .Include(e => e.Files.Where(f => f.IsCurrent))
@@ -525,14 +535,47 @@ namespace PersonalCabinetEducationProgram.Controllers
                 "date" => descending ? elementsQuery.OrderByDescending(e => e.UploadDate) : elementsQuery.OrderBy(e => e.UploadDate),
                 _ => descending ? elementsQuery.OrderByDescending(e => e.Name) : elementsQuery.OrderBy(e => e.Name)
             };
-            var filteredElements = await _elementFilterService.FilterAndPageAsync(
-                elementsQuery, filters.Tab, page, pageSize);
-            var totalCount = filteredElements.TotalCount;
-            program.Elements = filteredElements.Items;
-            SetPagination(totalCount, page, pageSize, sort, direction);
+            var sectionPages = new Dictionary<string, AdministrationPagination>();
+            var visibleElements = new List<EducationalProgramElement>();
+            foreach (var type in requestedPages.Keys)
+            {
+                if (!string.IsNullOrWhiteSpace(filters.Type) && filters.Type != type)
+                    continue;
+
+                var requestedPage = Math.Max(1, requestedPages[type]);
+                var sectionFilter = type == EducationalProgramElementTypes.Main
+                    ? filters.Main
+                    : filters.Tab;
+                var sectionResult = await _elementFilterService.FilterAndPageAsync(
+                    elementsQuery.Where(element => element.TypeElement == type),
+                    sectionFilter,
+                    requestedPage,
+                    pageSize);
+                var totalPages = Math.Max(1, (int)Math.Ceiling(sectionResult.TotalCount / (double)pageSize));
+                var effectivePage = Math.Min(requestedPage, totalPages);
+                if (effectivePage != requestedPage)
+                {
+                    sectionResult = await _elementFilterService.FilterAndPageAsync(
+                        elementsQuery.Where(element => element.TypeElement == type),
+                        sectionFilter,
+                        effectivePage,
+                        pageSize);
+                }
+
+                visibleElements.AddRange(sectionResult.Items);
+                sectionPages[type] = new AdministrationPagination(
+                    effectivePage,
+                    pageSize,
+                    sectionResult.TotalCount);
+            }
+
+            program.Elements = visibleElements;
 
             ViewBag.ShowArchivedElements = showArchivedElements;
             ViewBag.ElementFilters = filters;
+            ViewBag.ElementSectionPages = sectionPages;
+            ViewBag.Sort = sort;
+            ViewBag.Direction = descending ? "desc" : "asc";
             ViewBag.Departments = await _context.Departments.OrderBy(d => d.Name).ToListAsync();
             ViewBag.Faculties = await _context.Facultys.OrderBy(f => f.Name).ToListAsync();
 

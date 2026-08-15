@@ -30,6 +30,10 @@
     --neutral-bg: #eef1f4;
 }
 
+.scroll-anchor-target {
+    scroll-margin-top: 1rem;
+}
+
 html[data-theme="dark"] {
     color-scheme: dark;
     --app-bg: #17191d;

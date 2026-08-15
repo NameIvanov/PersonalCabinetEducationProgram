@@ -2,16 +2,34 @@
 @{
     ViewData["Title"] = "ОПОП";
     var showArchivedElements = ViewBag.ShowArchivedElements as bool? ?? false;
-    var page = ViewBag.Page as int? ?? 1; var totalPages = ViewBag.TotalPages as int? ?? 1;
     var currentSort = ViewBag.Sort as string ?? "name"; var currentDirection = ViewBag.Direction as string ?? "asc";
     var elementFilters = ViewBag.ElementFilters as PersonalCabinetEducationProgram.ViewModels.ElementListFiltersViewModel ?? new();
+    var sectionPages = ViewBag.ElementSectionPages as Dictionary<string, PersonalCabinetEducationProgram.ViewModels.AdministrationPagination> ?? [];
     string NextDirection(string column) => currentSort == column && currentDirection == "asc" ? "desc" : "asc";
-    Dictionary<string, string> ElementRouteData(int pageValue, string sortValue, string directionValue, bool includeTab = true)
+    string PageParameter(string type) => type switch
     {
-        var values = elementFilters.ToRouteData(includeMain: false, includeTab: includeTab);
+        "Main" => "mainPage",
+        "Module" => "modulePage",
+        "Discipline" => "disciplinePage",
+        "Practice" => "practicePage",
+        "Coursework" => "courseworkPage",
+        "GIA" => "giaPage",
+        _ => "disciplinePage"
+    };
+    Dictionary<string, string> ElementRouteData(
+        int pageValue, string sortValue, string directionValue,
+        bool includeMain = true, bool includeTab = true, string? pagedSection = null)
+    {
+        var values = elementFilters.ToRouteData(includeMain: includeMain, includeTab: includeTab);
         values["id"] = Model.Id.ToString();
         values["showArchivedElements"] = showArchivedElements.ToString().ToLowerInvariant();
-        values["page"] = pageValue.ToString();
+        foreach (var type in new[] { "Main", "Module", "Discipline", "Practice", "Coursework", "GIA" })
+        {
+            var sectionPage = sectionPages.GetValueOrDefault(type)?.Page ?? 1;
+            values[PageParameter(type)] = (pagedSection == null || pagedSection == type
+                ? pageValue
+                : sectionPage).ToString();
+        }
         values["sort"] = sortValue;
         values["direction"] = directionValue;
         return values;
@@ -78,19 +96,30 @@
     @foreach (var type in typeOrder.Where(type => string.IsNullOrWhiteSpace(elementFilters.Type) || elementFilters.Type == type))
     {
         var elements = Model.Elements.Where(e => e.TypeElement == type).ToList();
-        var preservedFilterRoutes = ElementRouteData(1, currentSort, currentDirection, includeTab: false);
+        var isMainSection = type == "Main";
+        var preservedFilterRoutes = ElementRouteData(
+            1,
+            currentSort,
+            currentDirection,
+            includeMain: !isMainSection,
+            includeTab: isMainSection);
         preservedFilterRoutes["Type"] = type;
         var filterUi = new PersonalCabinetEducationProgram.ViewModels.ElementFilterUiViewModel
         {
             Filters = elementFilters,
             FormId = $"adminElementFilterForm_{type}",
             PreservedRouteValues = preservedFilterRoutes,
-            ResetUrl = Url.Action("ProgramDetails", ElementRouteData(1, currentSort, currentDirection, includeTab: false))!,
-            IsMain = false
+            ResetUrl = Url.Action("ProgramDetails", ElementRouteData(
+                1,
+                currentSort,
+                currentDirection,
+                includeMain: false,
+                includeTab: false))!,
+            IsMain = isMainSection
         };
 
         @await Html.PartialAsync("_ElementFilterForm", filterUi)
-        <div class="card shadow-sm rounded-4 mb-4">
+        <div id="section-@type" class="card shadow-sm rounded-4 mb-4 scroll-anchor-target">
             <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
                 <h5 class="fw-bold mb-0">@(typeNames.GetValueOrDefault(type, type))</h5>
                 <div class="d-flex gap-2">
@@ -180,6 +209,21 @@
             </div>
         </div>
 
+        @if (sectionPages.TryGetValue(type, out var sectionPagination) && sectionPagination.TotalPages > 1)
+        {
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <a asp-action="ProgramDetails"
+                   asp-all-route-data="@ElementRouteData(sectionPagination.Page - 1, currentSort, currentDirection, pagedSection: type)"
+                   asp-fragment="section-@type"
+                   class="btn btn-outline-secondary @(sectionPagination.Page <= 1 ? "disabled" : "")">Назад</a>
+                <span>@sectionPagination.Page из @sectionPagination.TotalPages</span>
+                <a asp-action="ProgramDetails"
+                   asp-all-route-data="@ElementRouteData(sectionPagination.Page + 1, currentSort, currentDirection, pagedSection: type)"
+                   asp-fragment="section-@type"
+                   class="btn btn-outline-secondary @(sectionPagination.Page >= sectionPagination.TotalPages ? "disabled" : "")">Далее</a>
+            </div>
+        }
+
         @foreach (var element in elements)
         {
             <div class="modal fade" id="editElement_@element.Id" tabindex="-1">
@@ -229,11 +273,6 @@
                 </div>
             </div>
         </div>
-    }
-
-    @if (totalPages > 1)
-    {
-        <div class="d-flex justify-content-between mb-4"><a asp-action="ProgramDetails" asp-all-route-data="@ElementRouteData(page - 1, currentSort, currentDirection)" class="btn btn-outline-secondary @(page<=1?"disabled":"")">Назад</a><span>@(page) из @totalPages</span><a asp-action="ProgramDetails" asp-all-route-data="@ElementRouteData(page + 1, currentSort, currentDirection)" class="btn btn-outline-secondary @(page>=totalPages?"disabled":"")">Далее</a></div>
     }
 
     <div class="modal fade" id="editProgramModal" tabindex="-1">

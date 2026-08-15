@@ -270,7 +270,7 @@
                 </div>
 
                 @await Html.PartialAsync("_ElementFilterForm", tabFilterUi)
-                <div class="card shadow-sm rounded-4">
+                <div id="element-page-section" class="card shadow-sm rounded-4 scroll-anchor-target">
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0">
                             <thead class="table-light">
@@ -340,7 +340,7 @@
                 </div>
                 @if (elementTotalPages > 1)
                 {
-                    <div class="d-flex justify-content-between mt-3"><a asp-action="Index" asp-all-route-data="@ElementRouteData(activeTab, elementPage - 1, elementSort, elementDirection)" class="btn btn-outline-secondary @(elementPage <= 1 ? "disabled" : "")">Назад</a><span>@(elementPage) из @elementTotalPages</span><a asp-action="Index" asp-all-route-data="@ElementRouteData(activeTab, elementPage + 1, elementSort, elementDirection)" class="btn btn-outline-secondary @(elementPage >= elementTotalPages ? "disabled" : "")">Далее</a></div>
+                    <div class="d-flex justify-content-between mt-3"><a asp-action="Index" asp-all-route-data="@ElementRouteData(activeTab, elementPage - 1, elementSort, elementDirection)" asp-fragment="element-page-section" class="btn btn-outline-secondary @(elementPage <= 1 ? "disabled" : "")">Назад</a><span>@(elementPage) из @elementTotalPages</span><a asp-action="Index" asp-all-route-data="@ElementRouteData(activeTab, elementPage + 1, elementSort, elementDirection)" asp-fragment="element-page-section" class="btn btn-outline-secondary @(elementPage >= elementTotalPages ? "disabled" : "")">Далее</a></div>
                 }
                 }
 
