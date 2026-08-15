@@ -571,6 +571,9 @@ namespace PersonalCabinetEducationProgram.Data
                 entity.Property(u => u.SecurityBlockReason)
                     .HasColumnName("security_block_reason")
                     .HasMaxLength(500);
+                entity.Property(u => u.AccountRiskResetAtUtc)
+                    .HasColumnName("account_risk_reset_at_utc")
+                    .HasPrecision(6);
                 entity.Property(u => u.Id).HasColumnName("Id");
                 entity.Property(u => u.UserName).HasColumnName("username").HasMaxLength(100);
                 entity.Property(u => u.NormalizedUserName).HasColumnName("normalized_username").HasMaxLength(100);

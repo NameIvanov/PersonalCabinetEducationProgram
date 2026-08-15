@@ -226,6 +226,7 @@ namespace PersonalCabinetEducationProgram.Services
                     user.AccessFailedCount,
                     user.SecurityBlockedAtUtc,
                     user.SecurityBlockReason,
+                    user.AccountRiskResetAtUtc,
                     user.ConsecutiveInvalidUploadCount
                 };
 
@@ -233,6 +234,7 @@ namespace PersonalCabinetEducationProgram.Services
                 user.AccessFailedCount = 0;
                 user.SecurityBlockedAtUtc = null;
                 user.SecurityBlockReason = null;
+                user.AccountRiskResetAtUtc = _timeProvider.GetUtcNow().UtcDateTime;
                 user.ConsecutiveInvalidUploadCount = 0;
                 user.SecurityStamp = Guid.NewGuid().ToString();
                 var updateResult = await _userManager.UpdateAsync(user);
@@ -260,6 +262,7 @@ namespace PersonalCabinetEducationProgram.Services
                         user.AccessFailedCount,
                         user.SecurityBlockedAtUtc,
                         user.SecurityBlockReason,
+                        user.AccountRiskResetAtUtc,
                         user.ConsecutiveInvalidUploadCount
                     });
                 await _context.SaveChangesAsync(cancellationToken);
@@ -309,6 +312,13 @@ namespace PersonalCabinetEducationProgram.Services
             {
                 var windowStart = _timeProvider.GetUtcNow().UtcDateTime
                     .AddHours(-Math.Max(1, _options.AccountRiskWindowHours));
+                var riskResetAtUtc = await _context.Users
+                    .AsNoTracking()
+                    .Where(item => item.Id == userId)
+                    .Select(item => item.AccountRiskResetAtUtc)
+                    .SingleOrDefaultAsync(cancellationToken);
+                if (riskResetAtUtc.HasValue && riskResetAtUtc.Value > windowStart)
+                    windowStart = riskResetAtUtc.Value;
                 var riskEvents = await _context.SecurityEventLogs
                     .AsNoTracking()
                     .Where(item => item.UserId == userId &&

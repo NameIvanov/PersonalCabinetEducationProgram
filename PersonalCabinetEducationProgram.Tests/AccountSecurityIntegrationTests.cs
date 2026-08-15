@@ -64,11 +64,42 @@ public sealed class AccountSecurityIntegrationTests
         Assert.Equal(0, unlockedUser.ConsecutiveInvalidUploadCount);
         Assert.Null(unlockedUser.SecurityBlockedAtUtc);
         Assert.Null(unlockedUser.SecurityBlockReason);
+        Assert.NotNull(unlockedUser.AccountRiskResetAtUtc);
         Assert.Null(unlockedUser.LockoutEnd);
         Assert.False(registry.IsBlocked(1));
         Assert.Contains(
             await context.AuditLogs.ToListAsync(),
             entry => entry.UserId == 4 && entry.EntityId == 1 && entry.Action == "SecurityUnlocked");
+    }
+
+    [Fact]
+    public async Task AdministrativeUnlock_StartsNewAccountRiskWindow()
+    {
+        using var factory = new CustomWebApplicationFactory();
+        await SeedRiskEventsAsync(factory, userId: 1,
+            (SecurityEventSeverities.Critical, SecurityEventStatuses.New, 2),
+            (SecurityEventSeverities.High, SecurityEventStatuses.New, 2));
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<AccountSecurityService>();
+        Assert.Equal(6, await service.EvaluateAccumulatedRiskAsync(1));
+
+        var unlock = await service.UnlockAsync(1, 4, "Risk reviewed by administrator.");
+        Assert.True(unlock.Succeeded, unlock.Error);
+        Assert.Equal(0, await service.EvaluateAccumulatedRiskAsync(1));
+
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        context.ChangeTracker.Clear();
+        var user = await context.Users.SingleAsync(item => item.Id == 1);
+        Assert.NotNull(user.AccountRiskResetAtUtc);
+        Assert.Null(user.SecurityBlockedAtUtc);
+        Assert.Null(user.LockoutEnd);
+
+        var oldEvents = await context.SecurityEventLogs
+            .Where(item => item.UserId == 1)
+            .ToListAsync();
+        Assert.NotEmpty(oldEvents);
+        Assert.All(oldEvents, item => Assert.NotEqual(SecurityEventStatuses.FalsePositive, item.Status));
     }
 
     [Fact]
@@ -296,6 +327,33 @@ public sealed class AccountSecurityIntegrationTests
         context.EducationalProgramElementFiles.Add(file);
         await context.SaveChangesAsync();
         return file.Id;
+    }
+
+    private static async Task SeedRiskEventsAsync(
+        CustomWebApplicationFactory factory,
+        int userId,
+        params (string Severity, string Status, int OccurrenceCount)[] events)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var now = DateTime.UtcNow;
+        foreach (var item in events)
+        {
+            context.SecurityEventLogs.Add(new SecurityEventLog
+            {
+                FirstOccurredAtUtc = now,
+                LastOccurredAtUtc = now,
+                EventType = "RiskResetTest",
+                Severity = item.Severity,
+                Status = item.Status,
+                Title = "Account risk reset test",
+                UserId = userId,
+                IpAddress = "127.0.0.1",
+                OccurrenceCount = item.OccurrenceCount
+            });
+        }
+
+        await context.SaveChangesAsync();
     }
 
     private static async Task SetBlockedAsync(CustomWebApplicationFactory factory, int userId)

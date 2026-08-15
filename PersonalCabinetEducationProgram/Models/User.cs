@@ -32,6 +32,9 @@ namespace PersonalCabinetEducationProgram.Models
         [MaxLength(500)]
         public string? SecurityBlockReason { get; set; }
 
+        [Column("account_risk_reset_at_utc")]
+        public DateTime? AccountRiskResetAtUtc { get; set; }
+
         [NotMapped]
         public string Username
         {
