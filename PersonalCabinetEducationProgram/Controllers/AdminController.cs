@@ -1226,7 +1226,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             if (filePath == null)
                 return NotFound();
 
-            Response.Headers.Append("Content-Disposition", $"inline; filename=\"{element.FileName ?? "preview"}\"");
+            FileContentDisposition.SetInline(Response, element.FileName ?? "preview");
             return PhysicalFile(filePath, GetContentType(element.FileName));
         }
 

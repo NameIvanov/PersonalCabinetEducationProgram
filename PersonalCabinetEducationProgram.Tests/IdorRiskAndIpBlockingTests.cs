@@ -118,6 +118,75 @@ public sealed class IdorRiskAndIpBlockingTests
     }
 
     [Fact]
+    public async Task ServerError_IsPersistedButExcludedFromAccountRisk_WhileAccessDeniedStillCounts()
+    {
+        using var factory = new CustomWebApplicationFactory();
+        _ = factory.Services;
+        const string ipAddress = "198.51.100.92";
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        context.SecurityEventLogs.Add(new SecurityEventLog
+        {
+            FirstOccurredAtUtc = DateTime.UtcNow,
+            LastOccurredAtUtc = DateTime.UtcNow,
+            EventType = SecurityEventTypes.ServerError,
+            Severity = SecurityEventSeverities.Critical,
+            Status = SecurityEventStatuses.New,
+            Title = "Ошибка приложения",
+            UserId = 1,
+            IpAddress = ipAddress,
+            OccurrenceCount = 3
+        });
+        context.SecurityEventLogs.Add(new SecurityEventLog
+        {
+            FirstOccurredAtUtc = DateTime.UtcNow,
+            LastOccurredAtUtc = DateTime.UtcNow,
+            EventType = SecurityEventTypes.AccessDenied,
+            Severity = SecurityEventSeverities.High,
+            Status = SecurityEventStatuses.New,
+            Title = "Отказ в доступе",
+            UserId = 1,
+            IpAddress = ipAddress
+        });
+        await context.SaveChangesAsync();
+
+        var score = await scope.ServiceProvider.GetRequiredService<AccountSecurityService>()
+            .EvaluateAccumulatedRiskAsync(1);
+
+        Assert.Equal(1, score);
+        Assert.True(await context.SecurityEventLogs.AnyAsync(item =>
+            item.EventType == SecurityEventTypes.ServerError && item.UserId == 1));
+        context.ChangeTracker.Clear();
+        Assert.Null((await context.Users.SingleAsync(item => item.Id == 1)).SecurityBlockedAtUtc);
+    }
+
+    [Fact]
+    public async Task ServerError_IsExcludedFromAccumulatedIpRisk_WhileCriticalIdorStillCounts()
+    {
+        using var factory = new CustomWebApplicationFactory();
+        _ = factory.Services;
+        const string ipAddress = "198.51.100.93";
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        AddIpRiskEvent(context, ipAddress, userId: 1, SecurityEventSeverities.Critical,
+            occurrenceCount: 3, eventType: SecurityEventTypes.ServerError);
+        AddIpRiskEvent(context, ipAddress, userId: 2, SecurityEventSeverities.Critical,
+            occurrenceCount: 1, eventType: SecurityEventTypes.IdorAttempt);
+        await context.SaveChangesAsync();
+
+        var score = await scope.ServiceProvider.GetRequiredService<IpAddressSecurityService>()
+            .EvaluateAccumulatedAccountRiskAsync(ipAddress);
+
+        Assert.Equal(2, score);
+        context.ChangeTracker.Clear();
+        var state = await context.IpAddressSecurityStates.SingleAsync(item => item.IpAddress == ipAddress);
+        Assert.Equal(2, state.AccountRiskScore);
+        Assert.False(state.IsBlocked);
+    }
+
+    [Fact]
     public async Task AnonymousProbeEscalation_IsThirtyMinutes_ThenDay_ThenPermanent()
     {
         using var factory = new CustomWebApplicationFactory();
@@ -442,14 +511,15 @@ public sealed class IdorRiskAndIpBlockingTests
         int userId,
         string severity,
         int occurrenceCount,
-        DateTime? occurredAtUtc = null)
+        DateTime? occurredAtUtc = null,
+        string eventType = "IpRiskTest")
     {
         var occurredAt = occurredAtUtc ?? DateTime.UtcNow;
         context.SecurityEventLogs.Add(new SecurityEventLog
         {
             FirstOccurredAtUtc = occurredAt,
             LastOccurredAtUtc = occurredAt,
-            EventType = "IpRiskTest",
+            EventType = eventType,
             Severity = severity,
             Status = SecurityEventStatuses.New,
             Title = "Проверка суммарного риска IP",

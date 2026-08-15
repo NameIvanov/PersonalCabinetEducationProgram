@@ -52,6 +52,8 @@ builder.Services.AddRateLimiter(AppRateLimiterConfiguration.Configure);
 builder.Services.AddHttpContextAccessor();
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(connectionString) && builder.Environment.IsEnvironment("Testing"))
+    connectionString = "Server=localhost;Database=integration_test;User Id=test;Password=test;";
 if (string.IsNullOrWhiteSpace(connectionString))
     throw new InvalidOperationException("Connection string 'DefaultConnection' is not configured.");
 

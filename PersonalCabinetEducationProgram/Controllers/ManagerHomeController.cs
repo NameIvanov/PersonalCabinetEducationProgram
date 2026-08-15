@@ -208,7 +208,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             var safePath = StoredFilePath.Resolve(_storageSettings.StoragePath, element.FilePath);
             if (safePath == null)
                 return NotFound();
-            Response.Headers.Append("Content-Disposition", $"inline; filename=\"{element.FileName ?? "preview.pdf"}\"");
+            FileContentDisposition.SetInline(Response, element.FileName ?? "preview.pdf");
             return PhysicalFile(safePath, GetContentType(element.FileName));
         }
 

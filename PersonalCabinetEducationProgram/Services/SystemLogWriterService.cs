@@ -187,6 +187,7 @@ namespace PersonalCabinetEducationProgram.Services
         private static bool CountsTowardsAccountRisk(SecurityEventLog item) =>
             item.UserId.HasValue &&
             item.Status != SecurityEventStatuses.FalsePositive &&
+            item.EventType != SecurityEventTypes.ServerError &&
             item.EventType != SecurityEventTypes.AccountAutomaticallyBlocked &&
             item.EventType != SecurityEventTypes.AccountRiskThresholdReached &&
             item.EventType != SecurityEventTypes.IpAutomaticallyBlocked &&
@@ -196,6 +197,7 @@ namespace PersonalCabinetEducationProgram.Services
         private static bool CountsTowardsIpRisk(SecurityEventLog item) =>
             item.UserId.HasValue &&
             item.Status != SecurityEventStatuses.FalsePositive &&
+            item.EventType != SecurityEventTypes.ServerError &&
             item.EventType != SecurityEventTypes.AccountAutomaticallyBlocked &&
             item.EventType != SecurityEventTypes.AccountRiskThresholdReached &&
             item.EventType != SecurityEventTypes.IpAutomaticallyBlocked &&

@@ -60,7 +60,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             if (download)
                 return PhysicalFile(fullPath, contentType, file.OriginalFileName);
 
-            Response.Headers.Append("Content-Disposition", $"inline; filename=\"{file.OriginalFileName}\"");
+            FileContentDisposition.SetInline(Response, file.OriginalFileName);
             return PhysicalFile(fullPath, contentType);
         }
     }

@@ -32,7 +32,7 @@ namespace PersonalCabinetEducationProgram.Controllers
             if (result == null)
                 return NotFound();
 
-            Response.Headers.Append("Content-Disposition", $"inline; filename=\"{result.Value.FileName}\"");
+            FileContentDisposition.SetInline(Response, result.Value.FileName);
             return PhysicalFile(result.Value.FullPath, GetContentType(result.Value.FileName));
         }
 

@@ -324,6 +324,7 @@ namespace PersonalCabinetEducationProgram.Services
                     .Where(item => item.UserId == userId &&
                                    item.LastOccurredAtUtc >= windowStart &&
                                    item.Status != SecurityEventStatuses.FalsePositive &&
+                                   item.EventType != SecurityEventTypes.ServerError &&
                                    item.EventType != SecurityEventTypes.AccountAutomaticallyBlocked &&
                                    item.EventType != SecurityEventTypes.AccountRiskThresholdReached &&
                                    item.EventType != SecurityEventTypes.IpAutomaticallyBlocked &&

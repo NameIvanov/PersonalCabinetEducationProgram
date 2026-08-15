@@ -194,6 +194,7 @@ namespace PersonalCabinetEducationProgram.Services
                 return;
 
             var now = DateTime.UtcNow;
+            var isServerError = eventType == SecurityEventTypes.ServerError;
             _queue.TryQueue(new SecurityEventLog
             {
                 FirstOccurredAtUtc = now,
@@ -202,9 +203,9 @@ namespace PersonalCabinetEducationProgram.Services
                 Severity = severity,
                 Title = title,
                 Description = LimitNullable(description, 2000),
-                UserId = request.UserId,
-                UserLogin = request.UserLogin,
-                UserFullName = request.UserFullName,
+                UserId = isServerError ? null : request.UserId,
+                UserLogin = isServerError ? null : request.UserLogin,
+                UserFullName = isServerError ? null : request.UserFullName,
                 IpAddress = IpAddressNormalizer.NormalizeOrUnknown(request.IpAddress),
                 HttpMethod = request.HttpMethod,
                 Path = request.Path,

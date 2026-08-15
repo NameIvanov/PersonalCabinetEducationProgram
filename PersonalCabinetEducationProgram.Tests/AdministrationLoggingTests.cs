@@ -117,6 +117,9 @@ public sealed class AdministrationLoggingTests
         Assert.Equal(nameof(InvalidOperationException), request.ErrorType);
         Assert.True(queue.SecurityEvents.TryRead(out var securityEvent));
         Assert.Equal(SecurityEventTypes.ServerError, securityEvent!.EventType);
+        Assert.Null(securityEvent.UserId);
+        Assert.Null(securityEvent.UserLogin);
+        Assert.Null(securityEvent.UserFullName);
     }
 
     [Fact]
