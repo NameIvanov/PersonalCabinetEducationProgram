@@ -52,6 +52,7 @@ namespace PersonalCabinetEducationProgram.Services
         public const string FileRemove = nameof(FileRemove);
         public const string NotificationMutation = nameof(NotificationMutation);
         public const string PreferenceMutation = nameof(PreferenceMutation);
+        public const string AiAssistant = nameof(AiAssistant);
 
         public static IReadOnlyDictionary<string, AppRateLimitRule> Rules { get; } =
             new Dictionary<string, AppRateLimitRule>(StringComparer.Ordinal)
@@ -83,7 +84,9 @@ namespace PersonalCabinetEducationProgram.Services
                 [ElementEdit] = new(20, TimeSpan.FromMinutes(1), RateLimitPartitionKind.User),
                 [FileRemove] = new(10, TimeSpan.FromMinutes(1), RateLimitPartitionKind.User),
                 [NotificationMutation] = new(10, TimeSpan.FromMinutes(1), RateLimitPartitionKind.User),
-                [PreferenceMutation] = new(10, TimeSpan.FromMinutes(1), RateLimitPartitionKind.User)
+                [PreferenceMutation] = new(10, TimeSpan.FromMinutes(1), RateLimitPartitionKind.User),
+                [AiAssistant] = new(6, TimeSpan.FromMinutes(1), RateLimitPartitionKind.User,
+                    30, TimeSpan.FromHours(1), 1)
             };
     }
 

@@ -1,0 +1,92 @@
+@using PersonalCabinetEducationProgram.Services
+@inject Microsoft.Extensions.Options.IOptions<AiOptions> AiConfiguration
+@{
+    var ai = AiConfiguration.Value;
+    var isConfigured = ai.Provider.Equals("Groq", StringComparison.OrdinalIgnoreCase) &&
+        !string.IsNullOrWhiteSpace(ai.ApiKey) && !string.IsNullOrWhiteSpace(ai.Model) &&
+        Uri.TryCreate(ai.BaseUrl, UriKind.Absolute, out _);
+}
+
+<section id="assistantWindow" class="ai-assistant-window card shadow-lg d-none" aria-label="Окно ИИ-помощника">
+    <header id="assistantDragHandle" class="ai-assistant-titlebar card-header d-flex align-items-center justify-content-between gap-2">
+        <div><strong>ИИ-помощник</strong><span class="badge ms-2 @(isConfigured ? "text-bg-success" : "text-bg-secondary")">@(isConfigured ? "Настроен" : "Не настроен")</span></div>
+        <button id="clearHistory" type="button" class="btn btn-sm btn-outline-secondary">Очистить историю</button>
+    </header>
+    <div class="card-body d-flex flex-column gap-3">
+        <div class="alert alert-info py-2 mb-0 small" role="note">В облачную модель передаётся только ограниченная обезличенная сводка. Полные журналы, персональные данные, пароли, токены, query string и stack trace не передаются.</div>
+        @if (!isConfigured)
+        {
+            <div class="alert alert-warning py-2 mb-0" role="alert">ИИ-помощник пока не настроен. Добавьте параметры <code>Ai</code> в User Secrets; ключ здесь не вводится.</div>
+        }
+        <div>
+            <div class="small fw-semibold mb-2">Быстрые вопросы</div>
+            <div class="d-flex flex-wrap gap-1" id="quickQuestions">
+                @foreach (var question in new[] { "Что произошло за последние сутки?", "Есть ли критические ошибки приложения?", "Какие IP требуют внимания?", "Есть ли новые блокировки аккаунтов или IP?", "Объясни последние события безопасности" })
+                {
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-question="@question">@question</button>
+                }
+            </div>
+        </div>
+        <div id="chatHistory" class="ai-assistant-history" aria-live="polite"></div>
+        <form id="assistantForm" novalidate>
+            @Html.AntiForgeryToken()
+            <label for="question" class="form-label small fw-semibold">Ваш вопрос</label>
+            <textarea id="question" class="form-control" rows="3" maxlength="@ai.MaxQuestionLength" placeholder="Например: что требует проверки в первую очередь?"></textarea>
+            <div class="form-text">Не вставляйте пароли, ключи, персональные данные или полные журналы.</div>
+            <div class="d-flex align-items-center gap-2 mt-2"><button id="sendQuestion" type="submit" class="btn btn-primary btn-sm" @(isConfigured ? null : "disabled")>Отправить</button><span id="processing" class="text-muted small d-none"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span> Анализируем…</span></div>
+        </form>
+    </div>
+</section>
+
+<style>
+    .admin-header-nav .admin-ai-toggle { display:flex; align-items:center; height:32px; padding:0 12px; border:0; border-radius:6px; color:var(--muted); background:transparent; font-size:11px; white-space:nowrap; }
+    .admin-header-nav .admin-ai-toggle:hover, .admin-header-nav .admin-ai-toggle.active { background:var(--active); color:var(--accent-strong); }
+    .ai-assistant-window { position:fixed; z-index:1050; width:min(560px, calc(100vw - 24px)); max-height:calc(100vh - 24px); right:24px; bottom:24px; }
+    .ai-assistant-titlebar { cursor:grab; user-select:none; touch-action:none; }
+    .ai-assistant-titlebar:active { cursor:grabbing; }
+    .ai-assistant-history { overflow-y:auto; max-height:min(42vh, 390px); min-height:100px; }
+    .ai-assistant-message { white-space:pre-wrap; overflow-wrap:anywhere; }
+    @@media (max-width: 576px) { .ai-assistant-window { right:12px; bottom:12px; } }
+</style>
+<script>
+(() => {
+    const panel = document.getElementById('assistantWindow'), toggle = document.getElementById('assistantToggle'), form = document.getElementById('assistantForm');
+    const question = document.getElementById('question'), history = document.getElementById('chatHistory'), processing = document.getElementById('processing'), send = document.getElementById('sendQuestion');
+    const handle = document.getElementById('assistantDragHandle'), clear = document.getElementById('clearHistory');
+    const token = form.querySelector('input[name="__RequestVerificationToken"]').value, isConfigured = @isConfigured.ToString().ToLowerInvariant();
+    const historyKey = 'admin-ai-assistant.history.v1', positionKey = 'admin-ai-assistant.position.v1', openKey = 'admin-ai-assistant.open.v1', maxMessages = 20;
+    const load = (key, fallback) => { try { return JSON.parse(sessionStorage.getItem(key)) ?? fallback; } catch { return fallback; } };
+    const setOpen = open => { panel.classList.toggle('d-none', !open); toggle.classList.toggle('active', open); toggle.setAttribute('aria-expanded', String(open)); sessionStorage.setItem(openKey, JSON.stringify(open)); };
+    const savedMessages = load(historyKey, []);
+    const render = (message, persist = true) => {
+        const item = document.createElement('div'); item.className = `ai-assistant-message border rounded p-2 mb-2 ${message.style}`;
+        const title = document.createElement('strong'); title.textContent = message.role;
+        const body = document.createElement('div'); body.className = 'mt-1 small'; body.textContent = message.text;
+        item.append(title, body); history.append(item);
+        if (persist) { const messages = Array.isArray(load(historyKey, [])) ? load(historyKey, []) : []; messages.push(message); sessionStorage.setItem(historyKey, JSON.stringify(messages.slice(-maxMessages))); }
+    };
+    if (Array.isArray(savedMessages)) savedMessages.forEach(message => render(message, false));
+    if (history.children.length) history.scrollTop = history.scrollHeight;
+    setOpen(load(openKey, false) === true);
+    toggle.addEventListener('click', () => setOpen(panel.classList.contains('d-none')));
+    clear.addEventListener('click', () => { sessionStorage.removeItem(historyKey); history.replaceChildren(); });
+    document.querySelectorAll('[data-question]').forEach(button => button.addEventListener('click', () => { question.value = button.dataset.question; question.focus(); }));
+    form.addEventListener('submit', async event => {
+        event.preventDefault(); const text = question.value.trim(); if (!text) return;
+        render({ role:'Вы', text, style:'bg-light' }); history.scrollTop = history.scrollHeight; question.value = ''; send.disabled = true; processing.classList.remove('d-none');
+        try {
+            const response = await fetch('@Url.Action("Ask", "AdminAiAssistant")', { method:'POST', headers:{ 'Content-Type':'application/json', 'RequestVerificationToken':token }, credentials:'same-origin', body:JSON.stringify({ question:text, currentPage:window.location.pathname }) });
+            const result = await response.json(); render({ role:'ИИ-помощник', text:result.message || 'Не удалось получить ответ.', style:result.succeeded ? 'bg-white' : 'bg-warning-subtle' });
+        } catch { render({ role:'ИИ-помощник', text:'Не удалось отправить запрос. Проверьте подключение и повторите попытку.', style:'bg-warning-subtle' }); }
+        finally { history.scrollTop = history.scrollHeight; processing.classList.add('d-none'); send.disabled = !isConfigured; }
+    });
+    const place = ({ left, top }) => { const maxLeft = Math.max(0, window.innerWidth - panel.offsetWidth), maxTop = Math.max(0, window.innerHeight - panel.offsetHeight); panel.style.left = `${Math.min(Math.max(0, left), maxLeft)}px`; panel.style.top = `${Math.min(Math.max(0, top), maxTop)}px`; panel.style.right = 'auto'; panel.style.bottom = 'auto'; };
+    const savedPosition = load(positionKey, null); if (savedPosition && Number.isFinite(savedPosition.left) && Number.isFinite(savedPosition.top)) place(savedPosition);
+    let drag = null;
+    handle.addEventListener('pointerdown', event => { if (event.target.closest('button')) return; const rect = panel.getBoundingClientRect(); drag = { x:event.clientX - rect.left, y:event.clientY - rect.top }; handle.setPointerCapture(event.pointerId); });
+    handle.addEventListener('pointermove', event => { if (drag) place({ left:event.clientX - drag.x, top:event.clientY - drag.y }); });
+    const finishDrag = () => { if (!drag) return; drag = null; const rect = panel.getBoundingClientRect(); sessionStorage.setItem(positionKey, JSON.stringify({ left:Math.round(rect.left), top:Math.round(rect.top) })); };
+    handle.addEventListener('pointerup', finishDrag); handle.addEventListener('pointercancel', finishDrag);
+    window.addEventListener('resize', () => { const rect = panel.getBoundingClientRect(); place({ left:rect.left, top:rect.top }); });
+})();
+</script>

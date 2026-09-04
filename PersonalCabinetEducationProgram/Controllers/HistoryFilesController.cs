@@ -64,18 +64,15 @@ namespace PersonalCabinetEducationProgram.Controllers
             if (fullPath == null)
                 return null;
 
-            return (fullPath, history.FileName ?? Path.GetFileName(history.FilePath));
+            var fileName = history.FileName ?? Path.GetFileName(history.FilePath);
+            return SupportedDocumentFormats.IsSupported(fileName)
+                ? (fullPath, fileName)
+                : null;
         }
 
         private static string GetContentType(string fileName)
         {
-            return Path.GetExtension(fileName).ToLowerInvariant() switch
-            {
-                ".pdf" => "application/pdf",
-                ".doc" => "application/msword",
-                ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                _ => "application/octet-stream"
-            };
+            return SupportedDocumentFormats.PdfContentType;
         }
     }
 }

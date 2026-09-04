@@ -186,6 +186,9 @@ namespace PersonalCabinetEducationProgram.Controllers
             if (element == null || string.IsNullOrEmpty(element.FilePath))
                 return NotFound();
 
+            if (!SupportedDocumentFormats.IsSupported(element.FileName))
+                return NotFound();
+
             var safePath = StoredFilePath.Resolve(_storageSettings.StoragePath, element.FilePath);
             if (safePath == null)
                 return NotFound();
@@ -203,6 +206,9 @@ namespace PersonalCabinetEducationProgram.Controllers
                 .FirstOrDefaultAsync(e => e.Id == elementId);
 
             if (element == null || string.IsNullOrEmpty(element.FilePath))
+                return NotFound();
+
+            if (!SupportedDocumentFormats.IsSupported(element.FileName))
                 return NotFound();
 
             var safePath = StoredFilePath.Resolve(_storageSettings.StoragePath, element.FilePath);
@@ -501,12 +507,7 @@ namespace PersonalCabinetEducationProgram.Controllers
 
         private static string GetContentType(string? fileName)
         {
-            return Path.GetExtension(fileName ?? string.Empty).ToLowerInvariant() switch
-            {
-                ".doc" => "application/msword",
-                ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                _ => "application/pdf"
-            };
+            return SupportedDocumentFormats.PdfContentType;
         }
 
         private IActionResult RedirectAfterUpload(int elementId, int programId, bool returnToFiles) =>

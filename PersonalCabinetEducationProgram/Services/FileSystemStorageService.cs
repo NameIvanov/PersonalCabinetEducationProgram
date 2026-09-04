@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using PersonalCabinetEducationProgram.Models;
-using System.IO.Compression;
 
 namespace PersonalCabinetEducationProgram.Services
 {
@@ -9,9 +8,7 @@ namespace PersonalCabinetEducationProgram.Services
     {
         private static readonly HashSet<string> AllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
         {
-            ".pdf",
-            ".doc",
-            ".docx"
+            ".pdf"
         };
 
         private readonly FileStorageSettings _settings;
@@ -116,7 +113,7 @@ namespace PersonalCabinetEducationProgram.Services
                     file,
                     $"Недопустимое расширение {extension}.",
                     countsTowardsBlock: true);
-                throw new InvalidOperationException("Можно загружать только PDF, DOC и DOCX файлы.");
+                throw new InvalidOperationException("Можно загружать только PDF-файлы.");
             }
 
             await using var stream = file.OpenReadStream();
@@ -124,13 +121,7 @@ namespace PersonalCabinetEducationProgram.Services
             var bytesRead = await stream.ReadAsync(header);
             stream.Position = 0;
 
-            var isValid = extension.ToLowerInvariant() switch
-            {
-                ".pdf" => bytesRead >= 5 && header.AsSpan(0, 5).SequenceEqual("%PDF-"u8),
-                ".doc" => bytesRead == 8 && header.SequenceEqual(new byte[] { 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1 }),
-                ".docx" => IsWordDocument(stream),
-                _ => false
-            };
+            var isValid = bytesRead >= 5 && header.AsSpan(0, 5).SequenceEqual("%PDF-"u8);
 
             if (!isValid)
             {
@@ -164,18 +155,5 @@ namespace PersonalCabinetEducationProgram.Services
                 $"Файл: {Path.GetFileName(file?.FileName ?? "не указан")}; размер: {file?.Length ?? 0} байт; причина: {reason}");
         }
 
-        private static bool IsWordDocument(Stream stream)
-        {
-            try
-            {
-                using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
-                return archive.GetEntry("[Content_Types].xml") != null &&
-                       archive.Entries.Any(e => e.FullName.StartsWith("word/", StringComparison.OrdinalIgnoreCase));
-            }
-            catch (InvalidDataException)
-            {
-                return false;
-            }
-        }
     }
 }

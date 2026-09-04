@@ -50,6 +50,20 @@ public class FileSystemStorageServiceTests
         Assert.Contains("не соответствует", exception.Message);
     }
 
+    [Theory]
+    [InlineData("document.doc")]
+    [InlineData("document.docx")]
+    public async Task ValidateFileAsync_RejectsWordDocuments(string fileName)
+    {
+        var service = CreateService();
+        var bytes = "%PDF-1.7\n%%EOF"u8.ToArray();
+        var file = new FormFile(new MemoryStream(bytes), 0, bytes.Length, "file", fileName);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.ValidateFileAsync(file));
+
+        Assert.Contains("только PDF", exception.Message);
+    }
+
     private static FileSystemStorageService CreateService()
     {
         return new FileSystemStorageService(Options.Create(new FileStorageSettings

@@ -58,6 +58,7 @@
                 <a class="@ActiveLink("Admin", "Users")" asp-controller="Admin" asp-action="Users">Пользователи</a>
                 <a class="@ActiveLink("Admin", "Assignments")" asp-controller="Admin" asp-action="Assignments">Назначения</a>
                 <a class="@ActiveLink("Administration")" asp-controller="Administration" asp-action="Logs">Администрирование</a>
+                <button id="assistantToggle" type="button" class="admin-ai-toggle" aria-controls="assistantWindow" aria-expanded="false">ИИ-помощник</button>
             </nav>
         }
 
@@ -123,6 +124,11 @@
             @RenderBody()
         </main>
     </div>
+
+    @if (isAuthenticated && User.IsInRole("Admin"))
+    {
+        <partial name="_AdminAiAssistantWidget" />
+    }
 
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc.Testing;
 using PersonalCabinetEducationProgram.Models;
 
@@ -19,6 +20,17 @@ public sealed class WebApplicationIntegrationTests : IClassFixture<CustomWebAppl
         using var client = CreateClient();
         var response = await client.GetAsync("/ManagerHome/Index?programId=1");
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task LoginForm_PostsToAccountLoginEndpoint()
+    {
+        using var client = CreateClient();
+
+        var page = await client.GetStringAsync("/Account/Login");
+
+        var action = Regex.Match(page, "<form[^>]*action=\"([^\"]*)\"", RegexOptions.IgnoreCase).Groups[1].Value;
+        Assert.Equal("/Account/Login", action);
     }
 
     [Fact]

@@ -45,17 +45,14 @@ namespace PersonalCabinetEducationProgram.Controllers
             if (!await _accessService.CanViewElementAsync(User, file.EducationalProgramElementId))
                 return Forbid();
 
+            if (!SupportedDocumentFormats.IsSupported(file.OriginalFileName))
+                return NotFound();
+
             var fullPath = StoredFilePath.Resolve(_settings.StoragePath, file.StoredFileName);
             if (fullPath == null)
                 return NotFound();
 
-            var contentType = Path.GetExtension(file.OriginalFileName).ToLowerInvariant() switch
-            {
-                ".pdf" => "application/pdf",
-                ".doc" => "application/msword",
-                ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                _ => "application/octet-stream"
-            };
+            const string contentType = SupportedDocumentFormats.PdfContentType;
 
             if (download)
                 return PhysicalFile(fullPath, contentType, file.OriginalFileName);

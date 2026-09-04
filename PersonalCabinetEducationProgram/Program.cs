@@ -112,8 +112,17 @@ builder.Services.Configure<SecurityStampValidatorOptions>(options =>
 builder.Services.AddScoped<IUserClaimsPrincipalFactory<User>, ApplicationClaimsPrincipalFactory>();
 builder.Services.Configure<FileStorageSettings>(builder.Configuration.GetSection("FileStorageSettings"));
 builder.Services.Configure<SecurityMonitoringOptions>(builder.Configuration.GetSection(SecurityMonitoringOptions.SectionName));
+builder.Services.Configure<AiOptions>(builder.Configuration.GetSection(AiOptions.SectionName));
 builder.Services.AddMemoryCache();
 builder.Services.AddHttpClient<IIpGeolocationService, IpGeolocationService>();
+builder.Services.AddHttpClient("GroqAi", (services, client) =>
+{
+    var options = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<AiOptions>>().Value;
+    client.BaseAddress = Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var baseUri)
+        ? baseUri
+        : new Uri("https://api.groq.com/openai/v1/");
+    client.Timeout = TimeSpan.FromSeconds(Math.Clamp(options.RequestTimeoutSeconds, 5, 60));
+});
 builder.Services.AddScoped<IFileStorageService, FileSystemStorageService>();
 builder.Services.AddScoped<ElementWorkflowService>();
 builder.Services.AddScoped<NotificationService>();
@@ -125,6 +134,8 @@ builder.Services.AddScoped<ElementListQueryService>();
 builder.Services.AddScoped<ElementFilterService>();
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<SecurityEventService>();
+builder.Services.AddScoped<AdminAiContextService>();
+builder.Services.AddScoped<IAiAssistantService, GroqAiAssistantService>();
 builder.Services.AddScoped<AccountSecurityService>();
 builder.Services.AddScoped<LoginSecurityService>();
 builder.Services.AddSingleton<IIpNetworkService, IpNetworkService>();

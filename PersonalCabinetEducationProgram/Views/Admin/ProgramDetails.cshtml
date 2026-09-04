@@ -161,7 +161,7 @@
                                             <form method="post" enctype="multipart/form-data" asp-action="UploadElement" class="d-inline">
                                                 <input type="hidden" name="elementId" value="@element.Id" />
                                                 <label class="btn btn-outline-primary btn-sm mb-0" title="Прикрепить файлы">
-                                                    Прикрепить <input type="file" name="files" multiple accept=".pdf,.doc,.docx" data-max-size="52428800" data-max-total-size="209715200" title="До 20 файлов, каждый до 50 МБ, группа до 200 МБ" style="display:none;" onchange="if (window.validateUploadFile(this)) this.form.submit()" />
+                                                    Прикрепить <input type="file" name="files" multiple accept=".pdf" data-max-size="52428800" data-max-total-size="209715200" title="До 20 PDF-файлов, каждый до 50 МБ, группа до 200 МБ" style="display:none;" onchange="if (window.validateUploadFile(this)) this.form.submit()" />
                                                 </label>
                                             </form>
                                         }
