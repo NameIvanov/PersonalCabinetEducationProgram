@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using PersonalCabinetEducationProgram.Data;
 using PersonalCabinetEducationProgram.Models;
+using PersonalCabinetEducationProgram.ViewModels;
 
 namespace PersonalCabinetEducationProgram.Services;
 
@@ -13,8 +14,163 @@ public sealed partial class AdminAiContextService
     private const int MaxRequestGroups = 20;
     private const int MaxBlockedIps = 20;
     private readonly ApplicationDbContext _context;
+    private readonly AiAssistantMetrics _metrics;
 
-    public AdminAiContextService(ApplicationDbContext context) => _context = context;
+    public AdminAiContextService(ApplicationDbContext context, AiAssistantMetrics? metrics = null)
+    {
+        _context = context;
+        _metrics = metrics ?? new AiAssistantMetrics();
+    }
+
+    public static string NormalizePeriod(string? period) => period?.Trim().ToLowerInvariant() switch
+    {
+        "today" => "today",
+        "24h" => "24h",
+        "week" => "week",
+        "month" => "month",
+        _ => "today"
+    };
+
+    public async Task<AdminAiDashboardViewModel> GetDashboardAsync(
+        string pageArea,
+        int? adminUserId,
+        int? selectedProgramId,
+        string? period,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedPeriod = NormalizePeriod(period);
+        var since = normalizedPeriod switch
+        {
+            "today" => DateTime.UtcNow.Date,
+            "week" => DateTime.UtcNow.AddDays(-7),
+            "month" => DateTime.UtcNow.AddDays(-30),
+            "24h" => DateTime.UtcNow.AddHours(-24),
+            _ => DateTime.UtcNow.Date
+        };
+        var elementQuery = _context.EducationalProgramElements.AsNoTracking()
+            .Where(item => !item.IsArchived && (selectedProgramId == null || item.EducationalProgramId == selectedProgramId));
+        var statuses = await elementQuery.Select(item => item.StatusApprovals).ToListAsync(cancellationToken);
+        var normalized = statuses.Select(ElementApprovalStatus.Normalize).ToList();
+        var activePrograms = await _context.EducationalPrograms.AsNoTracking().LongCountAsync(
+            item => !item.IsArchived && (selectedProgramId == null || item.Id == selectedProgramId), cancellationToken);
+        var filesAdded = await _context.EducationalProgramElementFiles.AsNoTracking().LongCountAsync(
+            item => !item.IsRemoved && item.UploadedAt >= since && (selectedProgramId == null || item.Element.EducationalProgramId == selectedProgramId), cancellationToken);
+        var changes = await _context.ElementStatusHistory.AsNoTracking()
+            .Where(item => item.ChangeDate >= since && (selectedProgramId == null || item.Element.EducationalProgramId == selectedProgramId))
+            .Select(item => new { item.OldStatus, item.NewStatus })
+            .ToListAsync(cancellationToken);
+        var unread = adminUserId.HasValue
+            ? await _context.Notifications.AsNoTracking().LongCountAsync(item => item.UserId == adminUserId && !item.IsRead, cancellationToken)
+            : 0;
+        var newNotifications = adminUserId.HasValue
+            ? await _context.Notifications.AsNoTracking().LongCountAsync(item => item.UserId == adminUserId && item.CreatedAt >= since, cancellationToken)
+            : 0;
+        var isAdministration = pageArea == "раздел администрирования и журналов";
+        var isFacultiesOrDepartments = pageArea is "раздел факультетов" or "раздел кафедр";
+        var isChangeDrivenSection = pageArea is "раздел ОПОП" or "раздел пользователей" or "раздел назначений";
+        var sectionAuditQuery = _context.AuditLogs.AsNoTracking().Where(item => item.CreatedAt >= since);
+        // The summary reflects user-visible changes made through the corresponding
+        // section. Background security automation is reported only in Administration.
+        var sectionChanges = pageArea switch
+        {
+            "раздел ОПОП" => await sectionAuditQuery.LongCountAsync(item =>
+                item.EntityType == "EducationalProgram" &&
+                (item.Action == "Created" || item.Action == "Edited" || item.Action == "Archived" || item.Action == "Restored"), cancellationToken),
+            "раздел пользователей" => await sectionAuditQuery.LongCountAsync(item =>
+                item.EntityType == "User" &&
+                (item.Action == "Created" || item.Action == "Edited" || item.Action == "Deleted" ||
+                 item.Action == "ApprovalStatusChanged" || item.Action == "PasswordReset" ||
+                 item.Action == "SecurityUnlocked"), cancellationToken),
+            "раздел назначений" => await sectionAuditQuery.LongCountAsync(item =>
+                item.EntityType == "EducationalProgram" &&
+                (item.Action == "AssignmentsChanged" || item.Action == "ManagerAssigned"), cancellationToken),
+            _ => 0
+        };
+        var administrationRequests = 0L;
+        var administrationClientErrors = 0L;
+        var administrationServerErrors = 0L;
+        var administrationSecurityEvents = 0L;
+        var administrationOpenSecurityEvents = 0L;
+        var administrationActiveIpBlocks = 0L;
+        var administrationBlockedAccounts = 0L;
+        var administrationAuditActions = 0L;
+        if (isAdministration)
+        {
+            var requestQuery = _context.SystemRequestLogs.AsNoTracking().Where(item =>
+                item.OccurredAtUtc >= since && item.Controller != "AdminAiAssistant");
+            administrationRequests = await requestQuery.LongCountAsync(cancellationToken);
+            administrationClientErrors = await requestQuery.LongCountAsync(item => item.StatusCode >= 400 && item.StatusCode < 500, cancellationToken);
+            administrationServerErrors = await requestQuery.LongCountAsync(item => item.StatusCode >= 500, cancellationToken);
+            administrationSecurityEvents = await _context.SecurityEventLogs.AsNoTracking()
+                .LongCountAsync(item => item.LastOccurredAtUtc >= since, cancellationToken);
+            administrationOpenSecurityEvents = await _context.SecurityEventLogs.AsNoTracking()
+                .LongCountAsync(item => item.LastOccurredAtUtc >= since &&
+                    (item.Status == SecurityEventStatuses.New || item.Status == SecurityEventStatuses.Investigating), cancellationToken);
+            administrationActiveIpBlocks = await _context.IpAddressSecurityStates.AsNoTracking()
+                .LongCountAsync(item => item.IsPermanentlyBlocked || item.BlockedUntilUtc > DateTime.UtcNow, cancellationToken);
+            administrationBlockedAccounts = await _context.Users.AsNoTracking()
+                .LongCountAsync(item => item.SecurityBlockedAtUtc != null || item.LockoutEnd > DateTime.UtcNow, cancellationToken);
+            administrationAuditActions = await sectionAuditQuery.LongCountAsync(cancellationToken);
+        }
+        var priorities = new List<string>();
+        if (isAdministration)
+        {
+            if (administrationServerErrors > 0) priorities.Add($"Ошибки сервера за период: {administrationServerErrors}.");
+            if (administrationOpenSecurityEvents > 0) priorities.Add($"Открытые события безопасности: {administrationOpenSecurityEvents}.");
+            if (administrationActiveIpBlocks > 0) priorities.Add($"Активные блокировки IP: {administrationActiveIpBlocks}.");
+            if (administrationBlockedAccounts > 0) priorities.Add($"Заблокированные учётные записи: {administrationBlockedAccounts}.");
+        }
+        else if (isChangeDrivenSection)
+        {
+            if (sectionChanges > 0) priorities.Add($"Изменений в разделе за период: {sectionChanges}.");
+        }
+        else if (!isFacultiesOrDepartments)
+        {
+            if (normalized.Count(status => status == ElementApprovalStatus.RevisionRequired) > 0)
+                priorities.Add($"На доработке: {normalized.Count(status => status == ElementApprovalStatus.RevisionRequired)}.");
+            if (normalized.Count(status => status == ElementApprovalStatus.OnApproval) > 0)
+                priorities.Add($"Ожидают согласования: {normalized.Count(status => status == ElementApprovalStatus.OnApproval)}.");
+            if (unread > 0) priorities.Add($"Непрочитанные уведомления: {unread}.");
+        }
+        if (priorities.Count == 0 && !isFacultiesOrDepartments)
+            priorities.Add(isChangeDrivenSection
+                ? "За выбранный период изменений в этом разделе нет."
+                : "Критичных агрегированных показателей для первоочередной проверки нет.");
+
+        return new AdminAiDashboardViewModel
+        {
+            Period = normalizedPeriod,
+            PageArea = pageArea,
+            ProgramId = selectedProgramId,
+            ShowAutomaticSummary = !isFacultiesOrDepartments && (!isChangeDrivenSection || sectionChanges > 0),
+            SectionChanges = sectionChanges,
+            ActivePrograms = activePrograms,
+            Elements = normalized.Count,
+            NotUploaded = normalized.Count(status => status == ElementApprovalStatus.NotUploaded),
+            Uploaded = normalized.Count(status => status == ElementApprovalStatus.Uploaded),
+            OnApproval = normalized.Count(status => status == ElementApprovalStatus.OnApproval),
+            RevisionRequired = normalized.Count(status => status == ElementApprovalStatus.RevisionRequired),
+            Approved = normalized.Count(status => status == ElementApprovalStatus.Approved),
+            Published = normalized.Count(status => status == ElementApprovalStatus.Published),
+            FilesAdded = filesAdded,
+            WorkflowChanges = changes.Count,
+            Revisions = changes.Count(item => ElementApprovalStatus.Normalize(item.NewStatus) == ElementApprovalStatus.RevisionRequired),
+            Approvals = changes.Count(item => ElementApprovalStatus.Normalize(item.NewStatus) == ElementApprovalStatus.Approved),
+            Publications = changes.Count(item => ElementApprovalStatus.Normalize(item.NewStatus) == ElementApprovalStatus.Published),
+            UnreadNotifications = unread,
+            NewNotifications = newNotifications,
+            AdministrationRequests = administrationRequests,
+            AdministrationClientErrors = administrationClientErrors,
+            AdministrationServerErrors = administrationServerErrors,
+            AdministrationSecurityEvents = administrationSecurityEvents,
+            AdministrationOpenSecurityEvents = administrationOpenSecurityEvents,
+            AdministrationActiveIpBlocks = administrationActiveIpBlocks,
+            AdministrationBlockedAccounts = administrationBlockedAccounts,
+            AdministrationAuditActions = administrationAuditActions,
+            Priorities = priorities,
+            Metrics = _metrics.GetSnapshot()
+        };
+    }
 
     /// <summary>
     /// Converts a browser path into one of a fixed set of report areas. The client
@@ -27,6 +183,12 @@ public sealed partial class AdminAiContextService
         var value when value?.StartsWith("/moderatorhome", StringComparison.Ordinal) == true => "раздел публикации",
         var value when value?.StartsWith("/notifications", StringComparison.Ordinal) == true => "раздел уведомлений",
         var value when value?.StartsWith("/administration", StringComparison.Ordinal) == true => "раздел администрирования и журналов",
+        var value when value?.StartsWith("/admin/faculties", StringComparison.Ordinal) == true => "раздел факультетов",
+        var value when value?.StartsWith("/admin/departments", StringComparison.Ordinal) == true => "раздел кафедр",
+        var value when value?.StartsWith("/admin/users", StringComparison.Ordinal) == true => "раздел пользователей",
+        var value when value?.StartsWith("/admin/assignments", StringComparison.Ordinal) == true => "раздел назначений",
+        var value when value?.StartsWith("/admin/programs", StringComparison.Ordinal) == true ||
+                       value?.StartsWith("/admin/programdetails", StringComparison.Ordinal) == true => "раздел ОПОП",
         var value when value?.StartsWith("/admin", StringComparison.Ordinal) == true => "раздел управления ОПОП",
         _ => "текущий административный раздел"
     };
