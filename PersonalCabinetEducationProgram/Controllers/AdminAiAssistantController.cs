@@ -58,6 +58,16 @@ public sealed class AdminAiAssistantController : Controller
                 ? parsedAdminUserId
                 : (int?)null;
             var safeContext = await _contextService.BuildSummaryAsync(pageArea, adminUserId, cancellationToken);
+            var dashboard = await _contextService.GetDashboardAsync(
+                pageArea, adminUserId, request?.ProgramId, request?.Period, cancellationToken);
+            safeContext += $"\nКонтекст текущего фильтра ({dashboard.Period}): активных ОПОП — {dashboard.ActivePrograms}; " +
+                $"элементов — {dashboard.Elements}; на согласовании — {dashboard.OnApproval}; на доработке — {dashboard.RevisionRequired}; " +
+                $"согласовано — {dashboard.Approved}; опубликовано — {dashboard.Published}; файлов добавлено — {dashboard.FilesAdded}; " +
+                $"изменений обработано — {dashboard.WorkflowChanges}; непрочитанных уведомлений — {dashboard.UnreadNotifications}.";
+            if (dashboard.PageArea is "раздел ОПОП" or "раздел пользователей" or "раздел назначений")
+                safeContext += dashboard.ShowAutomaticSummary
+                    ? $" В разделе «{dashboard.PageArea}» зарегистрировано целевых изменений за выбранный период: {dashboard.SectionChanges}."
+                    : $" В разделе «{dashboard.PageArea}» целевых изменений за выбранный период не зарегистрировано.";
             var result = await _assistant.AskAsync(question, safeContext, cancellationToken);
             _logger.LogInformation("AI assistant request processed. Admin {AdminId}; success {Success}; provider {Provider}; model {Model}",
                 User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "unknown",
@@ -77,5 +87,15 @@ public sealed class AdminAiAssistantController : Controller
                 User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "unknown", _options.Provider, _options.Model);
             return Ok(new AiAssistantResult(false, true, "Помощник временно недоступен. Попробуйте позже."));
         }
+    }
+
+    [HttpGet("Dashboard")]
+    [AppRateLimit(AppRateLimitPolicies.Search)]
+    public async Task<IActionResult> Dashboard(string? currentPage, int? programId, string? period, CancellationToken cancellationToken)
+    {
+        var adminUserId = int.TryParse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var parsed)
+            ? parsed : (int?)null;
+        return Ok(await _contextService.GetDashboardAsync(
+            AdminAiContextService.ResolvePageArea(currentPage), adminUserId, programId, period, cancellationToken));
     }
 }

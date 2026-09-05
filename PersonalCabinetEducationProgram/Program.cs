@@ -136,6 +136,7 @@ builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<SecurityEventService>();
 builder.Services.AddScoped<AdminAiContextService>();
 builder.Services.AddScoped<IAiAssistantService, GroqAiAssistantService>();
+builder.Services.AddSingleton<AiAssistantMetrics>();
 builder.Services.AddScoped<AccountSecurityService>();
 builder.Services.AddScoped<LoginSecurityService>();
 builder.Services.AddSingleton<IIpNetworkService, IpNetworkService>();

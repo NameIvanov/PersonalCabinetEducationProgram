@@ -25,6 +25,7 @@ public sealed class AdminAiAssistantTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("ИИ-помощник пока не настроен", html);
+        Assert.Contains("href=\"/Notifications/Index\"", html);
     }
 
     [Fact]
@@ -159,6 +160,11 @@ public sealed class AdminAiAssistantTests
     [InlineData("/ApproverHome/Index", "раздел согласования")]
     [InlineData("/ModeratorHome/Index", "раздел публикации")]
     [InlineData("/Administration/Security", "раздел администрирования и журналов")]
+    [InlineData("/Admin/Programs", "раздел ОПОП")]
+    [InlineData("/Admin/Users", "раздел пользователей")]
+    [InlineData("/Admin/Assignments", "раздел назначений")]
+    [InlineData("/Admin/Faculties", "раздел факультетов")]
+    [InlineData("/Admin/Departments", "раздел кафедр")]
     [InlineData("/unknown", "текущий административный раздел")]
     public void PageArea_UsesOnlyKnownPageCategories(string path, string expected)
     {
@@ -200,6 +206,65 @@ public sealed class AdminAiAssistantTests
     }
 
     [Fact]
+    public async Task Dashboard_UsesSelectedProgramPeriodAndOnlyAggregateMetrics()
+    {
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase($"ai-dashboard-{Guid.NewGuid():N}").Options;
+        await using var context = new ApplicationDbContext(options);
+        context.EducationalPrograms.AddRange(
+            new EducationalProgram { Id = 201, CodeReferral = "A", Name = "Первая" },
+            new EducationalProgram { Id = 202, CodeReferral = "B", Name = "Вторая" });
+        context.EducationalProgramElements.AddRange(
+            new EducationalProgramElement { Id = 301, EducationalProgramId = 201, StatusApprovals = ElementApprovalStatus.Approved },
+            new EducationalProgramElement { Id = 302, EducationalProgramId = 201, StatusApprovals = ElementApprovalStatus.RevisionRequired },
+            new EducationalProgramElement { Id = 303, EducationalProgramId = 202, StatusApprovals = ElementApprovalStatus.OnApproval });
+        context.Notifications.Add(new Notification { UserId = 77, Type = NotificationType.CommentAdded, CreatedAt = DateTime.UtcNow, IsRead = false });
+        await context.SaveChangesAsync();
+        var metrics = new AiAssistantMetrics();
+        metrics.Record(true, "success", 42);
+
+        var dashboard = await new AdminAiContextService(context, metrics)
+            .GetDashboardAsync("раздел управления ОПОП", 77, 201, "24h");
+
+        Assert.Equal("24h", dashboard.Period);
+        Assert.Equal(1, dashboard.ActivePrograms);
+        Assert.Equal(2, dashboard.Elements);
+        Assert.Equal(1, dashboard.Approved);
+        Assert.Equal(1, dashboard.RevisionRequired);
+        Assert.Equal(1, dashboard.UnreadNotifications);
+        Assert.Equal(1, dashboard.Metrics.Calls);
+        Assert.Equal(42, dashboard.Metrics.AverageDurationMs);
+    }
+
+    [Fact]
+    public async Task Dashboard_HidesAutomaticSummaryForStructureAndSectionsWithoutChanges()
+    {
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase($"ai-dashboard-visibility-{Guid.NewGuid():N}").Options;
+        await using var context = new ApplicationDbContext(options);
+        context.AuditLogs.Add(new AuditLog
+        {
+            UserId = 1,
+            EntityType = "User",
+            EntityId = 2,
+            Action = "Edited",
+            Details = "Изменено.",
+            CreatedAt = DateTime.UtcNow
+        });
+        await context.SaveChangesAsync();
+        var service = new AdminAiContextService(context);
+
+        var faculty = await service.GetDashboardAsync("раздел факультетов", null, null, "today");
+        var programs = await service.GetDashboardAsync("раздел ОПОП", null, null, "today");
+        var users = await service.GetDashboardAsync("раздел пользователей", null, null, "today");
+
+        Assert.False(faculty.ShowAutomaticSummary);
+        Assert.False(programs.ShowAutomaticSummary);
+        Assert.True(users.ShowAutomaticSummary);
+        Assert.Equal(1, users.SectionChanges);
+    }
+
+    [Fact]
     public async Task GroqProvider_UsesConfiguredUrlBearerAndModelWithoutTools()
     {
         var handler = new RecordingHandler(HttpStatusCode.OK, """{"choices":[{"message":{"content":"Краткий ответ."}}]}""");
@@ -218,7 +283,7 @@ public sealed class AdminAiAssistantTests
     }
 
     [Theory]
-    [InlineData(429, "Лимит Groq")]
+    [InlineData(429, "Лимит ИИ-провайдера")]
     [InlineData(503, "временно недоступен")]
     public async Task GroqProvider_HandlesApiErrors(int statusCode, string expectedMessage)
     {
@@ -267,7 +332,8 @@ public sealed class AdminAiAssistantTests
         var service = new GroqAiAssistantService(
             new SingleClientFactory(new HttpClient(handler) { BaseAddress = new Uri("https://api.groq.com/openai/v1/") }),
             Options.Create(new AiOptions { Provider = "Groq", Model = "configured-model" }),
-            NullLogger<GroqAiAssistantService>.Instance);
+            NullLogger<GroqAiAssistantService>.Instance,
+            new AiAssistantMetrics());
 
         var result = await service.AskAsync("Вопрос", "Сводка", CancellationToken.None);
 
@@ -285,7 +351,8 @@ public sealed class AdminAiAssistantTests
             BaseUrl = "https://api.groq.com/openai/v1/",
             MaxAnswerCharacters = 500
         }),
-        NullLogger<GroqAiAssistantService>.Instance);
+        NullLogger<GroqAiAssistantService>.Instance,
+        new AiAssistantMetrics());
 
     private sealed class SingleClientFactory(HttpClient client) : IHttpClientFactory
     {

@@ -2,9 +2,12 @@
 @inject Microsoft.Extensions.Options.IOptions<AiOptions> AiConfiguration
 @{
     var ai = AiConfiguration.Value;
-    var isConfigured = ai.Provider.Equals("Groq", StringComparison.OrdinalIgnoreCase) &&
-        !string.IsNullOrWhiteSpace(ai.ApiKey) && !string.IsNullOrWhiteSpace(ai.Model) &&
-        Uri.TryCreate(ai.BaseUrl, UriKind.Absolute, out _);
+    var isLocalProvider = ai.Provider.Equals("Ollama", StringComparison.OrdinalIgnoreCase);
+    var isConfigured = (ai.Provider.Equals("Groq", StringComparison.OrdinalIgnoreCase) ||
+                        ai.Provider.Equals("OpenAI", StringComparison.OrdinalIgnoreCase) ||
+                        isLocalProvider) &&
+        (isLocalProvider || !string.IsNullOrWhiteSpace(ai.ApiKey)) &&
+        !string.IsNullOrWhiteSpace(ai.Model) && Uri.TryCreate(ai.BaseUrl, UriKind.Absolute, out _);
 }
 
 <section id="assistantWindow" class="ai-assistant-window card shadow-lg d-none" aria-label="Окно ИИ-помощника">
@@ -18,6 +21,28 @@
         {
             <div class="alert alert-warning py-2 mb-0" role="alert">ИИ-помощник пока не настроен. Добавьте параметры <code>Ai</code> в User Secrets; ключ здесь не вводится.</div>
         }
+        <div id="assistantAutomaticSummary" class="border rounded p-2 small d-none">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <strong id="assistantDashboardTitle">Сводка по разделу</strong>
+                <select id="assistantPeriod" class="form-select form-select-sm ai-assistant-period" aria-label="Период аналитики">
+                    <option value="today">Сегодня</option>
+                    <option value="24h">Последние 24 часа</option>
+                    <option value="week">Неделя</option>
+                    <option value="month">Месяц</option>
+                </select>
+            </div>
+            <div id="assistantDashboard" class="mt-2 text-muted">Загружаем показатели…</div>
+            <div id="assistantPriorities" class="mt-2"></div>
+            <div class="mt-2"><a asp-controller="Notifications" asp-action="Index" class="small">Открыть уведомления</a></div>
+        </div>
+        <details class="small">
+            <summary>Настройки помощника</summary>
+            <div class="d-flex flex-wrap gap-2 align-items-center mt-2">
+                <label class="form-check-label"><input id="assistantAutoBrief" class="form-check-input me-1" type="checkbox" />Краткий доклад при открытии</label>
+                <label>Хранить <select id="assistantHistoryLimit" class="form-select form-select-sm d-inline-block w-auto"><option value="10">10</option><option value="20">20</option><option value="50">50</option></select> сообщений</label>
+                <button id="exportAssistantHistory" type="button" class="btn btn-outline-secondary btn-sm">Экспортировать историю</button>
+            </div>
+        </details>
         <div>
             <div class="small fw-semibold mb-2">Быстрые вопросы</div>
             <div class="d-flex flex-wrap gap-1" id="quickQuestions">
@@ -46,6 +71,12 @@
     .ai-assistant-titlebar:active { cursor:grabbing; }
     .ai-assistant-history { overflow-y:auto; max-height:min(42vh, 390px); min-height:100px; }
     .ai-assistant-message { white-space:pre-wrap; overflow-wrap:anywhere; }
+    .ai-assistant-period { width:auto; min-width:150px; }
+    .ai-assistant-kpis { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:6px; }
+    .ai-assistant-kpi { border:1px solid var(--bs-border-color); border-radius:4px; padding:5px; }
+    .ai-assistant-kpi strong { display:block; font-size:1.05rem; }
+    .ai-assistant-bar { height:5px; background:var(--bs-secondary-bg); border-radius:99px; overflow:hidden; }
+    .ai-assistant-bar > span { display:block; height:100%; background:var(--bs-primary); }
     @@media (max-width: 576px) { .ai-assistant-window { right:12px; bottom:12px; } }
 </style>
 <script>
@@ -53,29 +84,96 @@
     const panel = document.getElementById('assistantWindow'), toggle = document.getElementById('assistantToggle'), form = document.getElementById('assistantForm');
     const question = document.getElementById('question'), history = document.getElementById('chatHistory'), processing = document.getElementById('processing'), send = document.getElementById('sendQuestion');
     const handle = document.getElementById('assistantDragHandle'), clear = document.getElementById('clearHistory');
+    const period = document.getElementById('assistantPeriod'), dashboard = document.getElementById('assistantDashboard'), priorities = document.getElementById('assistantPriorities'), dashboardTitle = document.getElementById('assistantDashboardTitle'), automaticSummary = document.getElementById('assistantAutomaticSummary');
+    const autoBrief = document.getElementById('assistantAutoBrief'), historyLimit = document.getElementById('assistantHistoryLimit'), exportHistory = document.getElementById('exportAssistantHistory');
     const token = form.querySelector('input[name="__RequestVerificationToken"]').value, isConfigured = @isConfigured.ToString().ToLowerInvariant();
-    const historyKey = 'admin-ai-assistant.history.v1', positionKey = 'admin-ai-assistant.position.v1', openKey = 'admin-ai-assistant.open.v1', maxMessages = 20;
+    const historyKey = 'admin-ai-assistant.history.v1', positionKey = 'admin-ai-assistant.position.v1', openKey = 'admin-ai-assistant.open.v1', settingsKey = 'admin-ai-assistant.settings.v1';
     const load = (key, fallback) => { try { return JSON.parse(sessionStorage.getItem(key)) ?? fallback; } catch { return fallback; } };
-    const setOpen = open => { panel.classList.toggle('d-none', !open); toggle.classList.toggle('active', open); toggle.setAttribute('aria-expanded', String(open)); sessionStorage.setItem(openKey, JSON.stringify(open)); };
+    const settings = { period:'today', autoBrief:false, historyLimit:20, ...load(settingsKey, {}) };
+    if (!['today', '24h', 'week', 'month'].includes(settings.period)) settings.period = 'today';
+    if (![10, 20, 50].includes(Number(settings.historyLimit))) settings.historyLimit = 20;
+    const saveSettings = () => sessionStorage.setItem(settingsKey, JSON.stringify(settings));
+    period.value = settings.period; autoBrief.checked = settings.autoBrief; historyLimit.value = String(settings.historyLimit);
+    const setOpen = open => { panel.classList.toggle('d-none', !open); toggle.classList.toggle('active', open); toggle.setAttribute('aria-expanded', String(open)); sessionStorage.setItem(openKey, JSON.stringify(open)); if (open) loadDashboard(); };
+    const currentProgramId = () => {
+        const query = new URLSearchParams(window.location.search);
+        const value = query.get('programId') ?? (window.location.pathname.toLowerCase().startsWith('/admin/programdetails') ? query.get('id') : null);
+        const id = Number(value);
+        return Number.isInteger(id) && id > 0 ? id : null;
+    };
+    const number = value => new Intl.NumberFormat('ru-RU').format(value || 0);
+    const kpi = (label, value) => `<div class="ai-assistant-kpi"><strong>${number(value)}</strong><span>${label}</span></div>`;
+    const sectionDashboard = data => {
+        switch (data.pageArea) {
+            case 'раздел руководителя ОПОП':
+                return { title:'Сводка раздела руководителя ОПОП', kpis:[kpi('элементов', data.elements), kpi('загружено', data.uploaded), kpi('согласование', data.onApproval), kpi('доработка', data.revisionRequired)], note:`Файлов добавлено: <b>${number(data.filesAdded)}</b>; изменений: <b>${number(data.workflowChanges)}</b>.`, funnel:true };
+            case 'раздел согласования':
+                return { title:'Сводка раздела согласования', kpis:[kpi('ожидают решения', data.onApproval), kpi('на доработке', data.revisionRequired), kpi('согласовано', data.approved), kpi('элементов', data.elements)], note:`За период согласовано: <b>${number(data.approvals)}</b>; возвращено на доработку: <b>${number(data.revisions)}</b>.`, funnel:true };
+            case 'раздел публикации':
+                return { title:'Сводка раздела публикации', kpis:[kpi('готово к публикации', data.approved), kpi('опубликовано', data.published), kpi('на доработке', data.revisionRequired), kpi('элементов', data.elements)], note:`За период опубликовано: <b>${number(data.publications)}</b>; изменений: <b>${number(data.workflowChanges)}</b>.`, funnel:true };
+            case 'раздел уведомлений':
+                return { title:'Сводка раздела уведомлений', kpis:[kpi('непрочитано', data.unreadNotifications), kpi('новых за период', data.newNotifications)], note:'Уведомления показаны только в виде количества и статуса прочтения.', funnel:false };
+            case 'раздел администрирования и журналов':
+                return { title:'Сводка администрирования', kpis:[kpi('запросов', data.administrationRequests), kpi('ошибок 4xx', data.administrationClientErrors), kpi('ошибок 5xx', data.administrationServerErrors), kpi('открытых событий', data.administrationOpenSecurityEvents), kpi('блокировок IP', data.administrationActiveIpBlocks), kpi('действий в аудите', data.administrationAuditActions)], note:`Событий безопасности: <b>${number(data.administrationSecurityEvents)}</b>; заблокированных учётных записей: <b>${number(data.administrationBlockedAccounts)}</b>.`, funnel:false };
+            case 'раздел ОПОП':
+                return { title:'Изменения ОПОП за период', kpis:[kpi('изменений', data.sectionChanges), kpi('активных ОПОП', data.activePrograms), kpi('элементов', data.elements), kpi('доработка', data.revisionRequired)], note:'Блок показан, потому что за выбранный период были изменения ОПОП.', funnel:false };
+            case 'раздел пользователей':
+                return { title:'Изменения пользователей за период', kpis:[kpi('изменений', data.sectionChanges), kpi('непрочитано', data.unreadNotifications)], note:'Блок показан, потому что за выбранный период были изменения учётных записей.', funnel:false };
+            case 'раздел назначений':
+                return { title:'Изменения назначений за период', kpis:[kpi('изменений', data.sectionChanges), kpi('активных ОПОП', data.activePrograms)], note:'Учтены изменения привязок ОПОП и назначения руководителей.', funnel:false };
+            default:
+                return { title:'Сводка раздела управления ОПОП', kpis:[kpi('активных ОПОП', data.activePrograms), kpi('элементов', data.elements), kpi('согласование', data.onApproval), kpi('доработка', data.revisionRequired)], note:`Файлов добавлено: <b>${number(data.filesAdded)}</b>; изменений: <b>${number(data.workflowChanges)}</b>.`, funnel:true };
+        }
+    };
+    const loadDashboard = async () => {
+        dashboard.textContent = 'Загружаем показатели…'; priorities.replaceChildren();
+        try {
+            const query = new URLSearchParams({ currentPage:window.location.pathname, period:settings.period });
+            const programId = currentProgramId(); if (programId) query.set('programId', String(programId));
+            const response = await fetch(`@Url.Action("Dashboard", "AdminAiAssistant")?${query}`, { credentials:'same-origin' });
+            if (!response.ok) throw new Error('Dashboard unavailable');
+            const data = await response.json();
+            automaticSummary.classList.toggle('d-none', !data.showAutomaticSummary);
+            if (!data.showAutomaticSummary) return;
+            const section = sectionDashboard(data); dashboardTitle.textContent = section.title;
+            const funnel = section.funnel ? `<div class="mt-2">Воронка: <div class="ai-assistant-bar"><span style="width:${data.elements ? Math.min(100, Math.round(data.approved * 100 / data.elements)) : 0}%"></span></div><span class="text-muted">Согласовано ${number(data.approved)} из ${number(data.elements)}</span></div>` : '';
+            dashboard.innerHTML = `<div class="ai-assistant-kpis">${section.kpis.join('')}</div><div class="mt-2">${section.note}</div>${funnel}<div class="mt-2 text-muted">Качество помощника в этом запуске: ${number(data.metrics?.succeeded)} успешных из ${number(data.metrics?.calls)}; среднее ${number(data.metrics?.averageDurationMs)} мс.</div>`;
+            (data.priorities || []).forEach(text => { const item = document.createElement('div'); item.className = 'alert alert-warning py-1 px-2 mb-1 small'; item.textContent = text; priorities.append(item); });
+            const briefKey = `admin-ai-assistant.auto-brief.${window.location.pathname}.${settings.period}.${programId || 'all'}`;
+            if (settings.autoBrief && isConfigured && !sessionStorage.getItem(briefKey)) { sessionStorage.setItem(briefKey, '1'); question.value = 'Дай краткий доклад по текущему разделу: что сделано, что требует внимания и какие следующие шаги.'; form.requestSubmit(); }
+        } catch { dashboard.textContent = 'Показатели сейчас недоступны. Обновите страницу или попробуйте позже.'; }
+    };
     const savedMessages = load(historyKey, []);
     const render = (message, persist = true) => {
         const item = document.createElement('div'); item.className = `ai-assistant-message border rounded p-2 mb-2 ${message.style}`;
         const title = document.createElement('strong'); title.textContent = message.role;
         const body = document.createElement('div'); body.className = 'mt-1 small'; body.textContent = message.text;
         item.append(title, body); history.append(item);
-        if (persist) { const messages = Array.isArray(load(historyKey, [])) ? load(historyKey, []) : []; messages.push(message); sessionStorage.setItem(historyKey, JSON.stringify(messages.slice(-maxMessages))); }
+        if (persist) { const messages = Array.isArray(load(historyKey, [])) ? load(historyKey, []) : []; messages.push(message); sessionStorage.setItem(historyKey, JSON.stringify(messages.slice(-settings.historyLimit))); }
     };
     if (Array.isArray(savedMessages)) savedMessages.forEach(message => render(message, false));
     if (history.children.length) history.scrollTop = history.scrollHeight;
     setOpen(load(openKey, false) === true);
     toggle.addEventListener('click', () => setOpen(panel.classList.contains('d-none')));
     clear.addEventListener('click', () => { sessionStorage.removeItem(historyKey); history.replaceChildren(); });
+    period.addEventListener('change', () => { settings.period = period.value; saveSettings(); loadDashboard(); });
+    autoBrief.addEventListener('change', () => { settings.autoBrief = autoBrief.checked; saveSettings(); });
+    historyLimit.addEventListener('change', () => {
+        settings.historyLimit = Number(historyLimit.value); saveSettings();
+        const messages = Array.isArray(load(historyKey, [])) ? load(historyKey, []) : [];
+        sessionStorage.setItem(historyKey, JSON.stringify(messages.slice(-settings.historyLimit)));
+    });
+    exportHistory.addEventListener('click', () => {
+        const messages = Array.isArray(load(historyKey, [])) ? load(historyKey, []) : [];
+        const blob = new Blob([JSON.stringify({ exportedAt:new Date().toISOString(), messages }, null, 2)], { type:'application/json' });
+        const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'ai-assistant-history.json'; link.click(); URL.revokeObjectURL(link.href);
+    });
     document.querySelectorAll('[data-question]').forEach(button => button.addEventListener('click', () => { question.value = button.dataset.question; question.focus(); }));
     form.addEventListener('submit', async event => {
         event.preventDefault(); const text = question.value.trim(); if (!text) return;
         render({ role:'Вы', text, style:'bg-light' }); history.scrollTop = history.scrollHeight; question.value = ''; send.disabled = true; processing.classList.remove('d-none');
         try {
-            const response = await fetch('@Url.Action("Ask", "AdminAiAssistant")', { method:'POST', headers:{ 'Content-Type':'application/json', 'RequestVerificationToken':token }, credentials:'same-origin', body:JSON.stringify({ question:text, currentPage:window.location.pathname }) });
+            const response = await fetch('@Url.Action("Ask", "AdminAiAssistant")', { method:'POST', headers:{ 'Content-Type':'application/json', 'RequestVerificationToken':token }, credentials:'same-origin', body:JSON.stringify({ question:text, currentPage:window.location.pathname, programId:currentProgramId(), period:settings.period }) });
             const result = await response.json(); render({ role:'ИИ-помощник', text:result.message || 'Не удалось получить ответ.', style:result.succeeded ? 'bg-white' : 'bg-warning-subtle' });
         } catch { render({ role:'ИИ-помощник', text:'Не удалось отправить запрос. Проверьте подключение и повторите попытку.', style:'bg-warning-subtle' }); }
         finally { history.scrollTop = history.scrollHeight; processing.classList.add('d-none'); send.disabled = !isConfigured; }

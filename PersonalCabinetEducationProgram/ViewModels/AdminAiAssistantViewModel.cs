@@ -10,4 +10,6 @@ public sealed class AdminAiQuestionRequest
 {
     public string? Question { get; init; }
     public string? CurrentPage { get; init; }
+    public int? ProgramId { get; init; }
+    public string? Period { get; init; }
 }
