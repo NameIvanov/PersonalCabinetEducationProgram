@@ -80,11 +80,12 @@ a {
     position: sticky;
     top: 0;
     z-index: 1030;
-    height: 50px;
+    min-height: 50px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 18px;
+    gap: 6px 12px;
+    padding: 6px 18px;
     background: var(--surface);
     border-top: 3px solid var(--accent);
     border-bottom: 1px solid var(--line);
@@ -116,6 +117,8 @@ a {
 }
 
 .admin-header-nav {
+    flex: 1 1 0;
+    flex-wrap: wrap;
     align-self: stretch;
     display: flex;
     align-items: center;
@@ -125,6 +128,7 @@ a {
 }
 
 .admin-header-nav a {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     height: 32px;
@@ -833,6 +837,15 @@ h5 {
 ::-webkit-scrollbar-track { background: var(--app-bg); }
 ::-webkit-scrollbar-thumb { border-radius: 4px; background: var(--control-border); }
 
+@media (max-width: 1600px) {
+    .app-header { flex-wrap: wrap; }
+    .admin-header-nav {
+        order: 3;
+        flex: 1 0 100%;
+        justify-content: flex-start;
+    }
+}
+
 @media (max-width: 991.98px) {
     .app-header {
         height: auto;
@@ -846,6 +859,7 @@ h5 {
         order: 3;
         width: 100%;
         overflow-x: auto;
+        flex-wrap: nowrap;
         justify-content: flex-start;
     }
 
@@ -889,7 +903,7 @@ h5 {
 }
 
 @media (max-width: 575.98px) {
-    .app-header { padding: 0 10px; }
+    .app-header { padding: 6px 10px; }
     .app-brand { flex-basis: auto; }
     .app-user-copy { display: none; }
     .global-nav { grid-template-columns: 1fr; }
@@ -1773,8 +1787,8 @@ html[data-theme="dark"] .app-brand-mark {
 }
 
 @media (max-width: 1299.98px) {
-    .app-brand { flex-basis: 190px; font-size: 12px; }
-    .admin-header-nav a { padding-right: 8px; padding-left: 8px; font-size: 10px; }
+    .app-brand { flex-basis: auto; font-size: 12px; }
+    .admin-header-nav a { padding-right: 8px; padding-left: 8px; }
     .administration-content { padding-right: 22px; padding-left: 22px; }
     .administration-filter-bar,
     .administration-filter-security,

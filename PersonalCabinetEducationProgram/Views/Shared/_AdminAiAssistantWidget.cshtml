@@ -13,7 +13,10 @@
 <section id="assistantWindow" class="ai-assistant-window card shadow-lg d-none" aria-label="Окно ИИ-помощника">
     <header id="assistantDragHandle" class="ai-assistant-titlebar card-header d-flex align-items-center justify-content-between gap-2">
         <div><strong>ИИ-помощник</strong><span class="badge ms-2 @(isConfigured ? "text-bg-success" : "text-bg-secondary")">@(isConfigured ? "Настроен" : "Не настроен")</span></div>
-        <button id="clearHistory" type="button" class="btn btn-sm btn-outline-secondary">Очистить историю</button>
+        <div class="d-flex align-items-center gap-2">
+            <button id="clearHistory" type="button" class="btn btn-sm btn-outline-secondary">Очистить историю</button>
+            <button id="assistantClose" type="button" class="btn btn-sm btn-outline-secondary" aria-label="Закрыть ИИ-помощника" title="Закрыть">✕</button>
+        </div>
     </header>
     <div class="card-body d-flex flex-column gap-3">
         <div class="alert alert-info py-2 mb-0 small" role="note">В облачную модель передаётся только ограниченная обезличенная сводка. Полные журналы, персональные данные, пароли, токены, query string и stack trace не передаются.</div>
@@ -64,13 +67,16 @@
 </section>
 
 <style>
-    .admin-header-nav .admin-ai-toggle { display:flex; align-items:center; height:32px; padding:0 12px; border:0; border-radius:6px; color:var(--muted); background:transparent; font-size:11px; white-space:nowrap; }
+    .admin-header-nav .admin-ai-toggle { display:flex; flex-shrink:0; align-items:center; height:32px; padding:0 12px; border:0; border-radius:6px; color:var(--muted); background:transparent; font-size:11px; white-space:nowrap; }
     .admin-header-nav .admin-ai-toggle:hover, .admin-header-nav .admin-ai-toggle.active { background:var(--active); color:var(--accent-strong); }
-    .ai-assistant-window { position:fixed; z-index:1050; width:min(560px, calc(100vw - 24px)); max-height:calc(100vh - 24px); right:24px; bottom:24px; }
-    .ai-assistant-titlebar { cursor:grab; user-select:none; touch-action:none; }
+    .ai-assistant-window { position:fixed; z-index:1020; width:min(560px, calc(100vw - 24px)); max-height:calc(100dvh - var(--assistant-top, 110px) - 12px); right:12px; bottom:12px; overflow:hidden; }
+    .ai-assistant-window > .card-body { min-height:0; overflow-y:auto; overscroll-behavior:contain; padding:clamp(12px, 2vw, 18px); }
+    .ai-assistant-window > .card-body > * { flex-shrink:0; min-width:0; }
+    .ai-assistant-titlebar { flex-shrink:0; flex-wrap:wrap; cursor:grab; user-select:none; touch-action:none; }
     .ai-assistant-titlebar:active { cursor:grabbing; }
     .ai-assistant-history { overflow-y:auto; max-height:min(42vh, 390px); min-height:100px; }
     .ai-assistant-message { white-space:pre-wrap; overflow-wrap:anywhere; }
+    .ai-assistant-window .btn { white-space:normal; overflow-wrap:anywhere; }
     .ai-assistant-period { width:auto; min-width:150px; }
     .ai-assistant-kpis { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:6px; }
     .ai-assistant-kpi { border:1px solid var(--bs-border-color); border-radius:4px; padding:5px; }
@@ -94,7 +100,7 @@
     if (![10, 20, 50].includes(Number(settings.historyLimit))) settings.historyLimit = 20;
     const saveSettings = () => sessionStorage.setItem(settingsKey, JSON.stringify(settings));
     period.value = settings.period; autoBrief.checked = settings.autoBrief; historyLimit.value = String(settings.historyLimit);
-    const setOpen = open => { panel.classList.toggle('d-none', !open); toggle.classList.toggle('active', open); toggle.setAttribute('aria-expanded', String(open)); sessionStorage.setItem(openKey, JSON.stringify(open)); if (open) loadDashboard(); };
+    const setOpen = open => { panel.classList.toggle('d-none', !open); toggle.classList.toggle('active', open); toggle.setAttribute('aria-expanded', String(open)); sessionStorage.setItem(openKey, JSON.stringify(open)); if (open) { fitPanel(); loadDashboard(); } };
     const currentProgramId = () => {
         const query = new URLSearchParams(window.location.search);
         const value = query.get('programId') ?? (window.location.pathname.toLowerCase().startsWith('/admin/programdetails') ? query.get('id') : null);
@@ -153,8 +159,9 @@
     };
     if (Array.isArray(savedMessages)) savedMessages.forEach(message => render(message, false));
     if (history.children.length) history.scrollTop = history.scrollHeight;
-    setOpen(load(openKey, false) === true);
     toggle.addEventListener('click', () => setOpen(panel.classList.contains('d-none')));
+    document.getElementById('assistantClose').addEventListener('click', () => { setOpen(false); toggle.focus(); });
+    panel.addEventListener('keydown', event => { if (event.key === 'Escape') { setOpen(false); toggle.focus(); } });
     clear.addEventListener('click', () => { sessionStorage.removeItem(historyKey); history.replaceChildren(); });
     period.addEventListener('change', () => { settings.period = period.value; saveSettings(); loadDashboard(); });
     autoBrief.addEventListener('change', () => { settings.autoBrief = autoBrief.checked; saveSettings(); });
@@ -178,13 +185,41 @@
         } catch { render({ role:'ИИ-помощник', text:'Не удалось отправить запрос. Проверьте подключение и повторите попытку.', style:'bg-warning-subtle' }); }
         finally { history.scrollTop = history.scrollHeight; processing.classList.add('d-none'); send.disabled = !isConfigured; }
     });
-    const place = ({ left, top }) => { const maxLeft = Math.max(0, window.innerWidth - panel.offsetWidth), maxTop = Math.max(0, window.innerHeight - panel.offsetHeight); panel.style.left = `${Math.min(Math.max(0, left), maxLeft)}px`; panel.style.top = `${Math.min(Math.max(0, top), maxTop)}px`; panel.style.right = 'auto'; panel.style.bottom = 'auto'; };
-    const savedPosition = load(positionKey, null); if (savedPosition && Number.isFinite(savedPosition.left) && Number.isFinite(savedPosition.top)) place(savedPosition);
+    const appHeader = document.querySelector('.app-header');
+    const savedPosition = load(positionKey, null);
+    let preferredPosition = savedPosition && Number.isFinite(savedPosition.left) && Number.isFinite(savedPosition.top) ? savedPosition : null;
+    const bounds = () => {
+        const viewport = window.visualViewport;
+        const left = (viewport?.offsetLeft ?? 0) + 12;
+        const bottom = (viewport?.offsetTop ?? 0) + (viewport?.height ?? window.innerHeight) - 12;
+        const top = Math.max(appHeader.getBoundingClientRect().bottom, viewport?.offsetTop ?? 0) + 12;
+        return { left, top, right:left + (viewport?.width ?? document.documentElement.clientWidth) - 24, bottom };
+    };
+    const place = ({ left, top }) => {
+        const area = bounds();
+        panel.style.left = `${Math.max(area.left, Math.min(left, area.right - panel.offsetWidth))}px`;
+        panel.style.top = `${Math.max(area.top, Math.min(top, area.bottom - panel.offsetHeight))}px`;
+        panel.style.right = 'auto'; panel.style.bottom = 'auto';
+    };
+    function fitPanel() {
+        const area = bounds();
+        panel.style.setProperty('--assistant-top', `${area.top}px`);
+        panel.style.maxHeight = `${Math.max(0, area.bottom - area.top)}px`;
+        panel.style.width = `${Math.min(560, Math.max(0, area.right - area.left))}px`;
+        if (panel.classList.contains('d-none')) return;
+        place(preferredPosition ?? { left:area.right - panel.offsetWidth, top:area.bottom - panel.offsetHeight });
+    }
     let drag = null;
     handle.addEventListener('pointerdown', event => { if (event.target.closest('button')) return; const rect = panel.getBoundingClientRect(); drag = { x:event.clientX - rect.left, y:event.clientY - rect.top }; handle.setPointerCapture(event.pointerId); });
     handle.addEventListener('pointermove', event => { if (drag) place({ left:event.clientX - drag.x, top:event.clientY - drag.y }); });
-    const finishDrag = () => { if (!drag) return; drag = null; const rect = panel.getBoundingClientRect(); sessionStorage.setItem(positionKey, JSON.stringify({ left:Math.round(rect.left), top:Math.round(rect.top) })); };
+    const finishDrag = () => { if (!drag) return; drag = null; const rect = panel.getBoundingClientRect(); preferredPosition = { left:Math.round(rect.left), top:Math.round(rect.top) }; sessionStorage.setItem(positionKey, JSON.stringify(preferredPosition)); };
     handle.addEventListener('pointerup', finishDrag); handle.addEventListener('pointercancel', finishDrag);
-    window.addEventListener('resize', () => { const rect = panel.getBoundingClientRect(); place({ left:rect.left, top:rect.top }); });
+    window.addEventListener('resize', fitPanel);
+    window.visualViewport?.addEventListener('resize', fitPanel);
+    window.visualViewport?.addEventListener('scroll', fitPanel);
+    const resizeObserver = new ResizeObserver(fitPanel);
+    resizeObserver.observe(appHeader);
+    resizeObserver.observe(panel);
+    setOpen(load(openKey, false) === true);
 })();
 </script>

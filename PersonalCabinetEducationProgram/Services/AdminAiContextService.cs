@@ -172,10 +172,7 @@ public sealed partial class AdminAiContextService
         };
     }
 
-    /// <summary>
-    /// Converts a browser path into one of a fixed set of report areas. The client
-    /// never controls a database filter or any text sent to the model through this value.
-    /// </summary>
+
     public static string ResolvePageArea(string? path) => path?.Trim().ToLowerInvariant() switch
     {
         var value when value?.StartsWith("/managerhome", StringComparison.Ordinal) == true => "раздел руководителя ОПОП",
