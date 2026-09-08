@@ -169,6 +169,74 @@ namespace PersonalCabinetEducationProgram.Migrations
                     b.ToTable("user_tokens", (string)null);
                 });
 
+            modelBuilder.Entity("PersonalCabinetEducationProgram.Models.AdminAiConversationMessage", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("varchar(4000)")
+                        .HasColumnName("content");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("varchar(16)")
+                        .HasColumnName("role");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "CreatedAtUtc")
+                        .HasDatabaseName("ix_ai_conversation_user_date");
+
+                    b.ToTable("admin_ai_conversation_messages", "personal_cabinet");
+                });
+
+            modelBuilder.Entity("PersonalCabinetEducationProgram.Models.AiAssistantCallMetric", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("DurationMs")
+                        .HasColumnType("bigint")
+                        .HasColumnName("duration_ms");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasPrecision(6)
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("occurred_at_utc");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)")
+                        .HasColumnName("outcome");
+
+                    b.Property<bool>("Succeeded")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("succeeded");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OccurredAtUtc")
+                        .HasDatabaseName("ix_ai_metric_date");
+
+                    b.ToTable("ai_assistant_call_metrics", "personal_cabinet");
+                });
+
             modelBuilder.Entity("PersonalCabinetEducationProgram.Models.ApproverAssignment", b =>
                 {
                     b.Property<int>("Id")
@@ -416,6 +484,297 @@ namespace PersonalCabinetEducationProgram.Migrations
                             CodeDepartment = "Каф.МАТЕМ",
                             Name = "Кафедра математического анализа"
                         });
+                });
+
+            modelBuilder.Entity("PersonalCabinetEducationProgram.Models.DocumentAnalysis", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ActiveKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<Guid>("ConcurrencyToken")
+                        .IsConcurrencyToken()
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime>("DeadlineUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("EngineVersion")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("FileHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<int>("FileId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("FileRevision")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(1500)
+                        .HasColumnType("varchar(1500)");
+
+                    b.Property<string>("PreviousFileHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<int?>("PreviousFileId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ProviderModel")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<int>("Purpose")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("QueueSlot")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RequestedByName")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("varchar(300)");
+
+                    b.Property<int?>("RequestedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("StartedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("varchar(4000)");
+
+                    b.Property<string>("TemplateSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(16000)
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("UserQueueKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActiveKey")
+                        .IsUnique();
+
+                    b.HasIndex("UserQueueKey")
+                        .IsUnique();
+
+                    b.HasIndex("PreviousFileId");
+
+                    b.HasIndex("QueueSlot")
+                        .IsUnique();
+
+                    b.HasIndex("RequestedByUserId");
+
+                    b.HasIndex("FileId", "CreatedAtUtc");
+
+                    b.HasIndex("Status", "DeadlineUtc");
+
+                    b.ToTable("document_analyses", (string)null);
+                });
+
+            modelBuilder.Entity("PersonalCabinetEducationProgram.Models.DocumentFinding", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("ConcurrencyToken")
+                        .IsConcurrencyToken()
+                        .HasColumnType("char(36)");
+
+                    b.Property<double>("Confidence")
+                        .HasColumnType("double");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1500)
+                        .HasColumnType("varchar(1500)");
+
+                    b.Property<long>("DocumentAnalysisId")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("FromOcr")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<int>("PageNumber")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Quote")
+                        .IsRequired()
+                        .HasMaxLength(600)
+                        .HasColumnType("varchar(600)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Suggestion")
+                        .IsRequired()
+                        .HasMaxLength(1500)
+                        .HasColumnType("varchar(1500)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentAnalysisId");
+
+                    b.ToTable("document_findings", (string)null);
+                });
+
+            modelBuilder.Entity("PersonalCabinetEducationProgram.Models.DocumentFindingFeedback", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Comment")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("varchar(1000)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<int>("Decision")
+                        .HasColumnType("int");
+
+                    b.Property<long>("DocumentFindingId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UserName")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("varchar(300)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentFindingId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("document_finding_feedback", (string)null);
+                });
+
+            modelBuilder.Entity("PersonalCabinetEducationProgram.Models.DocumentPageChange", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("AfterQuote")
+                        .IsRequired()
+                        .HasMaxLength(600)
+                        .HasColumnType("varchar(600)");
+
+                    b.Property<string>("BeforeQuote")
+                        .IsRequired()
+                        .HasMaxLength(600)
+                        .HasColumnType("varchar(600)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<long>("DocumentAnalysisId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)");
+
+                    b.Property<int?>("NewPageNumber")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("OldPageNumber")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentAnalysisId");
+
+                    b.ToTable("document_page_changes", (string)null);
+                });
+
+            modelBuilder.Entity("PersonalCabinetEducationProgram.Models.DocumentPageDiagnostic", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("DocumentAnalysisId")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("FromOcr")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<bool>("HasTextLayer")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<bool>("IsBlank")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<bool>("LowReadability")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<int>("PageNumber")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Rotation")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentAnalysisId", "PageNumber")
+                        .IsUnique();
+
+                    b.ToTable("document_page_diagnostics", (string)null);
                 });
 
             modelBuilder.Entity("PersonalCabinetEducationProgram.Models.EducationalProgram", b =>
@@ -2056,6 +2415,18 @@ namespace PersonalCabinetEducationProgram.Migrations
                         .HasConstraintName("fk_ut_user");
                 });
 
+            modelBuilder.Entity("PersonalCabinetEducationProgram.Models.AdminAiConversationMessage", b =>
+                {
+                    b.HasOne("PersonalCabinetEducationProgram.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ai_conversation_user");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("PersonalCabinetEducationProgram.Models.ApproverAssignment", b =>
                 {
                     b.HasOne("PersonalCabinetEducationProgram.Models.User", "ApproverUser")
@@ -2112,6 +2483,82 @@ namespace PersonalCabinetEducationProgram.Migrations
                     b.Navigation("EducationalProgram");
 
                     b.Navigation("ImportedByUser");
+                });
+
+            modelBuilder.Entity("PersonalCabinetEducationProgram.Models.DocumentAnalysis", b =>
+                {
+                    b.HasOne("PersonalCabinetEducationProgram.Models.EducationalProgramElementFile", "File")
+                        .WithMany()
+                        .HasForeignKey("FileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PersonalCabinetEducationProgram.Models.EducationalProgramElementFile", "PreviousFile")
+                        .WithMany()
+                        .HasForeignKey("PreviousFileId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("PersonalCabinetEducationProgram.Models.User", "RequestedByUser")
+                        .WithMany()
+                        .HasForeignKey("RequestedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("File");
+
+                    b.Navigation("PreviousFile");
+
+                    b.Navigation("RequestedByUser");
+                });
+
+            modelBuilder.Entity("PersonalCabinetEducationProgram.Models.DocumentFinding", b =>
+                {
+                    b.HasOne("PersonalCabinetEducationProgram.Models.DocumentAnalysis", "Analysis")
+                        .WithMany("Findings")
+                        .HasForeignKey("DocumentAnalysisId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Analysis");
+                });
+
+            modelBuilder.Entity("PersonalCabinetEducationProgram.Models.DocumentFindingFeedback", b =>
+                {
+                    b.HasOne("PersonalCabinetEducationProgram.Models.DocumentFinding", "Finding")
+                        .WithMany("Feedback")
+                        .HasForeignKey("DocumentFindingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PersonalCabinetEducationProgram.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Finding");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("PersonalCabinetEducationProgram.Models.DocumentPageChange", b =>
+                {
+                    b.HasOne("PersonalCabinetEducationProgram.Models.DocumentAnalysis", "Analysis")
+                        .WithMany("Changes")
+                        .HasForeignKey("DocumentAnalysisId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Analysis");
+                });
+
+            modelBuilder.Entity("PersonalCabinetEducationProgram.Models.DocumentPageDiagnostic", b =>
+                {
+                    b.HasOne("PersonalCabinetEducationProgram.Models.DocumentAnalysis", "Analysis")
+                        .WithMany("Pages")
+                        .HasForeignKey("DocumentAnalysisId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Analysis");
                 });
 
             modelBuilder.Entity("PersonalCabinetEducationProgram.Models.EducationalProgram", b =>
@@ -2301,6 +2748,20 @@ namespace PersonalCabinetEducationProgram.Migrations
                         .HasConstraintName("fk_login_session_user");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("PersonalCabinetEducationProgram.Models.DocumentAnalysis", b =>
+                {
+                    b.Navigation("Changes");
+
+                    b.Navigation("Findings");
+
+                    b.Navigation("Pages");
+                });
+
+            modelBuilder.Entity("PersonalCabinetEducationProgram.Models.DocumentFinding", b =>
+                {
+                    b.Navigation("Feedback");
                 });
 
             modelBuilder.Entity("PersonalCabinetEducationProgram.Models.EducationalProgram", b =>

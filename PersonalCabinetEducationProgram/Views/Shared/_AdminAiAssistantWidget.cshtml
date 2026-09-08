@@ -19,7 +19,7 @@
         </div>
     </header>
     <div class="card-body d-flex flex-column gap-3">
-        <div class="alert alert-info py-2 mb-0 small" role="note">В облачную модель передаётся только ограниченная обезличенная сводка. Полные журналы, персональные данные, пароли, токены, query string и stack trace не передаются.</div>
+        <div class="alert alert-info py-2 mb-0 small" role="note">В облачную модель передаётся только ограниченная обезличенная сводка и контекст этого диалога. Полные журналы, персональные данные из системы, пароли, токены, query string и stack trace не передаются. Не вводите их в сообщения: история хранится в вашей учётной записи до 30 дней.</div>
         @if (!isConfigured)
         {
             <div class="alert alert-warning py-2 mb-0" role="alert">ИИ-помощник пока не настроен. Добавьте параметры <code>Ai</code> в User Secrets; ключ здесь не вводится.</div>
@@ -93,20 +93,29 @@
     const period = document.getElementById('assistantPeriod'), dashboard = document.getElementById('assistantDashboard'), priorities = document.getElementById('assistantPriorities'), dashboardTitle = document.getElementById('assistantDashboardTitle'), automaticSummary = document.getElementById('assistantAutomaticSummary');
     const autoBrief = document.getElementById('assistantAutoBrief'), historyLimit = document.getElementById('assistantHistoryLimit'), exportHistory = document.getElementById('exportAssistantHistory');
     const token = form.querySelector('input[name="__RequestVerificationToken"]').value, isConfigured = @isConfigured.ToString().ToLowerInvariant();
-    const historyKey = 'admin-ai-assistant.history.v1', positionKey = 'admin-ai-assistant.position.v1', openKey = 'admin-ai-assistant.open.v1', settingsKey = 'admin-ai-assistant.settings.v1';
-    const load = (key, fallback) => { try { return JSON.parse(sessionStorage.getItem(key)) ?? fallback; } catch { return fallback; } };
+    const historyKey = 'admin-ai-assistant.history.v2', positionKey = 'admin-ai-assistant.position.v1', openKey = 'admin-ai-assistant.open.v1', settingsKey = 'admin-ai-assistant.settings.v1', selectedProgramKey = 'admin-ai-assistant.selected-program.v1';
+    const load = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key) ?? sessionStorage.getItem(key)) ?? fallback; } catch { return fallback; } };
+    const save = (key, value) => localStorage.setItem(key, JSON.stringify(value));
     const settings = { period:'today', autoBrief:false, historyLimit:20, ...load(settingsKey, {}) };
     if (!['today', '24h', 'week', 'month'].includes(settings.period)) settings.period = 'today';
     if (![10, 20, 50].includes(Number(settings.historyLimit))) settings.historyLimit = 20;
-    const saveSettings = () => sessionStorage.setItem(settingsKey, JSON.stringify(settings));
+    const saveSettings = () => save(settingsKey, settings);
     period.value = settings.period; autoBrief.checked = settings.autoBrief; historyLimit.value = String(settings.historyLimit);
-    const setOpen = open => { panel.classList.toggle('d-none', !open); toggle.classList.toggle('active', open); toggle.setAttribute('aria-expanded', String(open)); sessionStorage.setItem(openKey, JSON.stringify(open)); if (open) { fitPanel(); loadDashboard(); } };
+    const setOpen = open => { panel.classList.toggle('d-none', !open); toggle.classList.toggle('active', open); toggle.setAttribute('aria-expanded', String(open)); save(openKey, open); if (open) { fitPanel(); loadDashboard(); } };
     const currentProgramId = () => {
         const query = new URLSearchParams(window.location.search);
-        const value = query.get('programId') ?? (window.location.pathname.toLowerCase().startsWith('/admin/programdetails') ? query.get('id') : null);
+        const currentPath = window.location.pathname.toLowerCase();
+        const saved = ['managerhome', 'approverhome', 'moderatorhome'].some(part => currentPath.includes(part)) ? load(selectedProgramKey, null) : null;
+        const value = query.get('programId') ?? (currentPath.startsWith('/admin/programdetails') ? query.get('id') : saved);
         const id = Number(value);
         return Number.isInteger(id) && id > 0 ? id : null;
     };
+    document.addEventListener('click', event => {
+        const anchor = event.target.closest('a[href]'); if (!anchor) return;
+        const target = new URL(anchor.href, window.location.origin);
+        const id = Number(target.searchParams.get('programId') ?? (target.pathname.toLowerCase().startsWith('/admin/programdetails') ? target.searchParams.get('id') : null));
+        if (Number.isInteger(id) && id > 0) save(selectedProgramKey, id);
+    });
     const number = value => new Intl.NumberFormat('ru-RU').format(value || 0);
     const kpi = (label, value) => `<div class="ai-assistant-kpi"><strong>${number(value)}</strong><span>${label}</span></div>`;
     const sectionDashboard = data => {
@@ -131,6 +140,21 @@
                 return { title:'Сводка раздела управления ОПОП', kpis:[kpi('активных ОПОП', data.activePrograms), kpi('элементов', data.elements), kpi('согласование', data.onApproval), kpi('доработка', data.revisionRequired)], note:`Файлов добавлено: <b>${number(data.filesAdded)}</b>; изменений: <b>${number(data.workflowChanges)}</b>.`, funnel:true };
         }
     };
+    const contextQuestions = {
+        'раздел руководителя ОПОП':['Что требует загрузки или доработки?', 'Сколько файлов обработано за выбранный период?', 'Какие элементы ожидают согласования?'],
+        'раздел согласования':['Что ожидает моего решения?', 'Какие элементы возвращены на доработку?', 'Что согласовано за выбранный период?'],
+        'раздел публикации':['Что готово к публикации?', 'Что опубликовано за выбранный период?', 'Какие элементы ещё требуют доработки?'],
+        'раздел уведомлений':['Какие уведомления требуют внимания?', 'Что изменилось по уведомлениям за период?'],
+        'раздел администрирования и журналов':['Есть ли критические ошибки приложения?', 'Какие события безопасности требуют проверки?', 'Что изменилось в администрировании за период?'],
+        'раздел ОПОП':['Какие ОПОП изменились за выбранный период?', 'Что требует внимания среди программ?'],
+        'раздел пользователей':['Какие изменения учётных записей были за период?', 'Есть ли пользователи, требующие проверки?'],
+        'раздел назначений':['Какие назначения изменились за период?', 'Какие привязки требуют проверки?']
+    };
+    const renderQuickQuestions = area => {
+        const items = contextQuestions[area] ?? ['Что произошло за последние сутки?', 'Есть ли критические ошибки приложения?', 'Какие IP требуют внимания?', 'Есть ли новые блокировки аккаунтов или IP?', 'Объясни последние события безопасности'];
+        const container = document.getElementById('quickQuestions'); container.replaceChildren();
+        items.forEach(text => { const button = document.createElement('button'); button.type = 'button'; button.className = 'btn btn-outline-secondary btn-sm'; button.dataset.question = text; button.textContent = text; container.append(button); });
+    };
     const loadDashboard = async () => {
         dashboard.textContent = 'Загружаем показатели…'; priorities.replaceChildren();
         try {
@@ -140,6 +164,7 @@
             if (!response.ok) throw new Error('Dashboard unavailable');
             const data = await response.json();
             automaticSummary.classList.toggle('d-none', !data.showAutomaticSummary);
+            renderQuickQuestions(data.pageArea);
             if (!data.showAutomaticSummary) return;
             const section = sectionDashboard(data); dashboardTitle.textContent = section.title;
             const funnel = section.funnel ? `<div class="mt-2">Воронка: <div class="ai-assistant-bar"><span style="width:${data.elements ? Math.min(100, Math.round(data.approved * 100 / data.elements)) : 0}%"></span></div><span class="text-muted">Согласовано ${number(data.approved)} из ${number(data.elements)}</span></div>` : '';
@@ -149,33 +174,45 @@
             if (settings.autoBrief && isConfigured && !sessionStorage.getItem(briefKey)) { sessionStorage.setItem(briefKey, '1'); question.value = 'Дай краткий доклад по текущему разделу: что сделано, что требует внимания и какие следующие шаги.'; form.requestSubmit(); }
         } catch { dashboard.textContent = 'Показатели сейчас недоступны. Обновите страницу или попробуйте позже.'; }
     };
-    const savedMessages = load(historyKey, []);
+    let historyMessages = [];
     const render = (message, persist = true) => {
         const item = document.createElement('div'); item.className = `ai-assistant-message border rounded p-2 mb-2 ${message.style}`;
         const title = document.createElement('strong'); title.textContent = message.role;
         const body = document.createElement('div'); body.className = 'mt-1 small'; body.textContent = message.text;
         item.append(title, body); history.append(item);
-        if (persist) { const messages = Array.isArray(load(historyKey, [])) ? load(historyKey, []) : []; messages.push(message); sessionStorage.setItem(historyKey, JSON.stringify(messages.slice(-settings.historyLimit))); }
+        if (persist) { historyMessages.push(message); historyMessages = historyMessages.slice(-settings.historyLimit); save(historyKey, historyMessages); }
     };
-    if (Array.isArray(savedMessages)) savedMessages.forEach(message => render(message, false));
-    if (history.children.length) history.scrollTop = history.scrollHeight;
+    const loadHistory = async () => {
+        try {
+            const response = await fetch(`@Url.Action("History", "AdminAiAssistant")?limit=${settings.historyLimit}`, { credentials:'same-origin' });
+            if (!response.ok) throw new Error('History unavailable');
+            const messages = await response.json(); historyMessages = Array.isArray(messages) ? messages : [];
+            history.replaceChildren(); historyMessages.forEach(message => render(message, false)); save(historyKey, historyMessages);
+        } catch {
+            historyMessages = Array.isArray(load(historyKey, [])) ? load(historyKey, []) : [];
+            historyMessages.forEach(message => render(message, false));
+        }
+        if (history.children.length) history.scrollTop = history.scrollHeight;
+    };
+    loadHistory();
     toggle.addEventListener('click', () => setOpen(panel.classList.contains('d-none')));
     document.getElementById('assistantClose').addEventListener('click', () => { setOpen(false); toggle.focus(); });
     panel.addEventListener('keydown', event => { if (event.key === 'Escape') { setOpen(false); toggle.focus(); } });
-    clear.addEventListener('click', () => { sessionStorage.removeItem(historyKey); history.replaceChildren(); });
+    clear.addEventListener('click', async () => {
+        try { await fetch('@Url.Action("ClearHistory", "AdminAiAssistant")', { method:'POST', headers:{ 'RequestVerificationToken':token }, credentials:'same-origin' }); } catch { }
+        historyMessages = []; localStorage.removeItem(historyKey); sessionStorage.removeItem(historyKey); history.replaceChildren();
+    });
     period.addEventListener('change', () => { settings.period = period.value; saveSettings(); loadDashboard(); });
     autoBrief.addEventListener('change', () => { settings.autoBrief = autoBrief.checked; saveSettings(); });
     historyLimit.addEventListener('change', () => {
         settings.historyLimit = Number(historyLimit.value); saveSettings();
-        const messages = Array.isArray(load(historyKey, [])) ? load(historyKey, []) : [];
-        sessionStorage.setItem(historyKey, JSON.stringify(messages.slice(-settings.historyLimit)));
+        historyMessages = historyMessages.slice(-settings.historyLimit); save(historyKey, historyMessages);
     });
     exportHistory.addEventListener('click', () => {
-        const messages = Array.isArray(load(historyKey, [])) ? load(historyKey, []) : [];
-        const blob = new Blob([JSON.stringify({ exportedAt:new Date().toISOString(), messages }, null, 2)], { type:'application/json' });
+        const blob = new Blob([JSON.stringify({ exportedAt:new Date().toISOString(), messages:historyMessages }, null, 2)], { type:'application/json' });
         const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'ai-assistant-history.json'; link.click(); URL.revokeObjectURL(link.href);
     });
-    document.querySelectorAll('[data-question]').forEach(button => button.addEventListener('click', () => { question.value = button.dataset.question; question.focus(); }));
+    document.getElementById('quickQuestions').addEventListener('click', event => { const button = event.target.closest('[data-question]'); if (!button) return; question.value = button.dataset.question; question.focus(); });
     form.addEventListener('submit', async event => {
         event.preventDefault(); const text = question.value.trim(); if (!text) return;
         render({ role:'Вы', text, style:'bg-light' }); history.scrollTop = history.scrollHeight; question.value = ''; send.disabled = true; processing.classList.remove('d-none');
@@ -212,7 +249,7 @@
     let drag = null;
     handle.addEventListener('pointerdown', event => { if (event.target.closest('button')) return; const rect = panel.getBoundingClientRect(); drag = { x:event.clientX - rect.left, y:event.clientY - rect.top }; handle.setPointerCapture(event.pointerId); });
     handle.addEventListener('pointermove', event => { if (drag) place({ left:event.clientX - drag.x, top:event.clientY - drag.y }); });
-    const finishDrag = () => { if (!drag) return; drag = null; const rect = panel.getBoundingClientRect(); preferredPosition = { left:Math.round(rect.left), top:Math.round(rect.top) }; sessionStorage.setItem(positionKey, JSON.stringify(preferredPosition)); };
+    const finishDrag = () => { if (!drag) return; drag = null; const rect = panel.getBoundingClientRect(); preferredPosition = { left:Math.round(rect.left), top:Math.round(rect.top) }; save(positionKey, preferredPosition); };
     handle.addEventListener('pointerup', finishDrag); handle.addEventListener('pointercancel', finishDrag);
     window.addEventListener('resize', fitPanel);
     window.visualViewport?.addEventListener('resize', fitPanel);

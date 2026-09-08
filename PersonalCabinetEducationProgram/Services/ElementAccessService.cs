@@ -41,7 +41,7 @@ namespace PersonalCabinetEducationProgram.Services
             return access.Allowed;
         }
 
-        public async Task<bool> CanManageElementAsync(ClaimsPrincipal user, int elementId)
+        public async Task<bool> CanManageElementAsync(ClaimsPrincipal user, int elementId, bool recordDenial = true)
         {
             var isAdmin = user.IsInRole(AppRoles.Admin);
             if (!isAdmin && !user.IsInRole(AppRoles.Manager))
@@ -61,7 +61,7 @@ namespace PersonalCabinetEducationProgram.Services
 
             if (access == null)
                 return false;
-            if (!access.Allowed)
+            if (!access.Allowed && recordDenial)
                 _incidents.Record("EducationalProgramElement", elementId, "управление элементом");
             return access.Allowed;
         }
@@ -92,7 +92,7 @@ namespace PersonalCabinetEducationProgram.Services
             return access.Allowed;
         }
 
-        public async Task<bool> CanApproveElementAsync(ClaimsPrincipal user, int elementId)
+        public async Task<bool> CanApproveElementAsync(ClaimsPrincipal user, int elementId, bool recordDenial = true)
         {
             var isAdmin = user.IsInRole(AppRoles.Admin);
             if (!isAdmin && !user.IsInRole(AppRoles.Approver))
@@ -115,7 +115,7 @@ namespace PersonalCabinetEducationProgram.Services
 
             if (access == null)
                 return false;
-            if (!access.Allowed)
+            if (!access.Allowed && recordDenial)
                 _incidents.Record("EducationalProgramElement", elementId, "согласование элемента");
             return access.Allowed;
         }

@@ -1,0 +1,123 @@
+@model PersonalCabinetEducationProgram.ViewModels.DocumentAnalysisViewModel
+@using PersonalCabinetEducationProgram.Models
+@{
+    ViewData["Title"] = "Проверка PDF перед согласованием";
+    var selected = Model.Selected;
+    string StatusText(DocumentAnalysisStatus status) => status switch {
+        DocumentAnalysisStatus.Queued => "В очереди", DocumentAnalysisStatus.Running => "Выполняется",
+        DocumentAnalysisStatus.Completed => "Проверка выполнена", DocumentAnalysisStatus.NeedsManualReview => "Требуется ручная проверка",
+        DocumentAnalysisStatus.Cancelled => "Отменена", _ => "Не выполнена" };
+    string DecisionText(DocumentFindingStatus status) => status switch {
+        DocumentFindingStatus.Accepted => "Учтено", DocumentFindingStatus.Dismissed => "Не является ошибкой", _ => "Открыто" };
+}
+<div class="container py-4" style="max-width:1100px">
+    <a asp-controller="ManagerHome" asp-action="ManageFiles" asp-route-elementId="@Model.File.EducationalProgramElementId">← Файлы элемента</a>
+    <h1 class="h3 mt-3">Проверка PDF перед согласованием</h1>
+    <p><strong>@Model.File.Element.EducationalProgram.Name</strong><br />@Model.File.Element.Name · @Model.File.OriginalFileName · итерация @Model.File.RevisionNumber · файл №@Model.File.Id</p>
+    <p class="text-muted">Помощник проверяет выбранный PDF. «Учесть» фиксирует вашу реакцию; исправления внесите в исходный документ и загрузите новый PDF.</p>
+    @if (TempData["ErrorMessage"] is string error) { <div role="alert" class="alert alert-danger">@error</div> }
+    <div class="card mb-4"><div class="card-body">
+        <h2 class="h5">Новая проверка</h2>
+        <p class="small">До @(Model.MaxFileBytes / 1024 / 1024) МБ на PDF.
+            @(Model.CloudEnabled ? "Текст выбранного PDF будет отправлен настроенному ИИ-провайдеру. Предыдущая версия сравнивается локально." : "Облачная смысловая проверка отключена. Доступны локальные формальные проверки.")</p>
+        @if (Model.CanStart)
+        {
+            <form asp-action="Start" method="post">
+                <input type="hidden" name="fileId" value="@Model.File.Id" />
+                <label class="form-label" for="previousPdf">Предыдущий PDF того же документа (необязательно)</label>
+                <select id="previousPdf" name="previousFileId" class="form-select mb-2">
+                    <option value="">Без сравнения</option>
+                    @foreach (var previous in Model.PreviousFiles)
+                    {
+                        <option value="@previous.Id">@previous.OriginalFileName · итерация @previous.RevisionNumber · файл №@previous.Id · @previous.UploadedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</option>
+                    }
+                </select>
+                <p class="small text-muted">При переименовании выберите предыдущий файл вручную. В комплекте могут быть разные документы.</p>
+                <button class="btn btn-primary" type="submit">Проверить выбранный PDF</button>
+            </form>
+        }
+        else { <p>Для новой проверки выберите текущий файл до отправки на согласование. История этой версии доступна ниже.</p> }
+    </div></div>
+    @if (selected != null)
+    {
+        <section class="mb-4" aria-labelledby="analysisTitle">
+            <h2 id="analysisTitle" class="h4">@StatusText(selected.Status)</h2>
+            <p class="small">Проверка №@selected.Id · @selected.RequestedByName · @selected.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")<br />
+                Версия: файл №@selected.FileId / итерация @selected.FileRevision · SHA-256: <code class="text-break">@selected.FileHash</code></p>
+            <div id="analysisMessage" role="status" class="alert alert-info">@selected.Message</div>
+            @if (selected.Status is DocumentAnalysisStatus.Queued or DocumentAnalysisStatus.Running)
+            {
+                <div id="documentAnalysisPolling" data-status-url="@Url.Action("Status", new { id = selected.Id })"></div>
+                <p class="small">Страница обновится по завершении. Проверка продолжится, если вы закроете вкладку.</p>
+            }
+            <p>@selected.Summary</p>
+            @if (selected.PreviousFileId.HasValue)
+            {
+                <p>Сравнение с файлом №@selected.PreviousFileId. <a asp-action="Index" asp-route-fileId="@selected.PreviousFileId">История проверок предыдущего PDF</a></p>
+            }
+            @if (selected.Pages.Count > 0)
+            {
+                <details class="border rounded p-3 mb-3"><summary>Техническая проверка страниц и OCR</summary>
+                    <p class="small mt-2">Пустые страницы и отсутствие текста — технические статусы без цитат. Пустоту изображения скана и визуальное качество проверьте вручную.</p>
+                    <ul>@foreach (var diagnostic in selected.Pages.OrderBy(p => p.PageNumber)) {
+                        <li>Страница @diagnostic.PageNumber: @diagnostic.Message</li>
+                    }</ul>
+                </details>
+            }
+            <h3 class="h5">Замечания (@selected.Findings.Count)</h3>
+            @if (selected.Findings.Count == 0 && selected.CompletedAtUtc.HasValue)
+            { <p>Подтверждённых замечаний нет. Это не гарантирует отсутствие ошибок; учитывайте полноту проверки выше.</p> }
+            @foreach (var finding in selected.Findings.OrderBy(f => f.PageNumber).ThenBy(f => f.Id))
+            {
+                <article class="card mb-3"><div class="card-body">
+                    <div class="d-flex justify-content-between gap-3"><h4 class="h6">@finding.Title</h4><span>@DecisionText(finding.Status)</span></div>
+                    <p class="small text-muted">Страница @finding.PageNumber · уверенность @finding.Confidence.ToString("P0") · @(finding.Type == "Semantic" ? "ИИ: контекстная проверка" : "Проверка кодом") @(finding.FromOcr ? "· цитата OCR" : "")</p>
+                    <p>@finding.Description</p>
+                    <blockquote class="border-start border-3 ps-3" style="white-space:pre-wrap">@finding.Quote</blockquote>
+                    <details class="mb-3"><summary class="btn btn-outline-secondary btn-sm">Почему?</summary>
+                        <p class="mt-2"><strong>Почему это может быть ошибкой?</strong> @finding.Description</p>
+                        <p><strong>Где это указано?</strong> Страница @finding.PageNumber выбранной версии, цитата выше.
+                            <a href="@(Url.Action("Preview", "ElementFiles", new { id = selected.FileId }) + "#page=" + finding.PageNumber)" target="_blank" rel="noopener">Открыть страницу PDF</a></p>
+                        <p><strong>Как исправить?</strong> @finding.Suggestion</p>
+                        @if (finding.FromOcr) { <p>OCR может ошибаться. Сначала сверьте цитату с изображением PDF.</p> }
+                    </details>
+                    <form asp-action="Feedback" method="post">
+                        <input type="hidden" name="findingId" value="@finding.Id" />
+                        <input type="hidden" name="version" value="@finding.ConcurrencyToken" />
+                        <label for="feedback-@finding.Id" class="form-label small">Комментарий к решению (необязательно)</label>
+                        <textarea id="feedback-@finding.Id" name="comment" maxlength="1000" rows="2" class="form-control mb-2"></textarea>
+                        <button name="decision" value="Dismissed" type="submit" class="btn btn-outline-secondary btn-sm">Не является ошибкой</button>
+                        <button name="decision" value="Accepted" type="submit" class="btn btn-outline-primary btn-sm">Учесть</button>
+                    </form>
+                    @if (finding.Feedback.Count > 0)
+                    {
+                        <details class="small mt-2"><summary>История реакций</summary><ul>
+                        @foreach (var feedback in finding.Feedback.OrderBy(f => f.CreatedAtUtc)) {
+                            <li>@feedback.UserName · @feedback.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss") · @DecisionText(feedback.Decision): @feedback.Comment</li>
+                        }</ul></details>
+                    }
+                </div></article>
+            }
+            @if (selected.Changes.Count > 0)
+            {
+                <h3 class="h5">Изменения после доработки</h3>
+                <p class="small text-muted">Текстовое сравнение учитывает вставку и удаление страниц. Переносы текста, сложные таблицы, подписи и оформление требуют визуальной сверки.</p>
+                @foreach (var change in selected.Changes.OrderBy(c => c.Id))
+                {
+                    <details class="border rounded p-3 mb-2"><summary>@(change.Kind == "Added" ? "Добавлена страница" : change.Kind == "Removed" ? "Удалена страница" : "Изменена страница") · было @(change.OldPageNumber?.ToString() ?? "—") → стало @(change.NewPageNumber?.ToString() ?? "—")</summary>
+                        <p>@change.Description</p>
+                        <div class="row"><div class="col-md-6"><strong>Было</strong><blockquote style="white-space:pre-wrap">@change.BeforeQuote</blockquote></div>
+                        <div class="col-md-6"><strong>Стало</strong><blockquote style="white-space:pre-wrap">@change.AfterQuote</blockquote></div></div>
+                    </details>
+                }
+            }
+        </section>
+    }
+    <h2 class="h5">История проверок этого PDF</h2>
+    <ul>@foreach (var entry in Model.History) {
+        <li><a asp-action="Index" asp-route-fileId="@Model.File.Id" asp-route-analysisId="@entry.Id">№@entry.Id · @entry.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm") · @entry.RequestedByName · @StatusText(entry.Status)</a></li>
+    }</ul>
+    @if (Model.HistoryPage > 1) { <a asp-action="Index" asp-route-fileId="@Model.File.Id" asp-route-historyPage="@(Model.HistoryPage - 1)" class="me-3">Новее</a> }
+    @if (Model.HasMoreHistory) { <a asp-action="Index" asp-route-fileId="@Model.File.Id" asp-route-historyPage="@(Model.HistoryPage + 1)">Ранее</a> }
+</div>
+@section Scripts { <script src="~/js/document-analysis.js" asp-append-version="true"></script> }

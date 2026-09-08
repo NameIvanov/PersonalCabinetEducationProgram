@@ -63,6 +63,14 @@
                     <td>
                         <div class="d-flex flex-wrap gap-2">
                             <a asp-controller="ElementFiles" asp-action="Preview" asp-route-id="@file.Id" target="_blank" class="btn btn-outline-secondary btn-sm">Открыть</a>
+                            @if (allowFileEditing && (User.IsInRole(AppRoles.Manager) || User.IsInRole(AppRoles.Admin)))
+                            {
+                                <a asp-controller="DocumentAnalysis" asp-action="Index" asp-route-fileId="@file.Id" class="btn btn-outline-primary btn-sm">Проверить PDF</a>
+                            }
+                            else if (User.IsInRole(AppRoles.Approver) || User.IsInRole(AppRoles.Moderator))
+                            {
+                                <a asp-controller="DocumentAssistant" asp-action="Index" asp-route-fileId="@file.Id" class="btn btn-outline-primary btn-sm">ИИ-помощник</a>
+                            }
                             <form asp-controller="ElementFiles" asp-action="Download" asp-route-id="@file.Id" method="post" class="d-inline">
                                 <button type="submit" class="btn btn-outline-secondary btn-sm">Скачать</button>
                             </form>

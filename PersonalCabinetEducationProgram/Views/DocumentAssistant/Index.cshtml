@@ -1,0 +1,59 @@
+@model PersonalCabinetEducationProgram.ViewModels.DocumentAssistantViewModel
+@using PersonalCabinetEducationProgram.Models
+@{
+    ViewData["Title"] = "ИИ-помощник ОПОП";
+    var manager = Model.Purpose == DocumentAnalysisPurpose.ManagerPreflight;
+    var approver = Model.Purpose == DocumentAnalysisPurpose.ApproverReview;
+    var roleName = manager ? "руководителя ОПОП" : approver ? "согласующего" : "модератора";
+}
+<div class="container py-4" style="max-width:1000px">
+    <a asp-controller="Account" asp-action="RedirectByRole">← В личный кабинет</a>
+    <h1 class="h3 mt-3">ИИ-помощник @roleName</h1>
+    <p>Выберите доступную ОПОП и один PDF-документ.</p>
+    @if (!manager)
+    {
+        <div class="alert alert-info" role="status">
+            @(approver ? "Анализ для согласующего — следующий этап: содержание, риски, сравнение с требованиями и помощь в подготовке комментария." : "Анализ для модератора — следующий этап: сверка с утверждённой версией и проверка перед публикацией.")
+            Сейчас доступны выбор и просмотр PDF. Анализ для этой роли ещё не включён; текст документа не отправляется провайдеру.
+        </div>
+    }
+    @if (Model.Programs.Count == 0)
+    {
+        <p class="text-muted">Нет доступных ОПОП с элементами. Проверьте назначения или обратитесь к администратору.</p>
+    }
+    else
+    {
+        <form method="get" asp-action="Index" class="mb-4">
+            <label for="assistantProgram" class="form-label">Образовательная программа</label>
+            <div class="input-group">
+                <select id="assistantProgram" name="programId" class="form-select">
+                    @foreach (var program in Model.Programs)
+                    { <option value="@program.Id" selected="@(program.Id == Model.ProgramId)">@program.CodeReferral — @program.Name</option> }
+                </select>
+                <button class="btn btn-outline-primary" type="submit">Выбрать</button>
+            </div>
+        </form>
+        @if (Model.SelectedFile is { } selected)
+        {
+            <div class="card mb-3"><div class="card-body">
+                <h2 class="h5">Выбран PDF: @selected.OriginalFileName</h2>
+                <p>@selected.Element.Name · итерация @selected.RevisionNumber · файл №@selected.Id</p>
+                <a asp-controller="ElementFiles" asp-action="Preview" asp-route-id="@selected.Id" target="_blank" rel="noopener" class="btn btn-outline-secondary">Открыть PDF</a>
+            </div></div>
+        }
+        <h2 class="h5">PDF текущих комплектов</h2>
+        <div class="table-responsive"><table class="table align-middle">
+            <thead><tr><th>Элемент ОПОП</th><th>PDF</th><th>Действие</th></tr></thead>
+            <tbody>
+            @foreach (var file in Model.Files)
+            {
+                <tr><td>@file.Element.Name</td><td>@file.OriginalFileName<br /><small class="text-muted">Итерация @file.RevisionNumber · файл №@file.Id</small></td>
+                    <td><a asp-action="Index" asp-route-programId="@Model.ProgramId" asp-route-fileId="@file.Id" class="btn btn-outline-primary btn-sm">@(manager ? "Проверить PDF" : "Выбрать PDF")</a></td></tr>
+            }
+            @if (Model.Files.Count == 0) { <tr><td colspan="3" class="text-muted">В выбранной ОПОП нет текущих PDF.</td></tr> }
+            </tbody>
+        </table></div>
+        @if (Model.Page > 1) { <a asp-action="Index" asp-route-programId="@Model.ProgramId" asp-route-page="@(Model.Page - 1)" class="me-3">Назад</a> }
+        @if (Model.HasNextPage) { <a asp-action="Index" asp-route-programId="@Model.ProgramId" asp-route-page="@(Model.Page + 1)">Далее</a> }
+    }
+</div>

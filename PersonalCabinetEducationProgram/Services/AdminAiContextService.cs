@@ -168,7 +168,7 @@ public sealed partial class AdminAiContextService
             AdministrationBlockedAccounts = administrationBlockedAccounts,
             AdministrationAuditActions = administrationAuditActions,
             Priorities = priorities,
-            Metrics = _metrics.GetSnapshot()
+            Metrics = await _metrics.GetSnapshotAsync(since, cancellationToken)
         };
     }
 

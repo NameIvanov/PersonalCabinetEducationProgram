@@ -5,6 +5,18 @@
     var combineFileActions = controllerName is "ApproverHome" or "ModeratorHome";
 }
 
+@if (controllerName == "ManagerHome" && files.Count > 0)
+{
+    if (files.Count == 1)
+    {
+        <a asp-controller="DocumentAnalysis" asp-action="Index" asp-route-fileId="@files[0].Id" class="btn btn-outline-primary btn-sm">Проверить PDF</a>
+    }
+    else
+    {
+        <a asp-controller="ManagerHome" asp-action="ManageFiles" asp-route-elementId="@Model.Id" class="btn btn-outline-primary btn-sm">Проверить PDF…</a>
+    }
+}
+
 @if (combineFileActions && files.Count > 0)
 {
     <div class="dropdown d-inline-block action-with-count">
@@ -20,6 +32,7 @@
                     <span class="small text-truncate flex-grow-1" style="max-width: 220px;" title="@file.OriginalFileName">@file.OriginalFileName</span>
                     <a asp-controller="ElementFiles" asp-action="Preview" asp-route-id="@file.Id"
                        class="btn btn-outline-secondary btn-sm flex-shrink-0" title="Просмотр" target="_blank">📄</a>
+                    <a asp-controller="DocumentAssistant" asp-action="Index" asp-route-fileId="@file.Id" class="btn btn-outline-primary btn-sm flex-shrink-0">ИИ-помощник</a>
                     <form asp-controller="ElementFiles" asp-action="Download" asp-route-id="@file.Id" method="post" class="d-inline flex-shrink-0">
                         <button class="btn btn-outline-secondary btn-sm" type="submit" title="Скачать">⬇</button>
                     </form>

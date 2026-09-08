@@ -41,7 +41,7 @@
 </head>
 <body>
     <header class="app-header">
-        <a class="app-brand" asp-controller="ManagerHome" asp-action="Index">
+        <a class="app-brand" asp-controller="Account" asp-action="@(isAuthenticated ? "RedirectByRole" : "Login")">
             <span class="app-brand-mark" aria-hidden="true">ОП</span>
             <span>Личный кабинет ОПОП</span>
         </a>
@@ -65,6 +65,10 @@
         @if (isAuthenticated)
         {
             <div class="app-user">
+                @if (!User.IsInRole(AppRoles.Admin) && (User.IsInRole(AppRoles.Manager) || User.IsInRole(AppRoles.Approver) || User.IsInRole(AppRoles.Moderator)))
+                {
+                    <a asp-controller="DocumentAssistant" asp-action="Index" asp-route-programId="@(ViewBag.SelectedProgramId as int?)" class="btn btn-outline-primary btn-sm">ИИ-помощник</a>
+                }
                 <form class="theme-preference-form" asp-controller="UserPreferences" asp-action="SetTheme" method="post" data-theme-form>
                     <input type="hidden" name="theme" value="@preferredTheme" data-theme-value />
                     <button type="button"

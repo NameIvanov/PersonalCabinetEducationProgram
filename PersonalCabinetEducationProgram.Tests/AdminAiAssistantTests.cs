@@ -265,6 +265,50 @@ public sealed class AdminAiAssistantTests
     }
 
     [Fact]
+    public async Task ConversationHistory_IsPrivateToAdministratorAndCanBeCleared()
+    {
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase($"ai-conversation-{Guid.NewGuid():N}").Options;
+        await using var context = new ApplicationDbContext(options);
+        var store = new AdminAiConversationStore(context, Options.Create(new AiOptions()));
+
+        await store.AppendAsync(77, "user", "Первый вопрос", CancellationToken.None);
+        await store.AppendAsync(77, "assistant", "Первый ответ", CancellationToken.None);
+        await store.AppendAsync(78, "user", "Другой администратор", CancellationToken.None);
+
+        var ownMessages = await store.GetRecentAsync(77, 20, CancellationToken.None);
+        Assert.Collection(ownMessages,
+            message => Assert.Equal("Первый вопрос", message.Content),
+            message => Assert.Equal("Первый ответ", message.Content));
+
+        await store.ClearAsync(77, CancellationToken.None);
+        Assert.Empty(await store.GetRecentAsync(77, 20, CancellationToken.None));
+        Assert.Single(await store.GetRecentAsync(78, 20, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Metrics_ArePersistedWhenDatabaseIsAvailable()
+    {
+        var databaseName = $"ai-metrics-{Guid.NewGuid():N}";
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>().UseInMemoryDatabase(databaseName).Options;
+        await using (var context = new ApplicationDbContext(options))
+        {
+            var metrics = new AiAssistantMetrics(context);
+            await metrics.RecordAsync(true, "success", 24);
+            await metrics.RecordAsync(false, "timeout", 76);
+        }
+
+        await using var verificationContext = new ApplicationDbContext(options);
+        var snapshot = await new AiAssistantMetrics(verificationContext)
+            .GetSnapshotAsync(DateTime.UtcNow.AddMinutes(-1));
+
+        Assert.Equal(2, snapshot.Calls);
+        Assert.Equal(1, snapshot.Succeeded);
+        Assert.Equal(1, snapshot.TimedOut);
+        Assert.Equal(50, snapshot.AverageDurationMs);
+    }
+
+    [Fact]
     public async Task GroqProvider_UsesConfiguredUrlBearerAndModelWithoutTools()
     {
         var handler = new RecordingHandler(HttpStatusCode.OK, """{"choices":[{"message":{"content":"Краткий ответ."}}]}""");
@@ -307,6 +351,34 @@ public sealed class AdminAiAssistantTests
 
         Assert.False(result.Succeeded);
         Assert.Contains("время ожидания", result.Message);
+    }
+
+    [Fact]
+    public async Task GroqProvider_UsesConfiguredFallbackWhenPrimaryIsUnavailable()
+    {
+        var handler = new FallbackHandler();
+        var service = new GroqAiAssistantService(
+            new SingleClientFactory(new HttpClient(handler) { BaseAddress = new Uri("https://primary.example/v1/") }),
+            Options.Create(new AiOptions
+            {
+                Provider = "Groq",
+                ApiKey = "primary-key",
+                Model = "primary-model",
+                BaseUrl = "https://primary.example/v1/",
+                FallbackProvider = "OpenAI",
+                FallbackApiKey = "fallback-key",
+                FallbackModel = "fallback-model",
+                FallbackBaseUrl = "https://fallback.example/v1/"
+            }),
+            NullLogger<GroqAiAssistantService>.Instance,
+            new AiAssistantMetrics());
+
+        var result = await service.AskAsync("Вопрос", "Сводка", CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal("Ответ резервного провайдера.", result.Message);
+        Assert.Equal(2, handler.RequestUris.Count);
+        Assert.Equal("fallback.example", handler.RequestUris[1].Host);
     }
 
     [Fact]
@@ -376,5 +448,22 @@ public sealed class AdminAiAssistantTests
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
             throw new TaskCanceledException("simulated timeout");
+    }
+
+    private sealed class FallbackHandler : HttpMessageHandler
+    {
+        public List<Uri> RequestUris { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            RequestUris.Add(request.RequestUri!);
+            var isFallback = request.RequestUri!.Host.Equals("fallback.example", StringComparison.Ordinal);
+            return Task.FromResult(new HttpResponseMessage(isFallback ? HttpStatusCode.OK : HttpStatusCode.ServiceUnavailable)
+            {
+                Content = new StringContent(isFallback
+                    ? """{"choices":[{"message":{"content":"Ответ резервного провайдера."}}]}"""
+                    : "{}")
+            });
+        }
     }
 }

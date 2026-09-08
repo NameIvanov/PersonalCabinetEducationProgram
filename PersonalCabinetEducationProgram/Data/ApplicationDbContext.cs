@@ -25,6 +25,11 @@ namespace PersonalCabinetEducationProgram.Data
         public DbSet<UserLoginLocation> UserLoginLocations { get; set; }
         public DbSet<UserLoginSession> UserLoginSessions { get; set; }
         public DbSet<IpAddressSecurityState> IpAddressSecurityStates { get; set; }
+        public DbSet<AdminAiConversationMessage> AdminAiConversationMessages { get; set; }
+        public DbSet<AiAssistantCallMetric> AiAssistantCallMetrics { get; set; }
+        public DbSet<DocumentAnalysis> DocumentAnalyses { get; set; }
+        public DbSet<DocumentFinding> DocumentFindings { get; set; }
+        public DbSet<DocumentFindingFeedback> DocumentFindingFeedback { get; set; }
 
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) { }
 
@@ -32,6 +37,7 @@ namespace PersonalCabinetEducationProgram.Data
         {
             base.OnModelCreating(modelBuilder);
             ConfigureIdentityTables(modelBuilder);
+            DocumentAnalysisModelConfiguration.Configure(modelBuilder);
 
             modelBuilder.Entity<EducationalProgram>(entity =>
             {
@@ -252,6 +258,27 @@ namespace PersonalCabinetEducationProgram.Data
                 entity.HasIndex(a => a.UserId).HasDatabaseName("ix_audit_user");
                 entity.HasIndex(a => new { a.EntityType, a.EntityId }).HasDatabaseName("ix_audit_entity");
                 entity.HasIndex(a => a.CreatedAt).HasDatabaseName("ix_audit_created");
+            });
+
+            modelBuilder.Entity<AdminAiConversationMessage>(entity =>
+            {
+                entity.Property(message => message.Role).HasMaxLength(16);
+                entity.Property(message => message.Content).HasMaxLength(4000);
+                entity.Property(message => message.CreatedAtUtc).HasPrecision(6);
+                entity.HasOne(message => message.User)
+                    .WithMany()
+                    .HasForeignKey(message => message.UserId)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("fk_ai_conversation_user");
+                entity.HasIndex(message => new { message.UserId, message.CreatedAtUtc })
+                    .HasDatabaseName("ix_ai_conversation_user_date");
+            });
+
+            modelBuilder.Entity<AiAssistantCallMetric>(entity =>
+            {
+                entity.Property(metric => metric.Outcome).HasMaxLength(32);
+                entity.Property(metric => metric.OccurredAtUtc).HasPrecision(6);
+                entity.HasIndex(metric => metric.OccurredAtUtc).HasDatabaseName("ix_ai_metric_date");
             });
 
             modelBuilder.Entity<SystemRequestLog>(entity =>

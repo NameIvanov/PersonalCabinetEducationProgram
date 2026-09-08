@@ -9,6 +9,9 @@ using PersonalCabinetEducationProgram.Data;
 using PersonalCabinetEducationProgram.Models;
 using PersonalCabinetEducationProgram.Services;
 using Pomelo.EntityFrameworkCore.MySql.Infrastructure;
+using PersonalCabinetEducationProgram.Services.Documents;
+
+if (PdfExtractionWorker.TryRun(args)) return;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -127,6 +130,7 @@ builder.Services.AddScoped<IFileStorageService, FileSystemStorageService>();
 builder.Services.AddScoped<ElementWorkflowService>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<ElementAccessService>();
+builder.Services.AddDocumentAnalysis(builder.Configuration);
 builder.Services.AddScoped<ObjectAuthorizationIncidentService>();
 builder.Services.AddScoped<ProtectedObjectProbeDetector>();
 builder.Services.AddScoped<IpAddressSecurityService>();
@@ -135,8 +139,9 @@ builder.Services.AddScoped<ElementFilterService>();
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<SecurityEventService>();
 builder.Services.AddScoped<AdminAiContextService>();
+builder.Services.AddScoped<AdminAiConversationStore>();
 builder.Services.AddScoped<IAiAssistantService, GroqAiAssistantService>();
-builder.Services.AddSingleton<AiAssistantMetrics>();
+builder.Services.AddScoped<AiAssistantMetrics>();
 builder.Services.AddScoped<AccountSecurityService>();
 builder.Services.AddScoped<LoginSecurityService>();
 builder.Services.AddSingleton<IIpNetworkService, IpNetworkService>();

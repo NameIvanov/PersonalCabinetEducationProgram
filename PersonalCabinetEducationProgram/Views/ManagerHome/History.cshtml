@@ -104,6 +104,10 @@
                                         </span>
                                         <span class="d-flex gap-1 flex-shrink-0">
                                             <a asp-controller="ElementFiles" asp-action="Preview" asp-route-id="@file.Id" class="btn btn-outline-secondary btn-sm" target="_blank">Открыть</a>
+                                            @if (returnController == "ManagerHome")
+                                            {
+                                                <a asp-controller="DocumentAnalysis" asp-action="Index" asp-route-fileId="@file.Id" class="btn btn-outline-primary btn-sm">Проверки PDF</a>
+                                            }
                                             <form asp-controller="ElementFiles" asp-action="Download" asp-route-id="@file.Id" method="post" class="d-inline">
                                                 <button type="submit" class="btn btn-outline-secondary btn-sm">Скачать</button>
                                             </form>
