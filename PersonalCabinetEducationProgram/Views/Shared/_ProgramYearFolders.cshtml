@@ -1,0 +1,72 @@
+@model PersonalCabinetEducationProgram.ViewModels.ProgramSidebarViewModel
+@using PersonalCabinetEducationProgram.Models
+@{
+    var programsByYear = Model.Programs.ToLookup(p => p.YearApprovals ?? EducationalProgramYears.ExistingProgramsYear);
+    var years = Enumerable.Range(EducationalProgramYears.FirstYear,
+        EducationalProgramYears.CurrentYear - EducationalProgramYears.FirstYear + 1)
+        .Concat(programsByYear.Select(group => group.Key)).Distinct().OrderByDescending(year => year);
+}
+
+<div class="accordion" id="programYearFolders">
+    @foreach (var year in years)
+    {
+        var yearPrograms = programsByYear[year].ToList();
+        var yearContainsSelected = yearPrograms.Any(p => p.Id == Model.SelectedProgramId);
+        var yearId = $"programYear_{year}";
+        <div class="accordion-item border-0 bg-transparent mb-1" data-program-year="@year">
+            <h2 class="accordion-header">
+                <button class="accordion-button @(yearContainsSelected ? "" : "collapsed") bg-white shadow-none px-2 py-2 fw-semibold small"
+                        type="button" data-bs-toggle="collapse" data-bs-target="#@yearId"
+                        aria-expanded="@(yearContainsSelected ? "true" : "false")" aria-controls="@yearId">
+                    <span aria-hidden="true" class="me-2">📁</span><span>@year год</span>
+                    <span class="badge bg-secondary-subtle text-secondary ms-2">@yearPrograms.Count</span>
+                </button>
+            </h2>
+            <div id="@yearId" class="accordion-collapse collapse @(yearContainsSelected ? "show" : "")" data-bs-parent="#programYearFolders">
+                <div class="accordion-body p-0 ps-2">
+                    @if (yearPrograms.Count == 0)
+                    {
+                        <div class="small text-muted px-2 py-2">Нет образовательных программ</div>
+                    }
+                    else
+                    {
+                        var levelIndex = 0;
+                        <div class="accordion" id="programLevels_@year">
+                            @foreach (var level in yearPrograms.GroupBy(p => p.EducationalLevel).OrderBy(group => group.Key))
+                            {
+                                var levelId = $"programLevel_{year}_{levelIndex++}";
+                                var levelContainsSelected = level.Any(p => p.Id == Model.SelectedProgramId);
+                                <div class="accordion-item border-0 bg-transparent">
+                                    <h3 class="accordion-header">
+                                        <button class="accordion-button @(levelContainsSelected ? "" : "collapsed") bg-white shadow-none px-2 py-2 fw-semibold small"
+                                                type="button" data-bs-toggle="collapse" data-bs-target="#@levelId"
+                                                aria-expanded="@(levelContainsSelected ? "true" : "false")" aria-controls="@levelId">
+                                            @level.Key
+                                        </button>
+                                    </h3>
+                                    <div id="@levelId" class="accordion-collapse collapse @(levelContainsSelected ? "show" : "")" data-bs-parent="#programLevels_@year">
+                                        <div class="accordion-body p-0 ps-2">
+                                            @foreach (var program in level.OrderBy(p => p.CodeReferral).ThenBy(p => p.Name).ThenBy(p => p.Id))
+                                            {
+                                                var assignment = program.Assignments.FirstOrDefault();
+                                                <a asp-action="Index" asp-route-programId="@program.Id"
+                                                   class="d-block text-decoration-none py-1 px-2 rounded mb-1 sidebar-item @(program.Id == Model.SelectedProgramId ? "active" : "")">
+                                                    <div class="small fw-semibold text-dark">@program.CodeReferral</div>
+                                                    <div class="small text-muted app-small">@program.Name</div>
+                                                    @if (assignment?.Department != null)
+                                                    {
+                                                        <div class="text-muted app-caption">@assignment.Department.Name</div>
+                                                    }
+                                                </a>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>

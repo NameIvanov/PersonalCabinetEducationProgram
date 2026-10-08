@@ -1,0 +1,6 @@
+@model int?
+@using PersonalCabinetEducationProgram.Models
+@for (var year = EducationalProgramYears.FirstYear; year <= EducationalProgramYears.LastSelectableYear; year++)
+{
+    <option value="@year" selected="@(year == (Model ?? EducationalProgramYears.CurrentYear))">@year</option>
+}

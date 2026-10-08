@@ -244,8 +244,10 @@
                                 <input type="text" name="codeReferral" class="form-control" placeholder="01.03.02" required />
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">Год утверждения</label>
-                                <input type="number" name="yearApprovals" class="form-control" value="2026" required />
+                                <label class="form-label">Год программы</label>
+                                <select name="yearApprovals" class="form-select" required>
+                                    @await Html.PartialAsync("_ProgramYearOptions", (int?)EducationalProgramYears.CurrentYear)
+                                </select>
                             </div>
                             <div class="col-12">
                                 <label class="form-label">Наименование</label>

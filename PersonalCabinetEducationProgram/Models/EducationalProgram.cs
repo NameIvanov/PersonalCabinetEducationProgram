@@ -18,7 +18,7 @@ namespace PersonalCabinetEducationProgram.Models
         public string EducationalLevel { get; set; } = string.Empty;
 
         [Column("year_approvals")]
-        public int? YearApprovals { get; set; }
+        public int? YearApprovals { get; set; } = EducationalProgramYears.ExistingProgramsYear;
 
         public string Status { get; set; } = EducationalProgramStatus.Draft;
 

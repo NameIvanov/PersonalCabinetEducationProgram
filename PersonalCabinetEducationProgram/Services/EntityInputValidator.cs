@@ -19,8 +19,8 @@ namespace PersonalCabinetEducationProgram.Services
             return Required(code, "Шифр ОПОП", ProgramCodeMaxLength)
                 ?? Required(name, "Наименование ОПОП", ProgramNameMaxLength)
                 ?? Required(level, "Уровень образования", EducationalLevelMaxLength)
-                ?? (year < 1900 || year > DateTime.UtcNow.Year + 10
-                    ? $"Год утверждения должен быть от 1900 до {DateTime.UtcNow.Year + 10}."
+                ?? (year < Models.EducationalProgramYears.FirstYear || year > Models.EducationalProgramYears.LastSelectableYear
+                    ? $"Год программы должен быть от {Models.EducationalProgramYears.FirstYear} до {Models.EducationalProgramYears.LastSelectableYear}."
                     : null);
         }
 

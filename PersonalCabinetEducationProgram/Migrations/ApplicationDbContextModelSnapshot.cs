@@ -581,15 +581,15 @@ namespace PersonalCabinetEducationProgram.Migrations
                     b.HasIndex("ActiveKey")
                         .IsUnique();
 
-                    b.HasIndex("UserQueueKey")
-                        .IsUnique();
-
                     b.HasIndex("PreviousFileId");
 
                     b.HasIndex("QueueSlot")
                         .IsUnique();
 
                     b.HasIndex("RequestedByUserId");
+
+                    b.HasIndex("UserQueueKey")
+                        .IsUnique();
 
                     b.HasIndex("FileId", "CreatedAtUtc");
 
@@ -848,7 +848,8 @@ namespace PersonalCabinetEducationProgram.Migrations
                             Name = "Прикладная математика и информатика",
                             Status = "Разрабатывается",
                             UserId = 1,
-                            Version = 1
+                            Version = 1,
+                            YearApprovals = 2026
                         },
                         new
                         {
@@ -859,7 +860,8 @@ namespace PersonalCabinetEducationProgram.Migrations
                             Name = "Информатика и вычислительная техника",
                             Status = "Разрабатывается",
                             UserId = 1,
-                            Version = 1
+                            Version = 1,
+                            YearApprovals = 2026
                         },
                         new
                         {
@@ -870,7 +872,8 @@ namespace PersonalCabinetEducationProgram.Migrations
                             Name = "Педагогическое образование (Математика. Информатика)",
                             Status = "Разрабатывается",
                             UserId = 1,
-                            Version = 1
+                            Version = 1,
+                            YearApprovals = 2026
                         });
                 });
 

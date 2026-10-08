@@ -62,48 +62,7 @@
             <div class="p-2">
                 <div class="sidebar-title">Программы для публикации</div>
 
-                @if (programs != null)
-                {
-                    var grouped = programs
-                        .GroupBy(p => p.EducationalLevel)
-                        .OrderBy(g => g.Key);
-
-                    foreach (var group in grouped)
-                    {
-                        var groupKey = group.Key?.Replace(" ", "") ?? "unknown";
-                        var groupContainsSelected = group.Any(p => p.Id == selectedProgramId);
-                        <div class="mb-1">
-                            <div class="accordion" id="sidebar_@groupKey">
-                                <div class="accordion-item border-0">
-                                    <h2 class="accordion-header">
-                                        <button class="accordion-button @(groupContainsSelected ? "" : "collapsed") bg-white shadow-none px-2 py-2 fw-semibold small"
-                                                type="button" data-bs-toggle="collapse"
-                                                data-bs-target="#collapse_@groupKey">
-                                            @group.Key
-                                        </button>
-                                    </h2>
-                                    <div id="collapse_@groupKey" class="accordion-collapse collapse @(groupContainsSelected ? "show" : "")" data-bs-parent="#sidebar_@groupKey">
-                                        <div class="accordion-body p-0 ps-2">
-                                            @foreach (var prog in group)
-                                            {
-                                                var assignment = prog.Assignments?.FirstOrDefault();
-                                                <a asp-action="Index" asp-route-programId="@prog.Id"
-                                                   class="d-block text-decoration-none py-1 px-2 rounded mb-1 sidebar-item @(prog.Id == selectedProgramId ? "active" : "")">
-                                                    <div class="small fw-semibold text-dark">@prog.CodeReferral</div>
-                                                    <div class="small text-muted app-small">@prog.Name</div>
-                                                    @if (assignment?.Department != null)
-                                                    {
-                                                        <div class="text-muted app-caption">@assignment.Department.Name</div>
-                                                    }
-                                                </a>
-                                            }
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    }
-                }
+                @await Html.PartialAsync("_ProgramYearFolders", new PersonalCabinetEducationProgram.ViewModels.ProgramSidebarViewModel { Programs = programs ?? [], SelectedProgramId = selectedProgramId })
             </div>
         </div>
 
@@ -126,6 +85,7 @@
                                         <p class="mb-1"><strong>Факультет:</strong> @assignment.Faculty?.Name</p>
                                     }
                                     <p class="mb-1"><strong>Уровень:</strong> @selectedProgram.EducationalLevel</p>
+                                    <p class="mb-1"><strong>Год программы:</strong> @(selectedProgram.YearApprovals ?? PersonalCabinetEducationProgram.Models.EducationalProgramYears.ExistingProgramsYear)</p>
                                     <div class="d-flex align-items-center gap-2 mt-2">
                                         <span>Статус программы:</span>
                                         @{
