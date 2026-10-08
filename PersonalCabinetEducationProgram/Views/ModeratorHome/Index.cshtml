@@ -1,4 +1,4 @@
-﻿@model IEnumerable<PersonalCabinetEducationProgram.Models.EducationalProgramElement>
+@model IEnumerable<PersonalCabinetEducationProgram.Models.EducationalProgramElement>
 @{
     ViewData["Title"] = "Модератор";
 
@@ -46,7 +46,7 @@
     var coursework = Model.Where(e => e.TypeElement == "Coursework").ToList();
     var gia = Model.Where(e => e.TypeElement == "GIA").ToList();
 
-    int countNew = statusValues.Count(s => string.IsNullOrEmpty(PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(s)));
+    int countNotUploaded = statusValues.Count(s => string.IsNullOrEmpty(PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(s)));
     int countUploaded = statusValues.Count(s => PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(s) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Uploaded);
     int countOnReview = statusValues.Count(s => PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(s) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.OnApproval);
     int countApproved = statusValues.Count(s => PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(s) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Approved);
@@ -149,22 +149,27 @@
                                     <div class="row align-items-center">
                                         <div class="col-12 col-md-4 text-center mb-3 mb-md-0">
                                             @{
-                                                double total = Math.Max(countApproved + countPublished + countUploaded + countRejected, 1);
+                                                double total = Math.Max(statusValues.Count, 1);
+                                                double pctNotUploaded = (countNotUploaded / total) * 100;
                                                 double pctApproved = (countApproved / total) * 100;
                                                 double pctPublished = (countPublished / total) * 100;
                                                 double pctUploaded = (countUploaded / total) * 100;
                                                 double pctRejected = (countRejected / total) * 100;
+                                                double pctOnReview = (countOnReview / total) * 100;
 
-                                                double stop1 = pctApproved;
+                                                double stop1 = pctNotUploaded + pctApproved;
                                                 double stop2 = stop1 + pctPublished;
                                                 double stop3 = stop2 + pctUploaded;
                                                 double stop4 = stop3 + pctRejected;
+                                                double stop5 = stop4 + pctOnReview;
 
                                                 string chartStyle = "background: conic-gradient(" +
-                                                    $"#198754 0% {stop1.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}%, " +
+                                                    $"#6c757d 0% {pctNotUploaded.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}%, " +
+                                                    $"#198754 {pctNotUploaded.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}% {stop1.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}%, " +
                                                     $"#0d6efd {stop1.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}% {stop2.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}%, " +
                                                     $"#ffc107 {stop2.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}% {stop3.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}%, " +
-                                                    $"#dc3545 {stop3.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}% {stop4.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}%);";
+                                                    $"#dc3545 {stop3.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}% {stop4.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}%, " +
+                                                    $"#0dcaf0 {stop4.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}% {stop5.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}%);";
                                             }
                                             <div class="position-relative d-inline-block rounded-circle" style="width:140px;height:140px;@chartStyle">
                                                 <div class="position-absolute top-50 start-50 translate-middle rounded-circle bg-white d-flex flex-column align-items-center justify-content-center"
@@ -178,6 +183,12 @@
                                         <div class="col-12 col-md-8">
                                             <table class="table table-borderless align-middle mb-0 small">
                                                 <tbody>
+                                                    <tr>
+                                                        <td><span class="d-inline-block rounded-circle bg-secondary" style="width:10px;height:10px;"></span> Не загружено</td>
+                                                        <td class="fw-bold">@countNotUploaded</td>
+                                                        <td><span class="d-inline-block rounded-circle bg-info" style="width:10px;height:10px;"></span> На согласовании</td>
+                                                        <td class="fw-bold">@countOnReview</td>
+                                                    </tr>
                                                     <tr>
                                                         <td><span class="d-inline-block rounded-circle bg-success" style="width:10px;height:10px;"></span> Согласовано</td>
                                                         <td class="fw-bold">@countApproved</td>

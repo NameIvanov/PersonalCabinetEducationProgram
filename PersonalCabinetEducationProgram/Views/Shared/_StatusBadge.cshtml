@@ -12,7 +12,7 @@
         ElementApprovalStatus.Published => "bg-primary-subtle text-primary",
         _ => "bg-secondary-subtle text-secondary"
     };
-    var statusText = string.IsNullOrEmpty(normalizedStatus) ? "Не загружено" : normalizedStatus;
+    var statusText = ElementApprovalStatus.GetDisplayName(Model);
 }
 
 <span class="status-badge @statusClass d-inline-block">@statusText</span>

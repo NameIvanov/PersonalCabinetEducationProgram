@@ -15,9 +15,12 @@ namespace PersonalCabinetEducationProgram.Services
 
             if (!string.IsNullOrWhiteSpace(filter.Status))
             {
-                if (filter.Status == ElementListFiltersViewModel.NotUploadedFilterValue)
+                if (filter.Status == ElementListFiltersViewModel.NotUploadedFilterValue ||
+                    ElementApprovalStatus.Normalize(filter.Status) == ElementApprovalStatus.NotUploaded)
                 {
-                    query = query.Where(e => e.StatusApprovals == null || e.StatusApprovals == string.Empty);
+                    query = query.Where(e => e.StatusApprovals == null || e.StatusApprovals == string.Empty ||
+                        e.StatusApprovals == "Новое" || e.StatusApprovals == "новое" ||
+                        e.StatusApprovals == "Не загружено" || e.StatusApprovals == "не загружено");
                 }
                 else
                 {

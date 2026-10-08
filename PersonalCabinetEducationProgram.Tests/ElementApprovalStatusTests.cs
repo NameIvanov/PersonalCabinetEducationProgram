@@ -7,12 +7,27 @@ public class ElementApprovalStatusTests
     [Theory]
     [InlineData(null, ElementApprovalStatus.NotUploaded)]
     [InlineData("", ElementApprovalStatus.NotUploaded)]
+    [InlineData("Новое", ElementApprovalStatus.NotUploaded)]
+    [InlineData("новое", ElementApprovalStatus.NotUploaded)]
+    [InlineData("Не загружено", ElementApprovalStatus.NotUploaded)]
+    [InlineData("не загружено", ElementApprovalStatus.NotUploaded)]
     [InlineData("На рассмотрении", ElementApprovalStatus.OnApproval)]
     [InlineData("Отклонено", ElementApprovalStatus.RevisionRequired)]
     [InlineData(ElementApprovalStatus.Approved, ElementApprovalStatus.Approved)]
     public void Normalize_ReturnsCanonicalStatus(string? source, string expected)
     {
         Assert.Equal(expected, ElementApprovalStatus.Normalize(source));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("Новое")]
+    [InlineData("новое")]
+    [InlineData("Не загружено")]
+    public void GetDisplayName_UnuploadedDocumentAlwaysHasVisibleStatus(string? status)
+    {
+        Assert.Equal("Не загружено", ElementApprovalStatus.GetDisplayName(status));
     }
 
     [Theory]

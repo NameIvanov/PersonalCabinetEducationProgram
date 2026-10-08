@@ -22,10 +22,17 @@ namespace PersonalCabinetEducationProgram.Models
 
             return status.Trim() switch
             {
+                "Новое" or "новое" or "Не загружено" or "не загружено" => NotUploaded,
                 "На рассмотрении" => OnApproval,
                 "Отклонено" => RevisionRequired,
                 _ => status.Trim()
             };
+        }
+
+        public static string GetDisplayName(string? status)
+        {
+            var normalized = Normalize(status);
+            return normalized == NotUploaded ? "Не загружено" : normalized;
         }
 
         public static bool IsLockedForNonAdmin(string? status)

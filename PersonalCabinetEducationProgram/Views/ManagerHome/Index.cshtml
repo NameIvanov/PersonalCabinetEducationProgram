@@ -1,4 +1,4 @@
-﻿@model IEnumerable<PersonalCabinetEducationProgram.Models.EducationalProgramElement>
+@model IEnumerable<PersonalCabinetEducationProgram.Models.EducationalProgramElement>
 @{
     ViewData["Title"] = "Руководитель образовательной программы";
 
@@ -46,7 +46,7 @@
     var coursework = Model.Where(e => e.TypeElement == "Coursework").ToList();
     var gia = Model.Where(e => e.TypeElement == "GIA").ToList();
 
-    int countNew = statusValues.Count(s => string.IsNullOrEmpty(PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(s)));
+    int countNotUploaded = statusValues.Count(s => string.IsNullOrEmpty(PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(s)));
     int countApproved = statusValues.Count(s => PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(s) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Approved);
     int countRejected = statusValues.Count(s => PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(s) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.RevisionRequired);
     int countOnReview = statusValues.Count(s => PersonalCabinetEducationProgram.Models.ElementApprovalStatus.Normalize(s) == PersonalCabinetEducationProgram.Models.ElementApprovalStatus.OnApproval);
@@ -146,15 +146,15 @@
                                     <div class="row align-items-center">
                                         <div class="col-12 col-md-4 text-center mb-3 mb-md-0">
                                             @{
-                                                double total = Math.Max(countNew + countApproved + countRejected + countOnReview + countUploaded + countPublished, 1);
-                                                double pctNew = (countNew / total) * 100;
+                                                double total = Math.Max(countNotUploaded + countApproved + countRejected + countOnReview + countUploaded + countPublished, 1);
+                                                double pctNotUploaded = (countNotUploaded / total) * 100;
                                                 double pctUploaded = (countUploaded / total) * 100;
                                                 double pctApproved = (countApproved / total) * 100;
                                                 double pctRejected = (countRejected / total) * 100;
                                                 double pctOnReview = (countOnReview / total) * 100;
                                                 double pctPublished = (countPublished / total) * 100;
 
-                                                double stop1 = pctNew;
+                                                double stop1 = pctNotUploaded;
                                                 double stop2 = stop1 + pctUploaded;
                                                 double stop3 = stop2 + pctApproved;
                                                 double stop4 = stop3 + pctRejected;
@@ -182,8 +182,8 @@
                                             <table class="table table-borderless align-middle mb-0 small">
                                                 <tbody>
                                                     <tr>
-                                                        <td><span class="d-inline-block rounded-circle bg-secondary" style="width:10px;height:10px;"></span> Новые</td>
-                                                        <td class="fw-bold">@countNew</td>
+                                                        <td><span class="d-inline-block rounded-circle bg-secondary" style="width:10px;height:10px;"></span> Не загружено</td>
+                                                        <td class="fw-bold">@countNotUploaded</td>
                                                         <td><span class="d-inline-block rounded-circle bg-warning" style="width:10px;height:10px;"></span> Загружено</td>
                                                         <td class="fw-bold">@countUploaded</td>
                                                     </tr>

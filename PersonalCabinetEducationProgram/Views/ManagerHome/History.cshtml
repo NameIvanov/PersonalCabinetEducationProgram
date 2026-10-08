@@ -38,17 +38,17 @@
                                             <span class="small fw-semibold">@h.User?.FullName</span>
                                             @if (!string.IsNullOrEmpty(h.OldStatus))
                                             {
-                                                <span class="text-muted small"> изменил статус с «@h.OldStatus»</span>
+                                                <span class="text-muted small"> изменил статус с «@PersonalCabinetEducationProgram.Models.ElementApprovalStatus.GetDisplayName(h.OldStatus)»</span>
                                             }
                                             else
                                             {
-                                                <span class="text-muted small"> установил статус «@h.NewStatus»</span>
+                                                <span class="text-muted small"> установил статус «@PersonalCabinetEducationProgram.Models.ElementApprovalStatus.GetDisplayName(h.NewStatus)»</span>
                                             }
                                         </div>
                                         <div class="text-muted small" style="font-size:0.72rem;">@h.ChangeDate.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</div>
                                     </div>
                                     <div class="mt-1">
-                                        <span class="badge bg-secondary-subtle text-secondary">@h.NewStatus</span>
+                                        @await Html.PartialAsync("_StatusBadge", h.NewStatus)
                                     </div>
                                     @if (!string.IsNullOrEmpty(h.Comment))
                                     {

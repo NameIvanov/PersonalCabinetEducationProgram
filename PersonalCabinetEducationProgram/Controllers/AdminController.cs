@@ -1619,7 +1619,7 @@ namespace PersonalCabinetEducationProgram.Controllers
                         ListFilterMatcher.Text(element.Name, filters.Name) &&
                         ListFilterMatcher.Text(element.Description, filters.Description) &&
                         (filters.Status == ElementListFiltersViewModel.NotUploadedFilterValue
-                            ? string.IsNullOrWhiteSpace(element.StatusApprovals)
+                            ? ElementApprovalStatus.Normalize(element.StatusApprovals) == ElementApprovalStatus.NotUploaded
                             : ListFilterMatcher.Exact(element.StatusApprovals, filters.Status)) &&
                         ListFilterMatcher.Date(element.UploadDate, filters.DateFrom, filters.DateTo))
                     .ToList();
