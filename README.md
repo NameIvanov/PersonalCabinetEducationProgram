@@ -69,6 +69,83 @@ dotnet run --project PersonalCabinetEducationProgram\PersonalCabinetEducationPro
 3. Остановите ранее запущенный экземпляр приложения, если DLL или порт заняты.
 4. Запустите проект клавишей `F5` или `Ctrl+F5`.
 
+## Запуск на сервере через Docker
+
+В корне проекта добавлены `Dockerfile`, `compose.yaml` и `.env.example`. Нужен Linux-сервер с Docker Engine и Docker Compose v2. .NET и MySQL на хосте устанавливать не требуется. Образ приложения собирается в несколько этапов и запускается от пользователя `app`. Compose запускает MySQL 8.0 и ждёт успешного запроса к базе перед запуском приложения ([порядок запуска Compose](https://docs.docker.com/compose/how-tos/startup-order/)).
+
+### Настройка и запуск
+
+В каталоге проекта на сервере:
+
+```bash
+cp .env.example .env
+nano .env
+docker compose up -d --build
+docker compose ps
+docker compose logs --tail=100 web
+```
+
+В `.env` обязательно задайте разные случайные `MYSQL_PASSWORD` и `MYSQL_ROOT_PASSWORD` длиной от 24 символов. Используйте латинские буквы и цифры, без кавычек и `$`. Пустые значения блокируют запуск. `.env` исключён из Git и контекста сборки. Ограничьте доступ к нему: `chmod 600 .env`.
+
+Приложение доступно на сервере по `http://127.0.0.1:8080`; порт можно изменить через `APP_PORT`. Для проверки со своего компьютера используйте SSH-туннель `ssh -L 8080:127.0.0.1:8080 user@server` и откройте `http://localhost:8080`. Для временного доступа по IP можно задать `APP_BIND_ADDRESS=0.0.0.0` и пересоздать контейнер; рабочий сайт публикуйте через HTTPS-прокси.
+
+При первом запуске создаётся отдельная база `personal_cabinet`, автоматически применяются миграции и начальные данные проекта. Существующие данные локальной базы и файлы из `D:\2026` автоматически не переносятся: для переноса нужны SQL-дамп и копия хранилища документов. Перед публичным запуском измените пароли начальных учётных записей.
+
+### Домен и HTTPS
+
+Направьте DNS домена на сервер. На хосте настройте Nginx с сертификатом для домена и проксированием на `127.0.0.1:8080`. Пример блоков `server` после получения сертификата (замените `cabinet.example.com` и пути к сертификатам):
+
+```nginx
+server {
+    listen 80;
+    server_name cabinet.example.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name cabinet.example.com;
+    ssl_certificate /etc/letsencrypt/live/cabinet.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/cabinet.example.com/privkey.pem;
+    client_max_body_size 201m;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 180s;
+    }
+}
+```
+
+В `.env` задайте `TRUSTED_PROXY_IP` — адрес Nginx, который виден контейнеру. При Nginx на Linux-хосте это обычно шлюз сети Compose; его можно узнать командой:
+
+```bash
+docker inspect "$(docker compose ps -q web)" --format '{{range .NetworkSettings.Networks}}{{.Gateway}}{{end}}'
+```
+
+После изменения выполните `docker compose up -d`. Проверьте вход через HTTPS и адрес клиента в журнале: доверенный прокси нужен для корректной работы HTTPS, журналов и блокировок по IP. Для Nginx в отдельном контейнере укажите его адрес в общей сети вместо шлюза.
+
+### Данные, обновление и остановка
+
+Именованные тома сохраняют MySQL (`mysql_data`), документы и архивы PLX (`uploads`), ключи авторизации (`data_protection_keys`). Путь хранилища в контейнере — `/app/storage`; Windows-путь из локальных настроек переопределяется. Ключи в `/app/keys` сохраняют действительность cookie после пересоздания контейнера. Томам документов и ключей при первом создании назначаются права пользователя приложения.
+
+```bash
+# Обновление после получения новой версии исходников
+docker compose up -d --build
+
+# Журналы
+docker compose logs -f --tail=100 web db
+
+# Остановка с сохранением данных
+docker compose down
+```
+
+Перед обновлением делайте резервную копию базы и томов документов/ключей. Команда `docker compose down -v` удаляет все эти данные. Пароли MySQL в `.env` используются при первоначальном создании базы; для существующего тома смена пароля требует изменения пользователя в самой MySQL. Порт базы данных на хост не публикуется.
+
+Облачные ИИ-ключи можно передать через `AI_API_KEY` и `DOCUMENT_ANALYSIS_API_KEY`. Для смысловой проверки PDF дополнительно настройте `DocumentAnalysis__SemanticAnalysisEnabled` и `DocumentAnalysis__Model` в `environment` сервиса `web`, как описано в [руководстве модуля](docs/document-analysis.md). OCR в базовом образе не установлен; PDF с текстовым слоем обрабатываются, для сканов требуется отдельно добавить OCRmyPDF с языками `rus+eng` и настроить `DocumentAnalysis__OcrExecutable`.
+
 ## Тесты
 
 ```powershell

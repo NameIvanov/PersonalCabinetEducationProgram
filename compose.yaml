@@ -1,0 +1,51 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${APP_BIND_ADDRESS:-127.0.0.1}:${APP_PORT:-8080}:8080"
+    environment:
+      ConnectionStrings__DefaultConnection: 'Server=db;Port=3306;Database=personal_cabinet;User Id=personal_cabinet;Password="${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}";'
+      TrustedProxies__KnownProxies__0: "${TRUSTED_PROXY_IP:-127.0.0.1}"
+      Ai__ApiKey: "${AI_API_KEY:-}"
+      DocumentAnalysis__ApiKey: "${DOCUMENT_ANALYSIS_API_KEY:-}"
+    volumes:
+      - uploads:/app/storage
+      - data_protection_keys:/app/keys
+    depends_on:
+      db:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: personal_cabinet
+      MYSQL_USER: personal_cabinet
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}"
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysql --protocol=TCP -h 127.0.0.1 -u \"$$MYSQL_USER\" \"$$MYSQL_DATABASE\" -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  mysql_data:
+  uploads:
+  data_protection_keys:

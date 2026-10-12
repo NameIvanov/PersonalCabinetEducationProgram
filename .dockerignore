@@ -1,0 +1,15 @@
+# Only the application is needed by the build.
+**
+!PersonalCabinetEducationProgram/
+!PersonalCabinetEducationProgram/**
+PersonalCabinetEducationProgram/bin/
+PersonalCabinetEducationProgram/obj/
+PersonalCabinetEducationProgram/Properties/
+PersonalCabinetEducationProgram/wwwroot/uploads/
+PersonalCabinetEducationProgram/appsettings.Development.json
+**/*.user
+**/*.log
+**/.env*
+**/*.pfx
+**/*.pem
+**/*.key

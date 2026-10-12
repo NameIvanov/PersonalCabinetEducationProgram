@@ -362,5 +362,10 @@ MigrationBackup/
 # User-uploaded documents
 PersonalCabinetEducationProgram/wwwroot/uploads/*
 
+# Docker deployment secrets
+.env
+.env.*
+!.env.example
+
 # Fody - auto-generated XML schema
 FodyWeavers.xsd

@@ -21,6 +21,10 @@ builder.Logging.AddDebug();
 
 if (builder.Environment.IsEnvironment("Testing"))
     builder.Services.AddDataProtection().UseEphemeralDataProtectionProvider();
+else if (builder.Configuration["DataProtection:KeysPath"] is { Length: > 0 } keysPath)
+    builder.Services.AddDataProtection()
+        .PersistKeysToFileSystem(new DirectoryInfo(keysPath))
+        .SetApplicationName("PersonalCabinetEducationProgram");
 
 builder.Services.AddControllersWithViews(options =>
 {
